@@ -36,8 +36,7 @@ func main() {
 	// The writeMessages goroutine reads messages from the buffered channel
 	// and sends them to Redis.
 	//
-	// TODO PERF: Use a technique like https://golang.org/doc/effective_go.html#leaky_buffer
-	// To avoid allocating a new outgoingMessage for each incoming message
+	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
 	redisPubs := make(chan *redisPub, 10000)
 
 	wg.Add(1)
@@ -75,13 +74,9 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 
 	// Use gtm to tail to oplog
 	//
-	// TODO PERF: benchmark gtm vs. just tailing the oplog with mgo directly.
-	// Balance perf improvements against whatever reliability/retry/reconnect
-	// we get from GTM
+	// TODO PERF: benchmark other oplog tailers (https://github.com/tulip/oplogtoredis/issues/3)
 	//
-	// TODO: this starts reading from the end of the oplog. We should
-	// periodically write the timestamp of the last processed message to Redis,
-	// so we can pick up from where we left off on restart
+	// TODO: pick up where we left off on restart (https://github.com/tulip/oplogtoredis/issues/4)
 	ctx := gtm.Start(session, &gtm.Options{
 		ChannelSize:       10000,
 		BufferDuration:    100 * time.Millisecond,
@@ -96,25 +91,25 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 		case err = <-ctx.ErrC:
 			// Log errors we receive from mgo
 			//
-			// TODO TESTING: what kinds of error can we get here? Are there
-			// errors that we should respond to by re-connecting to Mongo?
-			// What happens during mongo outages and step-downs?
+			// TODO TESTING: Test mongo failure modes (https://github.com/tulip/oplogtoredis/issues/5)
 			log.RawLog.Error("Error tailing oplog", zap.Error(err))
 		case op := <-ctx.OpC:
 			// Process an oplog entry
 			//
 			// TODO PERF: Add options for filtering to specific collections or
-			// databases.
+			// databases (https://github.com/tulip/oplogtoredis/issues/8)
 			id, idOK := op.Id.(string)
 			if !idOK {
-				// TODO DOC: document that we only handle string IDs, not
-				// ObjectID ids. Or maybe stringify ObjectIDs?
+				// TODO: Handle ObjectIDs (https://github.com/tulip/oplogtoredis/issues/9)
 				log.Log.Errorw("op.ID was not a string",
 					"id", op.Id)
 				continue
 			}
 
 			// Construct the JSON we're going to send to Redis
+			//
+			// TODO PERF: consider a specialized JSON encoder
+			// https://github.com/tulip/oplogtoredis/issues/13
 			msg := outgoingMessage{
 				Event:  op.Operation,
 				Doc:    outgoingMessageDocument{id},
@@ -145,6 +140,7 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 
 // Given a gtm.Op, returned the fields affected by that operation
 //
+// TODO: test this against more complicated mutations (https://github.com/tulip/oplogtoredis/issues/10)
 // TODO TESTING: unit tests for this
 func fieldsForOperation(op *gtm.Op) []string {
 	if op.IsInsert() {
@@ -157,8 +153,6 @@ func fieldsForOperation(op *gtm.Op) []string {
 				continue
 			}
 
-			// TODO TESTING: maybe we want to whitelist operators we expect
-			// instead of accepting all operators?
 			operationMap, operationMapOK := operation.(map[string]interface{})
 			if !operationMapOK {
 				log.Log.Errorw("Oplog data for update contained a non-map",
@@ -166,11 +160,6 @@ func fieldsForOperation(op *gtm.Op) []string {
 				continue
 			}
 
-			// TODO TESTING: we might need to duplicate this logic:
-			// https://github.com/cult-of-coders/redis-oplog/blob/209334ac7687432da54b335e16cb4c56aff6212b/lib/utils/getFields.js#L21
-			//
-			// to properly handle things like { $set: { 'array.1.xx' } }
-			// but maybe the oplog handles this for us?
 			fields = append(fields, mapKeys(operationMap)...)
 		}
 
@@ -212,16 +201,9 @@ func writeMessages(redisPubs chan *redisPub, redisURL string) {
 	for {
 		p := <-redisPubs
 
-		// TODO TESTING: what failures modes are there here? what if Redis
-		// is offline? Or we're publishing too fast for it to keep up?
+		// TODO TESTING: test Redis failure modes (https://github.com/tulip/oplogtoredis/issues/11)
 		//
-		// TODO HA: instead of publishing we should do something like:
-		//   ok := SET <unique id from oplog> true NX EX 60
-		//   if ok {
-		//     // message was not already published
-		//     PUBLISH <channel> <msg>
-		//   }
-		// Maybe use a lua script to do this atomically?
+		// TODO: add an HA mode (https://github.com/tulip/oplogtoredis/issues/12)
 		client.Publish(p.channel, p.msg)
 	}
 }
