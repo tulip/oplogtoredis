@@ -9,6 +9,12 @@ oplogtoredis in combination with redis-oplog's `externalRedisPublisher` option
 guarantees that every change written to Mongo will be automatically published
 to Redis.
 
+## Project Status
+
+The project is currently pre-alpha. It shouldn't be used in production environments (or really any environment other than experimentation / testing). We expect to have an initial 0.1 release that is ready for general usage within the next couple months.
+
+## Configuring redis-oplog
+
 To use this with redis-oplog, configure redis-oplog with:
 
 - `externalRedisPublisher: true`
