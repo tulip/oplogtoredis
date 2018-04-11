@@ -25,7 +25,10 @@ type redisPub struct {
 func main() {
 	defer log.RawLog.Sync()
 
-	config.ParseEnv()
+	err := config.ParseEnv()
+	if err != nil {
+		panic("Error parsing environment variables: " + err.Error())
+	}
 
 	// We crate two goroutines:
 	//
