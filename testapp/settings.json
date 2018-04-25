@@ -1,0 +1,11 @@
+{
+  "redisOplog": {
+    "redis": {
+      "port": 6379,
+      "host": "redis"
+    },
+    "globalRedisPrefix": "dev.",
+    "debug": true,
+    "externalRedisPublisher": true
+  }
+}

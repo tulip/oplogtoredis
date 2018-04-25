@@ -7,10 +7,10 @@ services:
       - mongo
       - redis
     command:
-      - ./wait-for.sh
+      - /wait-for.sh
       - mongo:27017
       - '--'
-      - ./wait-for.sh
+      - /wait-for.sh
       - redis:6379
       - '--'
       - ./entry.sh
@@ -18,6 +18,7 @@ services:
       - MONGO_URL=mongodb://mongo/tests
       - REDIS_URL=redis://redis
     volumes:
+      - ../scripts/wait-for.sh:/wait-for.sh
       - ../vendor:/go/src/github.com/tulip/oplogtoredis/vendor
   oplogtoredis:
     image: oplogtoredis:latest
@@ -28,12 +29,12 @@ services:
       - mongo
       - redis
     volumes:
-      - ./wait-for.sh:/wait-for.sh
+      - ../scripts/wait-for.sh:/wait-for.sh
     command:
-      - ./wait-for.sh
+      - /wait-for.sh
       - mongo:27017
       - '--'
-      - ./wait-for.sh
+      - /wait-for.sh
       - redis:6379
       - '--'
       - /bin/oplogtoredis

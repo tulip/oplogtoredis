@@ -56,7 +56,32 @@ You can set the following environment variables:
 
 ## Development
 
-- Build & run using `go build` or Docker as above.
+You can use `go build` to build and test oplogtoredis, or you can use
+the docker-compose environment, which spins us a full environment with
+Mongo, Redis, oplogtoredis, and 2 Meteor application servers. Note that
+the first run will take a long time (5-10 minutes) while Meteor does initial
+downloads/builds; caching makes subsequent startups much, much faster.
+
+The components of the docker-compose environment are:
+
+- `oplogtoredis`: A container running oplogtoredis, live-reloading whenever
+  the source code changes (via [fresh](https://github.com/pilu/fresh)).
+
+- `mongo`: A MongoDB server. The other containers are configured to use
+  the `dev` db. Connect to Mongo with `docker-compose exec mongo mongo dev`
+
+- `redis`: A Redis server. Connect to the CLI with
+  `docker-compose exec redis redis-cli`. The `monitor` command in that CLI
+  will show you everything being published.
+
+- `meteor1` and `meteor2`: Two meteor servers, serving the app at `testapp/`.
+  You can go to `localhost:9091` and `localhost:9092` to hit the two app
+  servers. When everything's working correctly, changes made on a client
+  connected to one app server (or made directly in the Mongo database) should
+  show up in real-time to clients on the other app server.
+
+## Testing
+
 - Run linters (gofmt and go vet) with `scripts/runLint.sh`
 - Run unit tests (not many yet) with `scripts/runUnitTests.sh`
 - Run integration test suite & benchmarks with `scripts/runAcceptanceTests.sh`

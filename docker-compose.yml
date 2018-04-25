@@ -1,0 +1,72 @@
+version: "3"
+services:
+  oplogtoredis:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    depends_on:
+      - mongo
+      - redis
+    command:
+      - /wait-for.sh
+      - mongo:27017
+      - '--'
+      - /wait-for.sh
+      - redis:6379
+      - '--'
+      - sh
+      - -c
+      - |
+        mongo "$$OTR_MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
+        fresh -c scripts/fresh-runner.conf
+    environment:
+      - OTR_MONGO_URL=mongodb://mongo/dev
+      - OTR_REDIS_URL=redis://redis
+      - OTR_DIAGNOSTIC_PORT=8080
+      - OTR_LOG_DEBUG=true
+    ports:
+      - 9090:8080
+    volumes:
+      - ./scripts/wait-for.sh:/wait-for.sh
+      - .:/go/src/github.com/tulip/oplogtoredis
+  mongo:
+    image: mongo:3.6.2
+    command: "mongod --replSet myapp --port 27017"
+    logging:
+      driver: none
+    volumes:
+      - './.data/mongo-data:/data/db'
+  redis:
+    image: redis:3.2.11
+    logging:
+      driver: none
+  meteor1:
+    build: ./testapp
+    volumes:
+      - ./testapp:/src
+      - meteor_packages:/root/.meteor/packages
+      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_1_local:/src/.meteor/local
+    environment:
+      - MONGO_URL=mongodb://mongo/dev
+      - MONGO_OPLOG_URL=mongodb://mongo/local
+    ports:
+      - 9091:3000
+  meteor2:
+    build: ./testapp
+    volumes:
+      - ./testapp:/src
+      - meteor_packages:/root/.meteor/packages
+      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_2_local:/src/.meteor/local
+    environment:
+      - MONGO_URL=mongodb://mongo/dev
+      - MONGO_OPLOG_URL=mongodb://mongo/local
+    ports:
+      - 9092:3000
+
+volumes:
+  meteor_packages:
+  meteor_package_metadata:
+  meteor_1_local:
+  meteor_2_local:
