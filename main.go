@@ -114,7 +114,7 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 			// TODO PERF: consider a specialized JSON encoder
 			// https://github.com/tulip/oplogtoredis/issues/13
 			msg := outgoingMessage{
-				Event:  op.Operation,
+				Event:  eventNameForOperation(op),
 				Doc:    outgoingMessageDocument{id},
 				Fields: fieldsForOperation(op),
 			}
@@ -139,6 +139,13 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 			}
 		}
 	}
+}
+
+func eventNameForOperation(op *gtm.Op) string {
+	if op.Operation == "d" {
+		return "r"
+	}
+	return op.Operation
 }
 
 // Given a gtm.Op, returned the fields affected by that operation
