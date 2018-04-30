@@ -1,0 +1,32 @@
+version: "3"
+services:
+  meteor1:
+    build: ./testapp
+    volumes:
+      - ./testapp:/src
+      - meteor_packages:/root/.meteor/packages
+      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_1_local:/src/.meteor/local
+    environment:
+      - MONGO_URL=mongodb://mongo/dev
+      - MONGO_OPLOG_URL=mongodb://mongo/local
+    ports:
+      - 9091:3000
+  meteor2:
+    build: ./testapp
+    volumes:
+      - ./testapp:/src
+      - meteor_packages:/root/.meteor/packages
+      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_2_local:/src/.meteor/local
+    environment:
+      - MONGO_URL=mongodb://mongo/dev
+      - MONGO_OPLOG_URL=mongodb://mongo/local
+    ports:
+      - 9092:3000
+
+volumes:
+  meteor_packages:
+  meteor_package_metadata:
+  meteor_1_local:
+  meteor_2_local:

@@ -58,9 +58,7 @@ You can set the following environment variables:
 
 You can use `go build` to build and test oplogtoredis, or you can use
 the docker-compose environment, which spins us a full environment with
-Mongo, Redis, oplogtoredis, and 2 Meteor application servers. Note that
-the first run will take a long time (5-10 minutes) while Meteor does initial
-downloads/builds; caching makes subsequent startups much, much faster.
+Mongo, Redis, and oplogtoredis.
 
 The components of the docker-compose environment are:
 
@@ -73,6 +71,15 @@ The components of the docker-compose environment are:
 - `redis`: A Redis server. Connect to the CLI with
   `docker-compose exec redis redis-cli`. The `monitor` command in that CLI
   will show you everything being published.
+
+You can optionally also spin up 2 meteor app servers with
+`docker-compose -f docker-compose.yml -f docker-compose.meteor.yml`. These
+servers are running a simple todos app, using redis-oplog, and pointing at the
+same Mongo and Redis servers. Note that the first run will take a long time
+(5-10 minutes) while Meteor does initial downloads/builds; caching makes
+subsequent startups much, much faster.
+
+The additional `docker-compose.meteor.yml` file contains:
 
 - `meteor1` and `meteor2`: Two meteor servers, serving the app at `testapp/`.
   You can go to `localhost:9091` and `localhost:9092` to hit the two app
