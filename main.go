@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,6 +98,8 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 			// TODO TESTING: Test mongo failure modes (https://github.com/tulip/oplogtoredis/issues/5)
 			log.RawLog.Error("Error tailing oplog", zap.Error(err))
 		case op := <-ctx.OpC:
+			log.Log.Debugw("Got oplog entry", "op", op)
+
 			// Process an oplog entry
 			//
 			// TODO PERF: Add options for filtering to specific collections or
@@ -118,6 +121,7 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 				Doc:    outgoingMessageDocument{id},
 				Fields: fieldsForOperation(op),
 			}
+			log.Log.Debugw("Sending outgoing message", "message", msg)
 			msgJSON, err := json.Marshal(&msg)
 
 			if err != nil {
@@ -148,6 +152,14 @@ func eventNameForOperation(op *gtm.Op) string {
 	return op.Operation
 }
 
+type updateType int
+
+const (
+	updateTypeUnknown updateType = iota
+	updateTypeModification
+	updateTypeReplacement
+)
+
 // Given a gtm.Op, returned the fields affected by that operation
 //
 // TODO: test this against more complicated mutations (https://github.com/tulip/oplogtoredis/issues/10)
@@ -157,20 +169,49 @@ func fieldsForOperation(op *gtm.Op) []string {
 		return mapKeys(op.Data)
 	} else if op.IsUpdate() {
 		var fields []string
+		opType := updateTypeUnknown
 
 		for operationKey, operation := range op.Data {
 			if operationKey == "$v" {
+				// $v indicates the version of the update language and should be
+				// ignored; it will likely be removed in a future version of
+				// Mongo (https://jira.mongodb.org/browse/SERVER-32240)
 				continue
 			}
 
-			operationMap, operationMapOK := operation.(map[string]interface{})
-			if !operationMapOK {
-				log.Log.Errorw("Oplog data for update contained a non-map",
-					"op.Data", op.Data)
-				continue
-			}
+			if strings.HasPrefix(operationKey, "$") {
+				// It's an update operator -- extract the changed fields
+				// from the operation
+				if opType == updateTypeReplacement {
+					log.Log.Errorw("Oplog data for update contained a mix of $-prefix and non-$-prefix fields",
+						"op.Data", op.Data)
+				} else if opType == updateTypeUnknown {
+					opType = updateTypeModification
+				}
 
-			fields = append(fields, mapKeys(operationMap)...)
+				operationMap, operationMapOK := operation.(map[string]interface{})
+				if !operationMapOK {
+					log.Log.Errorw("Oplog data for update contained $-prefixed key with a non-map value",
+						"op.Data", op.Data)
+					continue
+				}
+
+				fields = append(fields, mapKeys(operationMap)...)
+			} else {
+				// We're dealing with a replacement update that doesn't use $-operators;
+				// the keys of the data are the changed fields.
+				if opType == updateTypeModification {
+					log.Log.Errorw("Oplog data for update contained a mix of $-prefix and non-$-prefix fields",
+						"op.Data", op.Data)
+				} else if opType == updateTypeUnknown {
+					// TODO (https://github.com/tulip/oplogtoredis/issues/17):
+					// Add a flag to the outgoing message indicating a replacement once
+					// https://github.com/cult-of-coders/redis-oplog/issues/280 lands
+					opType = updateTypeReplacement
+				}
+
+				fields = append(fields, operationKey)
+			}
 		}
 
 		return fields
