@@ -1,12 +1,12 @@
 import { Tasks } from '../imports/api/tasks.js';
 
 Foo = new Mongo.Collection('Foo')
-Meteor.publish('newfoo', function() {
-  newid = Random.id();
 
-  Meteor.setTimeout(() => {
-    Foo.insert({ _id: newid })
-  }, 500)
-
-  return Foo.find({ _id: newid });
+// For testing object id behavior
+Foo.find({
+  _id: new Mongo.Collection.ObjectID('5ae7d0042b2acc1f1796c0b6')
+}).observe({
+  changed(newDoc) {
+    console.log('CHANGE', newDoc)
+  }
 })

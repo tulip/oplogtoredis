@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/globalsign/mgo/bson"
+
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
 
@@ -56,7 +58,7 @@ func main() {
 func readOplog(redisPubs chan *redisPub, mongoURL string) {
 	// Struct that matches the message format redis-oplog expects
 	type outgoingMessageDocument struct {
-		ID string `json:"_id"`
+		ID interface{} `json:"_id"`
 	}
 	type outgoingMessage struct {
 		Event  string                  `json:"e"`
@@ -110,10 +112,21 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 				continue
 			}
 
-			id, idOK := op.Id.(string)
-			if !idOK {
-				// TODO: Handle ObjectIDs (https://github.com/tulip/oplogtoredis/issues/9)
-				log.Log.Errorw("op.ID was not a string",
+			var idForChannel string
+			var idForMessage interface{}
+
+			if id, idOK := op.Id.(string); idOK {
+				idForChannel = id
+				idForMessage = id
+			} else if id, idOK := op.Id.(bson.ObjectId); idOK {
+				idHex := id.Hex()
+				idForChannel = idHex
+				idForMessage = map[string]string{
+					"$type":  "oid",
+					"$value": idHex,
+				}
+			} else {
+				log.Log.Errorw("op.ID was not a string or ObjectID",
 					"id", op.Id)
 				continue
 			}
@@ -124,7 +137,7 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 			// https://github.com/tulip/oplogtoredis/issues/13
 			msg := outgoingMessage{
 				Event:  eventNameForOperation(op),
-				Doc:    outgoingMessageDocument{id},
+				Doc:    outgoingMessageDocument{idForMessage},
 				Fields: fieldsForOperation(op),
 			}
 			log.Log.Debugw("Sending outgoing message", "message", msg)
@@ -144,7 +157,7 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 				msg:     msgJSON,
 			}
 			redisPubs <- &redisPub{
-				channel: op.Namespace + "::" + id,
+				channel: op.Namespace + "::" + idForChannel,
 				msg:     msgJSON,
 			}
 		}
