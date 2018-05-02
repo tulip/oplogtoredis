@@ -53,7 +53,7 @@ func MaxCatchUp() time.Duration {
 // RedisDedupeExpiration controls the expiration of the Redis keys that are
 // used to ensure we process oplog entries at most once. Every time we publish
 // an oplog entry to Redis, we write its unique timestamp as a Redis expiring
-// key, and check for the existance of that key before doing the actual publish.
+// key, and check for the existence of that key before doing the actual publish.
 // This allows us to both run multiple copies of oplogtoredis (only one will
 // get to write the key and send the message, the other one will see the key
 // exists and skip publishing), and also ensures that on restart we don't
