@@ -52,7 +52,11 @@ func main() {
 
 	// This blocks forever; if we end up needing to do more work in the main
 	// goroutine we'll have to move this to a background goroutine
-	redispub.PublishStream(redisClient, redisPubs)
+	redispub.PublishStream(redisClient, redisPubs, &redispub.PublishOpts{
+		FlushInterval:    config.TimestampFlushInterval(),
+		DedupeExpiration: config.RedisDedupeExpiration(),
+		MetadataPrefix:   config.RedisMetadataPrefix(),
+	})
 }
 
 // Connects to mongo, starts up a gtm client, and starts up a background

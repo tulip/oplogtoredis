@@ -9,10 +9,11 @@ import (
 type oplogtoredisConfiguration struct {
 	RedisURL               string        `required:"true" split_words:"true"`
 	MongoURL               string        `required:"true" split_words:"true"`
-	BufferSize             int           `default:"10000"`
-	TimestampFlushInterval time.Duration `default:"1s"`
-	MaxCatchUp             time.Duration `default:"60s"`
-	RedisDedupeExpiration  time.Duration `default:"120s"`
+	BufferSize             int           `default:"10000" split_words:"true"`
+	TimestampFlushInterval time.Duration `default:"1s" split_words:"true"`
+	MaxCatchUp             time.Duration `default:"60s" split_words:"true"`
+	RedisDedupeExpiration  time.Duration `default:"120s" split_words:"true"`
+	RedisMetadataPrefix    string        `default:"oplogtoredis::" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -62,6 +63,21 @@ func MaxCatchUp() time.Duration {
 // existed.
 func RedisDedupeExpiration() time.Duration {
 	return globalConfig.RedisDedupeExpiration
+}
+
+// RedisMetadataPrefix controls the prefix for keys used to store oplogtoredis
+// metadata (such as the timestamp of the last oplog entry processed). If you're
+// running multiple instances of oplogtoredis for the same MongoDB (for high
+// availability), you should use the same RedisMetadataPrefix for both. If
+// you're running multiple instances for different MongoDBs (because you're
+// using many MongoDB instances with a shared Redis instace, for example), you
+// should have different RedisMetadataPrefixes for each.
+//
+// This *does not* affect the channel names used to publish oplog entries.
+// The channel names are always <db-name>.<collection-name> and
+// <db-name>.<collection-name>::<document-id>
+func RedisMetadataPrefix() string {
+	return globalConfig.RedisMetadataPrefix
 }
 
 // ParseEnv parses the current environment variables and updates the stored

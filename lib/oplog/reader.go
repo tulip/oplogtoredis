@@ -79,14 +79,10 @@ func Tail(in gtm.OpChan, out chan *redispub.Publication) {
 		// We need to publish on both the full-collection channel and the
 		// single-document channel
 		out <- &redispub.Publication{
-			Channel:        op.Namespace,
-			Msg:            msgJSON,
-			OplogTimestamp: op.Timestamp,
-		}
-		out <- &redispub.Publication{
-			Channel:        op.Namespace + "::" + idForChannel,
-			Msg:            msgJSON,
-			OplogTimestamp: op.Timestamp,
+			CollectionChannel: op.Namespace,
+			SpecificChannel:   op.Namespace + "::" + idForChannel,
+			Msg:               msgJSON,
+			OplogTimestamp:    op.Timestamp,
 		}
 	}
 }
