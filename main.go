@@ -1,28 +1,19 @@
 package main
 
 import (
-	"encoding/json"
-	"sync"
+	"fmt"
 	"time"
-
-	"github.com/globalsign/mgo/bson"
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
-
+	"github.com/tulip/oplogtoredis/lib/oplog"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.uber.org/zap"
 
 	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis"
 	"github.com/rwynn/gtm"
 )
-
-var wg sync.WaitGroup
-
-type redisPub struct {
-	channel string
-	msg     []byte
-}
 
 func main() {
 	defer log.RawLog.Sync()
@@ -31,6 +22,19 @@ func main() {
 	if err != nil {
 		panic("Error parsing environment variables: " + err.Error())
 	}
+
+	mongoSession, gtmSession, err := createGTMClient()
+	if err != nil {
+		panic("Error initialize oplog tailer: " + err.Error())
+	}
+	defer mongoSession.Close()
+	defer gtmSession.Stop()
+
+	redisClient, err := createRedisClient()
+	if err != nil {
+		panic("Error initializing Redis client: " + err.Error())
+	}
+	defer redisClient.Close()
 
 	// We crate two goroutines:
 	//
@@ -42,38 +46,31 @@ func main() {
 	// and sends them to Redis.
 	//
 	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
-	redisPubs := make(chan *redisPub, 10000)
+	redisPubs := make(chan *redispub.Publication, 10000)
 
-	wg.Add(1)
-	go readOplog(redisPubs, config.MongoURL())
+	go oplog.Tail(gtmSession.OpC, redisPubs)
 
-	wg.Add(1)
-	go writeMessages(redisPubs, config.RedisURL())
-
-	// This won't ever return; it's just here so we keep running forever
-	wg.Wait()
+	// This blocks forever; if we end up needing to do more work in the main
+	// goroutine we'll have to move this to a background goroutine
+	redispub.PublishStream(redisClient, redisPubs)
 }
 
-// Goroutine to read from the oplog and write messages to be published to Redis
-func readOplog(redisPubs chan *redisPub, mongoURL string) {
-	// Struct that matches the message format redis-oplog expects
-	type outgoingMessageDocument struct {
-		ID interface{} `json:"_id"`
-	}
-	type outgoingMessage struct {
-		Event  string                  `json:"e"`
-		Doc    outgoingMessageDocument `json:"d"`
-		Fields []string                `json:"f"`
+// Connects to mongo, starts up a gtm client, and starts up a background
+// goroutine to log GTM errors
+func createGTMClient() (*mgo.Session, *gtm.OpCtx, error) {
+	// configure mgo to use our logger
+	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Could not create a std logger: %s", err)
 	}
 
-	defer wg.Done()
+	mgo.SetLogger(stdLog)
 
 	// get a mgo session
 	session, err := mgo.Dial(config.MongoURL())
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
-	defer session.Close()
 
 	session.SetMode(mgo.Monotonic, true)
 
@@ -88,157 +85,50 @@ func readOplog(redisPubs chan *redisPub, mongoURL string) {
 		UpdateDataAsDelta: true,
 		WorkerCount:       8,
 	})
-	defer ctx.Stop()
 
-	for {
-		// loop forever receiving events
-		select {
-		case err = <-ctx.ErrC:
-			// Log errors we receive from mgo
-			//
-			// TODO TESTING: Test mongo failure modes (https://github.com/tulip/oplogtoredis/issues/5)
-			log.RawLog.Error("Error tailing oplog", zap.Error(err))
-		case op := <-ctx.OpC:
-			log.Log.Debugw("Got oplog entry", "op", op)
+	// Start a goroutine to log gtm errors
+	go func() {
+		for {
+			err := <-ctx.ErrC
 
-			// Process an oplog entry
-			//
-			// TODO PERF: Add options for filtering to specific collections or
-			// databases (https://github.com/tulip/oplogtoredis/issues/8)
-
-			if op.IsCommand() {
-				// Commands (such as dropping the database, modifying indices,
-				// etc.) don't get sent
-				continue
-			}
-
-			var idForChannel string
-			var idForMessage interface{}
-
-			if id, idOK := op.Id.(string); idOK {
-				idForChannel = id
-				idForMessage = id
-			} else if id, idOK := op.Id.(bson.ObjectId); idOK {
-				idHex := id.Hex()
-				idForChannel = idHex
-				idForMessage = map[string]string{
-					"$type":  "oid",
-					"$value": idHex,
-				}
-			} else {
-				log.Log.Errorw("op.ID was not a string or ObjectID",
-					"id", op.Id)
-				continue
-			}
-
-			// Construct the JSON we're going to send to Redis
-			//
-			// TODO PERF: consider a specialized JSON encoder
-			// https://github.com/tulip/oplogtoredis/issues/13
-			msg := outgoingMessage{
-				Event:  eventNameForOperation(op),
-				Doc:    outgoingMessageDocument{idForMessage},
-				Fields: fieldsForOperation(op),
-			}
-			log.Log.Debugw("Sending outgoing message", "message", msg)
-			msgJSON, err := json.Marshal(&msg)
-
-			if err != nil {
-				log.Log.Error("Error marshalling outgoing message",
-					"msg", msg)
-
-				continue
-			}
-
-			// We need to publish on both the full-collection channel and the
-			// single-document channel
-			redisPubs <- &redisPub{
-				channel: op.Namespace,
-				msg:     msgJSON,
-			}
-			redisPubs <- &redisPub{
-				channel: op.Namespace + "::" + idForChannel,
-				msg:     msgJSON,
-			}
+			log.Log.Errorw("Error tailing oplog",
+				"error", err)
 		}
-	}
-}
+	}()
 
-func eventNameForOperation(op *gtm.Op) string {
-	if op.Operation == "d" {
-		return "r"
-	}
-	return op.Operation
-}
-
-// Given a gtm.Op, returned the fields affected by that operation
-//
-// TODO: test this against more complicated mutations (https://github.com/tulip/oplogtoredis/issues/10)
-// TODO TESTING: unit tests for this
-func fieldsForOperation(op *gtm.Op) []string {
-	if op.IsInsert() || gtm.UpdateIsReplace(op.Data) {
-		return mapKeys(op.Data)
-	} else if op.IsUpdate() {
-		var fields []string
-		for operationKey, operation := range op.Data {
-			if operationKey == "$v" {
-				// $v indicates the version of the update language and should be
-				// ignored; it will likely be removed in a future version of
-				// Mongo (https://jira.mongodb.org/browse/SERVER-32240)
-				continue
-			}
-
-			operationMap, operationMapOK := operation.(map[string]interface{})
-			if !operationMapOK {
-				log.Log.Errorw("Oplog data for update contained $-prefixed key with a non-map value",
-					"op.Data", op.Data)
-				continue
-			}
-
-			fields = append(fields, mapKeys(operationMap)...)
-		}
-
-		return fields
-	}
-
-	return []string{}
-}
-
-// Given a map, returns the keys of that map
-//
-// TODO TESTING: unit tests for this
-func mapKeys(m map[string]interface{}) []string {
-	fields := make([]string, len(m))
-
-	i := 0
-	for key := range m {
-		fields[i] = key
-		i++
-	}
-
-	return fields
+	return session, ctx, nil
 }
 
 // Goroutine that just reads messages and sends them to Redis. We don't do this
 // inline above so that messages can queue up in the channel if we lose our
 // redis connection
-func writeMessages(redisPubs chan *redisPub, redisURL string) {
-	defer wg.Done()
-
-	redisOpts, err := redis.ParseURL(redisURL)
+func createRedisClient() (redis.UniversalClient, error) {
+	// Configure go-redis to use our logger
+	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
 	if err != nil {
-		panic("Could not parse Redis URL: " + err.Error())
+		return nil, fmt.Errorf("Could not create a std logger: %s", err)
 	}
 
-	client := redis.NewClient(redisOpts)
-	defer client.Close()
+	redis.SetLogger(stdLog)
 
-	for {
-		p := <-redisPubs
-
-		// TODO TESTING: test Redis failure modes (https://github.com/tulip/oplogtoredis/issues/11)
-		//
-		// TODO: add an HA mode (https://github.com/tulip/oplogtoredis/issues/12)
-		client.Publish(p.channel, p.msg)
+	// Parse the Redis URL
+	parsedRedisURL, err := redis.ParseURL(config.RedisURL())
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing Redis URL: %s", err)
 	}
+
+	// Create a Redis client
+	client := redis.NewUniversalClient(&redis.UniversalOptions{
+		Addrs:    []string{parsedRedisURL.Addr},
+		DB:       parsedRedisURL.DB,
+		Password: parsedRedisURL.Password,
+	})
+
+	// Check that we have a connection
+	_, err = client.Ping().Result()
+	if err != nil {
+		return nil, fmt.Errorf("Redis ping failed: %s", err)
+	}
+
+	return client, nil
 }
