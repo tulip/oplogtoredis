@@ -6,6 +6,7 @@ import (
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/mongourl"
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.uber.org/zap"
@@ -71,9 +72,14 @@ func createGTMClient() (*mgo.Session, *gtm.OpCtx, error) {
 	mgo.SetLogger(stdLog)
 
 	// get a mgo session
-	session, err := mgo.Dial(config.MongoURL())
+	dialInfo, err := mongourl.Parse(config.MongoURL())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Could not parse Mongo URL: %s", err)
+	}
+
+	session, err := mgo.DialWithInfo(dialInfo)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error connecting to Mongo: %s", err)
 	}
 
 	session.SetMode(mgo.Monotonic, true)
