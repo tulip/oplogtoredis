@@ -1,0 +1,18 @@
+sudo: required
+
+services:
+  - docker
+
+
+language: go
+go:
+  - "1.10"
+
+install: skip
+
+jobs:
+  include:
+    - stage: test
+      script: ./scripts/runLint.sh
+    - script: ./scripts/runUnitTests.sh
+    - script: ./scripts/runAcceptanceTests.sh

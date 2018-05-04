@@ -5,4 +5,4 @@
 set -e
 cd `dirname "$0"`'/..'
 
-go test . ./lib/*
+go test . ./lib/...
