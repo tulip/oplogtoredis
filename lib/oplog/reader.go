@@ -53,7 +53,8 @@ func Tail(in gtm.OpChan, out chan *redispub.Publication) {
 			}
 		} else {
 			log.Log.Errorw("op.ID was not a string or ObjectID",
-				"id", op.Id)
+				"id", op.Id,
+				"op", op)
 			continue
 		}
 
