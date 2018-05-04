@@ -38,6 +38,12 @@ func Tail(in gtm.OpChan, out chan *redispub.Publication) {
 			continue
 		}
 
+		database, collection := parseDBAndCollection(op)
+		if collection == "system.indexes" {
+			// We don't publish index creation events
+			continue
+		}
+
 		var idForChannel string
 		var idForMessage interface{}
 
@@ -54,7 +60,9 @@ func Tail(in gtm.OpChan, out chan *redispub.Publication) {
 		} else {
 			log.Log.Errorw("op.ID was not a string or ObjectID",
 				"id", op.Id,
-				"op", op)
+				"op", op,
+				"db", database,
+				"collection", collection)
 			continue
 		}
 
@@ -72,7 +80,9 @@ func Tail(in gtm.OpChan, out chan *redispub.Publication) {
 
 		if err != nil {
 			log.Log.Error("Error marshalling outgoing message",
-				"msg", msg)
+				"msg", msg,
+				"db", database,
+				"collection", collection)
 
 			continue
 		}
@@ -93,4 +103,26 @@ func eventNameForOperation(op *gtm.Op) string {
 		return "r"
 	}
 	return op.Operation
+}
+
+// Given a gtm.Op, returns (database, collection)
+func parseDBAndCollection(op *gtm.Op) (string, string) {
+	dbAndCollection := op.ParseNamespace()
+
+	switch len(dbAndCollection) {
+	case 0:
+		// This shouldn't happen -- ParseNamespace is calling SplitN which
+		// should always return at least one element
+		log.Log.Error("Got empty slice when parsing database and collection",
+			"namespace", op.Namespace,
+			"parsedNamespace", dbAndCollection,
+			"op", op)
+		return "", ""
+	case 1:
+		// Some operations are database-level and don't have a collection
+		return dbAndCollection[0], ""
+	default:
+		// Normal operation where the namesapce is <db>.<collection>
+		return dbAndCollection[0], dbAndCollection[1]
+	}
 }

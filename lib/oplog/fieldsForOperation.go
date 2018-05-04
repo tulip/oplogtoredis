@@ -25,7 +25,7 @@ func fieldsForOperation(op *gtm.Op) []string {
 			operationMap, operationMapOK := operation.(map[string]interface{})
 			if !operationMapOK {
 				log.Log.Errorw("Oplog data for update contained $-prefixed key with a non-map value",
-					"op.Data", op.Data)
+					"op", op)
 				continue
 			}
 
