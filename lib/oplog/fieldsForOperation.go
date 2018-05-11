@@ -10,10 +10,10 @@ import (
 // TODO: test this against more complicated mutations (https://github.com/tulip/oplogtoredis/issues/10)
 // TODO TESTING: unit tests for this
 func fieldsForOperation(op *gtm.Op) []string {
-	if op.IsInsert() || gtm.UpdateIsReplace(op.Data) {
+	if op.IsInsert() || (op.IsUpdate() && gtm.UpdateIsReplace(op.Data)) {
 		return mapKeys(op.Data)
 	} else if op.IsUpdate() {
-		var fields []string
+		fields := []string{}
 		for operationKey, operation := range op.Data {
 			if operationKey == "$v" {
 				// $v indicates the version of the update language and should be
@@ -39,8 +39,6 @@ func fieldsForOperation(op *gtm.Op) []string {
 }
 
 // Given a map, returns the keys of that map
-//
-// TODO TESTING: unit tests for this
 func mapKeys(m map[string]interface{}) []string {
 	fields := make([]string, len(m))
 

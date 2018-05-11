@@ -31,7 +31,7 @@ var publishDedupe = redis.NewScript(`
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts) {
+func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan bson.MongoTimestamp)
@@ -42,34 +42,39 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
 	for {
-		p := <-in
+		select {
+		case _ = <-stop:
+			return
 
-		err := publishDedupe.Run(
-			client,
-			[]string{
-				// The key used for deduplication
-				// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
-				// where the first 32 bits are a unix timestamp (seconds since
-				// the epoch), and the next 32 bits are a monotonically-increasing
-				// sequence number for operations within that second. It's
-				// guaranteed-unique, so we can use it for deduplication
-				opts.MetadataPrefix + "processed::" + encodeMongoTimestamp(p.OplogTimestamp),
-			},
-			dedupeExpirationSeconds, // ARGV[1], expiration time
-			p.Msg,               // ARGV[2], message
-			p.CollectionChannel, // ARGV[3], channel #1
-			p.SpecificChannel,   // ARGV[4], channel #2
-		).Err()
+		case p := <-in:
 
-		if err != nil {
-			log.Log.Errorw("Error publishing message",
-				"error", err)
-			continue
+			err := publishDedupe.Run(
+				client,
+				[]string{
+					// The key used for deduplication
+					// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
+					// where the first 32 bits are a unix timestamp (seconds since
+					// the epoch), and the next 32 bits are a monotonically-increasing
+					// sequence number for operations within that second. It's
+					// guaranteed-unique, so we can use it for deduplication
+					opts.MetadataPrefix + "processed::" + encodeMongoTimestamp(p.OplogTimestamp),
+				},
+				dedupeExpirationSeconds, // ARGV[1], expiration time
+				p.Msg,               // ARGV[2], message
+				p.CollectionChannel, // ARGV[3], channel #1
+				p.SpecificChannel,   // ARGV[4], channel #2
+			).Err()
+
+			if err != nil {
+				log.Log.Errorw("Error publishing message",
+					"error", err)
+				continue
+			}
+
+			// We want to make sure we do this *after* we've successfully published
+			// the messages
+			timestampC <- p.OplogTimestamp
 		}
-
-		// We want to make sure we do this *after* we've successfully published
-		// the messages
-		timestampC <- p.OplogTimestamp
 	}
 }
 
