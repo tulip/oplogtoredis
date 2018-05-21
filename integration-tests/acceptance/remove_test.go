@@ -36,8 +36,8 @@ func TestRemove(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":         []helpers.OTRMessage{expectedMessage},
-		"tests.Foo::someid": []helpers.OTRMessage{expectedMessage},
+		"tests.Foo":         {expectedMessage},
+		"tests.Foo::someid": {expectedMessage},
 	})
 }
 
@@ -88,8 +88,8 @@ func TestRemoveMultiple(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":          []helpers.OTRMessage{expectedMessage1, expectedMessage2},
-		"tests.Foo::someid":  []helpers.OTRMessage{expectedMessage1},
-		"tests.Foo::someid2": []helpers.OTRMessage{expectedMessage2},
+		"tests.Foo":          {expectedMessage1, expectedMessage2},
+		"tests.Foo::someid":  {expectedMessage1},
+		"tests.Foo::someid2": {expectedMessage2},
 	})
 }

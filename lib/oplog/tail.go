@@ -67,7 +67,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 	oplogCollection := session.DB("local").C("oplog.rs")
 
 	startTime := tailer.getStartTime(func() (bson.MongoTimestamp, error) {
-		// Get the timestamp of the last entry in teh oplog (as a position to
+		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry oplogEntry
 		mongoErr := session.DB("local").C("oplog.rs").Find(nil).Sort("-$natural").One(&entry)

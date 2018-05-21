@@ -99,7 +99,7 @@ func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 	// The code under test operates at a configurable speed (for things like
 	// periodic flushing). Adjusting this value controls that speed. Making it
-	// faster speeds up tests at the expense of increasing the likelyhood of
+	// faster speeds up tests at the expense of increasing the likelihood of
 	// flakes. It is set to 100x the experimentally-determined minimum for
 	// a successful tet run.
 	var testSpeed = 250 * time.Millisecond

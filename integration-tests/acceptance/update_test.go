@@ -42,8 +42,8 @@ func TestUpdate(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":         []helpers.OTRMessage{expectedMessage},
-		"tests.Foo::someid": []helpers.OTRMessage{expectedMessage},
+		"tests.Foo":         {expectedMessage},
+		"tests.Foo::someid": {expectedMessage},
 	})
 }
 
@@ -77,8 +77,8 @@ func TestUpdateReplace(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":         []helpers.OTRMessage{expectedMessage},
-		"tests.Foo::someid": []helpers.OTRMessage{expectedMessage},
+		"tests.Foo":         {expectedMessage},
+		"tests.Foo::someid": {expectedMessage},
 	})
 }
 
@@ -90,10 +90,10 @@ func TestUpdateArraySet(t *testing.T) {
 	err := harness.mongoClient.C("Foo").Insert(bson.M{
 		"_id": "someid",
 		"hello": []bson.M{
-			bson.M{"value": 10},
-			bson.M{"value": 20},
-			bson.M{"value": 30},
-			bson.M{"value": 40},
+			{"value": 10},
+			{"value": 20},
+			{"value": 30},
+			{"value": 40},
 		},
 	})
 	if err != nil {
@@ -103,10 +103,10 @@ func TestUpdateArraySet(t *testing.T) {
 	err = harness.mongoClient.C("Foo").Insert(bson.M{
 		"_id": "someid2",
 		"hello": []bson.M{
-			bson.M{"value": 10},
-			bson.M{"value": 10},
-			bson.M{"value": 20},
-			bson.M{"value": 30},
+			{"value": 10},
+			{"value": 10},
+			{"value": 20},
+			{"value": 30},
 		},
 	})
 	if err != nil {
@@ -143,9 +143,9 @@ func TestUpdateArraySet(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":          []helpers.OTRMessage{expectedMessage1, expectedMessage2},
-		"tests.Foo::someid":  []helpers.OTRMessage{expectedMessage1},
-		"tests.Foo::someid2": []helpers.OTRMessage{expectedMessage2},
+		"tests.Foo":          {expectedMessage1, expectedMessage2},
+		"tests.Foo::someid":  {expectedMessage1},
+		"tests.Foo::someid2": {expectedMessage2},
 	})
 }
 
@@ -157,10 +157,10 @@ func TestUpdateArrayPush(t *testing.T) {
 	err := harness.mongoClient.C("Foo").Insert(bson.M{
 		"_id": "someid",
 		"hello": []bson.M{
-			bson.M{"value": 10},
-			bson.M{"value": 20},
-			bson.M{"value": 30},
-			bson.M{"value": 40},
+			{"value": 10},
+			{"value": 20},
+			{"value": 30},
+			{"value": 40},
 		},
 	})
 	if err != nil {
@@ -180,6 +180,9 @@ func TestUpdateArrayPush(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		panic(err)
+	}
 
 	expectedMessage := helpers.OTRMessage{
 		Event: "u",
@@ -190,7 +193,7 @@ func TestUpdateArrayPush(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":         []helpers.OTRMessage{expectedMessage},
-		"tests.Foo::someid": []helpers.OTRMessage{expectedMessage},
+		"tests.Foo":         {expectedMessage},
+		"tests.Foo::someid": {expectedMessage},
 	})
 }

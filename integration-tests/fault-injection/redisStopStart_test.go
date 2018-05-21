@@ -49,6 +49,6 @@ func TestRedisStopStart(t *testing.T) {
 	if receivedCount < 60 {
 		// We should have recovered fast enough for at least 50 writes to
 		// succedd
-		t.Errorf("Expected at least 60 recieved messages, got %d", receivedCount)
+		t.Errorf("Expected at least 60 received messages, got %d", receivedCount)
 	}
 }

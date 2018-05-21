@@ -28,7 +28,7 @@ type MongoServer struct {
 }
 
 // StartMongoServer starts a mongo replica set and returns a
-// MongoServer for futher operations
+// MongoServer for further operations
 func StartMongoServer() *MongoServer {
 	dir, err := ioutil.TempDir("", "example")
 	if err != nil {

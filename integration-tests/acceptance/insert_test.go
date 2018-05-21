@@ -30,14 +30,7 @@ func TestInsert(t *testing.T) {
 	}
 
 	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":         []helpers.OTRMessage{expectedMessage},
-		"tests.Foo::someid": []helpers.OTRMessage{expectedMessage},
+		"tests.Foo":         {expectedMessage},
+		"tests.Foo::someid": {expectedMessage},
 	})
 }
-
-// TODO TESTING:
-//   - updates
-//   - deletes
-//   - really weird update operators
-//   - multi-updates/deletes
-//   - reconnect behavior (both mongo and redis)
