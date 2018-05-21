@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
-	"time"
+	"sync"
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis"
-	"github.com/rwynn/gtm"
 )
 
 func main() {
@@ -26,12 +27,11 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
-	mongoSession, gtmSession, err := createGTMClient()
+	mongoSession, err := createMongoClient()
 	if err != nil {
 		panic("Error initialize oplog tailer: " + err.Error())
 	}
 	defer mongoSession.Close()
-	defer gtmSession.Stop()
 	log.Log.Info("Initialized connection to Mongo")
 
 	redisClient, err := createRedisClient()
@@ -52,17 +52,45 @@ func main() {
 	//
 	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
 	redisPubs := make(chan *redispub.Publication, 10000)
+	waitGroup := sync.WaitGroup{}
 
 	stopOplogTail := make(chan bool)
-	go oplog.Tail(gtmSession.OpC, redisPubs, stopOplogTail)
+	waitGroup.Add(1)
+	go func() {
+		tailer := oplog.Tailer{
+			MongoClient: mongoSession,
+			RedisClient: redisClient,
+			RedisPrefix: config.RedisMetadataPrefix(),
+			MaxCatchUp:  config.MaxCatchUp(),
+		}
+		tailer.Tail(redisPubs, stopOplogTail)
+
+		log.Log.Info("Oplog tailer completed")
+		waitGroup.Done()
+	}()
 
 	stopRedisPub := make(chan bool)
-	go redispub.PublishStream(redisClient, redisPubs, &redispub.PublishOpts{
-		FlushInterval:    config.TimestampFlushInterval(),
-		DedupeExpiration: config.RedisDedupeExpiration(),
-		MetadataPrefix:   config.RedisMetadataPrefix(),
-	}, stopRedisPub)
+	waitGroup.Add(1)
+	go func() {
+		redispub.PublishStream(redisClient, redisPubs, &redispub.PublishOpts{
+			FlushInterval:    config.TimestampFlushInterval(),
+			DedupeExpiration: config.RedisDedupeExpiration(),
+			MetadataPrefix:   config.RedisMetadataPrefix(),
+		}, stopRedisPub)
+
+		log.Log.Info("Redis publisher completed")
+		waitGroup.Done()
+	}()
 	log.Log.Info("Started up processing goroutines")
+
+	// Start one more goroutine for the HTTP server
+	httpServer := makeHTTPServer(redisClient, mongoSession)
+	go func() {
+		err := httpServer.ListenAndServe()
+		if err != nil {
+			panic("Could not start up HTTP server: " + err.Error())
+		}
+	}()
 
 	// Now we just wait until we get an exit signal, then exit cleanly
 	//
@@ -84,15 +112,18 @@ func main() {
 
 	stopOplogTail <- true
 	stopRedisPub <- true
+
+	httpServer.Shutdown(nil)
+
+	waitGroup.Wait()
 }
 
-// Connects to mongo, starts up a gtm client, and starts up a background
-// goroutine to log GTM errors
-func createGTMClient() (*mgo.Session, *gtm.OpCtx, error) {
+// Connects to mongo
+func createMongoClient() (*mgo.Session, error) {
 	// configure mgo to use our logger
 	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Could not create a std logger: %s", err)
+		return nil, fmt.Errorf("Could not create a std logger: %s", err)
 	}
 
 	mgo.SetLogger(stdLog)
@@ -100,39 +131,17 @@ func createGTMClient() (*mgo.Session, *gtm.OpCtx, error) {
 	// get a mgo session
 	dialInfo, err := mongourl.Parse(config.MongoURL())
 	if err != nil {
-		return nil, nil, fmt.Errorf("Could not parse Mongo URL: %s", err)
+		return nil, fmt.Errorf("Could not parse Mongo URL: %s", err)
 	}
 
 	session, err := mgo.DialWithInfo(dialInfo)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error connecting to Mongo: %s", err)
+		return nil, fmt.Errorf("Error connecting to Mongo: %s", err)
 	}
 
 	session.SetMode(mgo.Monotonic, true)
 
-	// Use gtm to tail to oplog
-	//
-	// TODO PERF: benchmark other oplog tailers (https://github.com/tulip/oplogtoredis/issues/3)
-	//
-	// TODO: pick up where we left off on restart (https://github.com/tulip/oplogtoredis/issues/4)
-	ctx := gtm.Start(session, &gtm.Options{
-		ChannelSize:       10000,
-		BufferDuration:    100 * time.Millisecond,
-		UpdateDataAsDelta: true,
-		WorkerCount:       8,
-	})
-
-	// Start a goroutine to log gtm errors
-	go func() {
-		for {
-			err := <-ctx.ErrC
-
-			log.Log.Errorw("Error tailing oplog",
-				"error", err)
-		}
-	}()
-
-	return session, ctx, nil
+	return session, nil
 }
 
 // Goroutine that just reads messages and sends them to Redis. We don't do this
@@ -167,4 +176,43 @@ func createRedisClient() (redis.UniversalClient, error) {
 	}
 
 	return client, nil
+}
+
+func makeHTTPServer(redis redis.UniversalClient, mongo *mgo.Session) *http.Server {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		redisErr := redis.Ping().Err()
+		redisOK := redisErr == nil
+		if !redisOK {
+			log.Log.Errorw("Error connecting to Redis during healthz check",
+				"error", redisErr)
+		}
+
+		mongoErr := mongo.Ping()
+		mongoOK := mongoErr == nil
+
+		if !mongoOK {
+			log.Log.Errorw("Error connecting to Mongo during healthz check",
+				"error", mongoErr)
+		}
+
+		if mongoOK && redisOK {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+
+		jsonErr := json.NewEncoder(w).Encode(map[string]interface{}{
+			"mongoOK": mongoOK,
+			"redisOK": redisOK,
+		})
+		if jsonErr != nil {
+			log.Log.Errorw("Error writing healthz response",
+				"error", jsonErr)
+			http.Error(w, jsonErr.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	return &http.Server{Addr: config.HTTPServerAddr(), Handler: mux}
 }

@@ -1,11 +1,13 @@
 version: "3"
 services:
   meteor1:
-    build: ./testapp
+    build:
+      context: ./testapp
+      dockerfile: Dockerfile.dev
     volumes:
       - ./testapp:/src
       - meteor_packages:/root/.meteor/packages
-      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_package_metadata:/root/.meteor/package-metadata
       - meteor_1_local:/src/.meteor/local
     environment:
       - MONGO_URL=mongodb://mongo/dev
@@ -13,11 +15,13 @@ services:
     ports:
       - 9091:3000
   meteor2:
-    build: ./testapp
+    build:
+      context: ./testapp
+      dockerfile: Dockerfile.dev
     volumes:
       - ./testapp:/src
       - meteor_packages:/root/.meteor/packages
-      - meteor_package_metadata:/root/.meteor/package-metadata'
+      - meteor_package_metadata:/root/.meteor/package-metadata
       - meteor_2_local:/src/.meteor/local
     environment:
       - MONGO_URL=mongodb://mongo/dev

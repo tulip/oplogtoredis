@@ -1,7 +1,7 @@
 package redispub
 
 import (
-	"strconv"
+	"fmt"
 	"time"
 
 	"github.com/globalsign/mgo/bson"
@@ -41,41 +41,74 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
+	publishFn := func(p *Publication) error {
+		return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+	}
+
 	for {
 		select {
 		case _ = <-stop:
+			close(timestampC)
 			return
 
 		case p := <-in:
-
-			err := publishDedupe.Run(
-				client,
-				[]string{
-					// The key used for deduplication
-					// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
-					// where the first 32 bits are a unix timestamp (seconds since
-					// the epoch), and the next 32 bits are a monotonically-increasing
-					// sequence number for operations within that second. It's
-					// guaranteed-unique, so we can use it for deduplication
-					opts.MetadataPrefix + "processed::" + encodeMongoTimestamp(p.OplogTimestamp),
-				},
-				dedupeExpirationSeconds, // ARGV[1], expiration time
-				p.Msg,               // ARGV[2], message
-				p.CollectionChannel, // ARGV[3], channel #1
-				p.SpecificChannel,   // ARGV[4], channel #2
-			).Err()
+			err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 
 			if err != nil {
-				log.Log.Errorw("Error publishing message",
-					"error", err)
-				continue
+				log.Log.Errorw("Permanent error while trying to publish message; giving up",
+					"error", err,
+					"message", p)
+			} else {
+				// We want to make sure we do this *after* we've successfully published
+				// the messages
+				timestampC <- p.OplogTimestamp
 			}
-
-			// We want to make sure we do this *after* we've successfully published
-			// the messages
-			timestampC <- p.OplogTimestamp
 		}
 	}
+}
+
+func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
+	retries := 0
+
+	for retries < maxRetries {
+		err := publishFn(p)
+
+		if err != nil {
+			log.Log.Errorw("Error publishing message, will retry",
+				"error", err,
+				"retryNumber", retries)
+
+			// failure, retry
+			retries++
+			time.Sleep(sleepTime)
+		} else {
+			// success, return
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Failed to send message after retrying %d times", maxRetries)
+}
+
+func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {
+	_, err := publishDedupe.Run(
+		client,
+		[]string{
+			// The key used for deduplication
+			// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
+			// where the first 32 bits are a unix timestamp (seconds since
+			// the epoch), and the next 32 bits are a monotonically-increasing
+			// sequence number for operations within that second. It's
+			// guaranteed-unique, so we can use it for deduplication
+			prefix + "processed::" + encodeMongoTimestamp(p.OplogTimestamp),
+		},
+		dedupeExpirationSeconds, // ARGV[1], expiration time
+		p.Msg,               // ARGV[2], message
+		p.CollectionChannel, // ARGV[3], channel #1
+		p.SpecificChannel,   // ARGV[4], channel #2
+	).Result()
+
+	return err
 }
 
 // Periodically updates the last-processed-entry timestamp in Redis.
@@ -98,7 +131,12 @@ func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan
 
 	for {
 		select {
-		case timestamp := <-timestamps:
+		case timestamp, ok := <-timestamps:
+			if !ok {
+				// channel got closed
+				return
+			}
+
 			mostRecentTimestamp = timestamp
 			needFlush = true
 
@@ -111,9 +149,4 @@ func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan
 			}
 		}
 	}
-}
-
-// Converts a bson.MongoTimestamp into a string (in base-10)
-func encodeMongoTimestamp(ts bson.MongoTimestamp) string {
-	return strconv.FormatInt(int64(ts), 10)
 }

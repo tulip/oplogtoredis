@@ -1,0 +1,54 @@
+version: "3"
+services:
+  test:
+    build: .
+    depends_on:
+      - oplogtoredis
+      - mongo
+      - redis
+    command:
+      - /wait-for.sh
+      - --timeout=60
+      - mongo:27017
+      - '--'
+      - /wait-for.sh
+      - --timeout=60
+      - redis:6379
+      - '--'
+      - /go/src/github.com/tulip/oplogtoredis/integration-tests/acceptance/entry.sh
+    environment:
+      - MONGO_URL=mongodb://mongo/tests
+      - REDIS_URL=redis://redis
+      - OTR_URL=http://oplogtoredis:9000
+    volumes:
+      - ../../scripts/wait-for.sh:/wait-for.sh
+      - ../..:/go/src/github.com/tulip/oplogtoredis
+  oplogtoredis:
+    build:
+      context: ../..
+      dockerfile: ${OTR_DOCKERFILE}
+    environment:
+      - OTR_MONGO_URL=mongodb://mongo/tests
+      - OTR_REDIS_URL=redis://redis
+      - OTR_LOG_DEBUG=true
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ../../scripts/wait-for.sh:/wait-for.sh
+    command:
+      - /bin/oplogtoredis
+  mongo:
+    image: mongo:${MONGO_TAG}
+    command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0 --smallfiles"
+    logging:
+      driver: none
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:${REDIS_TAG}
+    logging:
+      driver: none
+
+volumes:
+  mongo_data:

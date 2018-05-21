@@ -4,72 +4,158 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 var envTests = map[string]struct {
 	env            map[string]string
 	expectedConfig *oplogtoredisConfiguration
 	expectError    bool
-}{}
+}{
+	"Full env": {
+		env: map[string]string{
+			"OTR_REDIS_URL":                "redis://something",
+			"OTR_MONGO_URL":                "mongodb://something",
+			"OTR_HTTP_SERVER_ADDR":         "localhost:1234",
+			"OTR_BUFFER_SIZE":              "10",
+			"OTR_TIMESTAMP_FLUSH_INTERVAL": "10m",
+			"OTR_MAX_CATCH_UP":             "0",
+			"OTR_REDIS_DEDUPE_EXPIRATION":  "12s",
+			"OTR_REDIS_METADATA_PREFIX":    "someprefix.",
+		},
+		expectedConfig: &oplogtoredisConfiguration{
+			RedisURL:               "redis://something",
+			MongoURL:               "mongodb://something",
+			HTTPServerAddr:         "localhost:1234",
+			BufferSize:             10,
+			TimestampFlushInterval: 10 * time.Minute,
+			MaxCatchUp:             0,
+			RedisDedupeExpiration:  12 * time.Second,
+			RedisMetadataPrefix:    "someprefix.",
+		},
+	},
+	"Minimal env": {
+		env: map[string]string{
+			"OTR_REDIS_URL": "redis://yyy",
+			"OTR_MONGO_URL": "mongodb://xxx",
+		},
+		expectedConfig: &oplogtoredisConfiguration{
+			RedisURL:               "redis://yyy",
+			MongoURL:               "mongodb://xxx",
+			HTTPServerAddr:         "0.0.0.0:9000",
+			BufferSize:             10000,
+			TimestampFlushInterval: time.Second,
+			MaxCatchUp:             time.Minute,
+			RedisDedupeExpiration:  2 * time.Minute,
+			RedisMetadataPrefix:    "oplogtoredis::",
+		},
+	},
+	"Missing redis URL": {
+		env: map[string]string{
+			"OTR_MONGO_URL": "mongodb://xxx",
+		},
+		expectError: true,
+	},
+	"Missing mongo URL": {
+		env: map[string]string{
+			"OTR_REDIS_URL": "redis://yyy",
+		},
+		expectError: true,
+	},
+}
 
 func TestParseEnv(t *testing.T) {
 	for name, envTest := range envTests {
-		// clear env
-		for _, envPair := range os.Environ() {
-			if strings.HasPrefix(envPair, "OTR_") {
-				// envPair is of the format "KEY=VALUE" so we split on "="
-				os.Unsetenv(strings.SplitN(envPair, "=", 2)[0])
+		t.Run(name, func(t *testing.T) {
+			// clear env
+			for _, envPair := range os.Environ() {
+				if strings.HasPrefix(envPair, "OTR_") {
+					// envPair is of the format "KEY=VALUE" so we split on "="
+					os.Unsetenv(strings.SplitN(envPair, "=", 2)[0])
+				}
 			}
-		}
 
-		// Set up env
-		for k, v := range envTest.env {
-			os.Setenv(k, v)
-		}
+			// Set up env
+			for k, v := range envTest.env {
+				os.Setenv(k, v)
+			}
 
-		// Run parseEnv
-		err := ParseEnv()
+			// Run parseEnv
+			err := ParseEnv()
 
-		// Check error expectations
-		if envTest.expectError && err == nil {
-			t.Errorf(
-				"[%s] Expected a error but did not get one for env: %#v.\n    Parsed config was: %#v",
-				name,
-				envTest.env,
-				envTest.expectedConfig,
-			)
-		}
-
-		if !envTest.expectError && err != nil {
-			t.Errorf(
-				"[%s] Recevied unexpected error while parsing env: %#v.\n    Error was: %s",
-				name,
-				envTest.env,
-				err,
-			)
-		}
-
-		// Check config expectations
-		if envTest.expectedConfig != nil {
-			if envTest.expectedConfig.MongoURL != MongoURL() {
-				t.Errorf(
-					"[%s] Incorrect Mongo URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-					name,
-					envTest.env,
-					envTest.expectedConfig,
-					MongoURL(),
+			// Check error expectations
+			if envTest.expectError && err == nil {
+				t.Fatalf(
+					"Expected a error but did not get one for env: %#v.\n    Parsed config was: %#v",
+					envTest.env, envTest.expectedConfig,
 				)
 			}
 
-			if envTest.expectedConfig.RedisURL != RedisURL() {
-				t.Errorf(
-					"[%s] Incorrect Redis URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-					name,
-					envTest.env,
-					envTest.expectedConfig,
-					RedisURL(),
+			if !envTest.expectError && err != nil {
+				t.Fatalf(
+					"Recevied unexpected error while parsing env: %#v.\n    Error was: %s",
+					envTest.env, err,
 				)
 			}
-		}
+
+			// Check config expectations
+			if envTest.expectedConfig != nil {
+				if envTest.expectedConfig.MongoURL != MongoURL() {
+					t.Errorf(
+						"Incorrect Mongo URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, MongoURL(),
+					)
+				}
+
+				if envTest.expectedConfig.RedisURL != RedisURL() {
+					t.Errorf(
+						"Incorrect Redis URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, RedisURL(),
+					)
+				}
+
+				if envTest.expectedConfig.HTTPServerAddr != HTTPServerAddr() {
+					t.Errorf(
+						"Incorrect HTTPServerAddr while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, HTTPServerAddr(),
+					)
+				}
+
+				if envTest.expectedConfig.BufferSize != BufferSize() {
+					t.Errorf(
+						"Incorrect BufferSize while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, BufferSize(),
+					)
+				}
+
+				if envTest.expectedConfig.TimestampFlushInterval != TimestampFlushInterval() {
+					t.Errorf(
+						"Incorrect TimestampFlushInterval while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, TimestampFlushInterval(),
+					)
+				}
+
+				if envTest.expectedConfig.MaxCatchUp != MaxCatchUp() {
+					t.Errorf(
+						"Incorrect MaxCatchUp while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, MaxCatchUp(),
+					)
+				}
+
+				if envTest.expectedConfig.RedisDedupeExpiration != RedisDedupeExpiration() {
+					t.Errorf(
+						"Incorrect RedisDedupeExpiration while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, RedisDedupeExpiration(),
+					)
+				}
+
+				if envTest.expectedConfig.RedisMetadataPrefix != RedisMetadataPrefix() {
+					t.Errorf(
+						"Incorrect RedisMetadataPrefix while parsing env: %#v.\n    Expected %#v\n    Got %#v",
+						envTest.env, envTest.expectedConfig, RedisMetadataPrefix(),
+					)
+				}
+			}
+		})
 	}
 }

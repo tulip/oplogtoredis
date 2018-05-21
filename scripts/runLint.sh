@@ -6,13 +6,15 @@
 set -e
 cd `dirname "$0"`'/..'
 
-gofmt_output=`gofmt -l *.go lib/**/*.go acceptance/**/*.go`
+gofmt_output=`gofmt -l *.go lib/**/*.go integration-tests/**/*.go`
 if [ ! -z "$gofmt_output" ]; then
     echo 'gofmt found issues with some files: '
     echo $gofmt_output
     exit 1
 fi
 
-go vet . ./lib/... ./acceptance/...
+go vet . ./lib/... ./integration-tests/...
+
+golint . ./lib/... ./integration-tests/...
 
 echo 'Lint passed.'

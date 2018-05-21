@@ -7,6 +7,7 @@ import { Tasks } from '../api/tasks.js';
 import './task.js';
 import './body.html';
 import './arrayTest.js';
+import './objectIDTest.js';
 
 Template.body.onCreated(function bodyOnCreated() {
   this.state = new ReactiveDict();

@@ -15,4 +15,6 @@ jobs:
     - stage: test
       script: ./scripts/runLint.sh
     - script: ./scripts/runUnitTests.sh
-    - script: ./scripts/runAcceptanceTests.sh
+    - script: ./scripts/runIntegrationAcceptance.sh
+    - script: ./scripts/runIntegrationPerformance.sh
+    - script: ./scripts/runIntegrationFaultInjection.sh

@@ -1,0 +1,7 @@
+goos: linux
+goarch: amd64
+pkg: github.com/tulip/oplogtoredis/integration-tests/performance
+BenchmarkInsertNoWait-4         	   20000	    305688 ns/op
+BenchmarkInsertWaitForRedis-4   	   20000	    351652 ns/op
+PASS
+ok  	github.com/tulip/oplogtoredis/integration-tests/performance	32.663s

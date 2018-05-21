@@ -42,21 +42,29 @@ you might use this config:
 
 ## Deploying oplogtoredis
 
-You can build oplogtoredis from source with `go build .`. In addition, this repo
-includes a Dockerfile you can use. There is not yet a public container on Docker
-Hub, but there may be in the future.
+You can build oplogtoredis from source with `go build .`, which produces a
+statically-linked binary you can run. Alternatively, you can use [the public
+docker image](https://hub.docker.com/r/tulip/oplogtoredis/tags/)
 
-You can set the following environment variables:
+You must set the following environment variables:
 
 - `OTR_MONGO_URL`: Required. Mongo URL to read the oplog from. This should
   point to the `local` database of the Mongo server.
 
 - `OTR_REDIS_URL`: Required: Redis URL to publish updates to.
 
+You may also set the following environment variables to configure the
+level of logging:
+
 - `OTR_LOG_DEBUG`: Optional. Use debug logging, which is more detailed. See
   `lib/log/main.go` for details.
 
 - `OTR_LOG_QUIET`: Don't print any logs. Useful when running unit tests.
+
+There are a number of other environment variables you can set to tune
+various performance and reliability settings. See the
+[config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
+for more details.
 
 ## Development
 
@@ -93,6 +101,65 @@ The additional `docker-compose.meteor.yml` file contains:
 
 ## Testing
 
-- Run linters (gofmt and go vet) with `scripts/runLint.sh`
-- Run unit tests (not many yet) with `scripts/runUnitTests.sh`
-- Run integration test suite & benchmarks with `scripts/runAcceptanceTests.sh`
+There are a number of testing tools and suites that are used to check the
+correctness of oplogtoredis. All of these are run by Travis on each commit.
+
+### Linting and static analysis
+
+We use `gofmt`, `go vet`, and `golint` to detect stylistic and correctness
+issues.  Run `scripts/runLint.sh` to run the suite.
+
+### Unit tests
+
+We use the standard `go test` tool. We wrap it as `scripts/runUnitTests.sh`
+to set timeout and enable the race detector.
+
+### Integration tests part 1: acceptance tests
+
+These acceptance tests test a production-ready docker build of oplogtoredis.
+They run the production docker container alongside Mongo and Redis docker
+containers (using docker-compose), and then test the behavior of that whole
+system.
+
+They are run both with and without the race detector, and against a number of
+different version of Mongo and Redis.
+
+Run these tests with `scripts/runIntegrationAcceptance.sh`. This suite takes
+a while to run, because it's run against many different combinations of
+Redis, Mongo, and race detections. Use `scripts/runIntegrationAcceptanceSingle.sh`
+for a quick run with only a single configuration.
+
+
+### Integration tests part 2: fault-injection tests
+
+These tests observe the behavior of oplogtoredis under a number of fault
+conditions, such as a crash and restart of oplogtoredis, and temporary
+unavailability of Mongo and Redis. To provide the test harness more control
+over the environment, they operate on a compiled binary of oplogtoredis
+rather than a docker image. They run inside a single docker container, with
+oplogtoredis, Mongo, and Redis spun up and down by the test harness itself.
+
+Run these tests with `scripts/runIntegrationFaultInjectionsh`.
+
+### Integration tests part 3: meteor tests
+
+These tests use docker-compose to spin up oplogtoredis, Mongo, Redis, and two
+Meteor application servers (running the app from `./testapp`), and then connect
+to the Meteor servers via websockets/DDP and observe the behavior of traffic
+on the wire to ensure that oplogtoredis is working correctly in concert with
+redis-oplog.
+
+Run these tests with `scripts/runIntegrationMeteor.sh`.
+
+### Integration tests part 4: performance tests
+
+These tests are run in a similar environment to the acceptance tests, but
+only againt a single Mongo and Redis version, and without the race detector.
+
+We run two tests: one where we just fire-and-forget a bunch of writes to Mongo,
+and one where we do the same writes, but wait until we've received notifications
+about all of those writes from Redis. The difference between these two numbers
+gives us an upper bound on the latency overhead of using oplogtoredis. These
+tests fail if the overhead is greater than 35%.
+
+Run these tests with `scripts/runIntegrationPerformance.sh`.

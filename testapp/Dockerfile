@@ -1,12 +1,19 @@
-FROM ubuntu:16.04
+FROM tulip/meteor-build-env:1.6.1.1_0
 
-ENV METEOR_ALLOW_SUPERUSER=true
-
-RUN mkdir /src
+ADD . /src
 WORKDIR /src
 
-RUN apt-get update
-RUN apt-get install -y g++ build-essential curl
-RUN curl https://install.meteor.com/ | sh
+RUN meteor npm install && \
+  meteor build --directory /app && \
+  cd /app/bundle/programs/server && \
+  npm install
 
-CMD meteor run --port 0.0.0.0:3000 --settings settings.json
+
+FROM node:8.9.4-slim
+
+COPY --from=0 /app/bundle /app
+WORKDIR /app
+CMD node main.js
+
+ENV PORT 8080
+EXPOSE 8080

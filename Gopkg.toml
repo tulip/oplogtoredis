@@ -26,8 +26,8 @@
 
 
 [[constraint]]
-  branch = "master"
   name = "github.com/globalsign/mgo"
+  version = "r2018.04.23"
 
 [[constraint]]
   name = "github.com/kelseyhightower/envconfig"
