@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/benchmark/parse"
 )
@@ -52,11 +53,20 @@ func overheadForTestRun(filepath string) float64 {
 		panic(err)
 	}
 
-	baseline := results["BenchmarkInsertNoWait-4"][0].NsPerOp
-	withOverhead := results["BenchmarkInsertWaitForRedis-4"][0].NsPerOp
+	var baseline float64
+	var withOverhead float64
+
+	for name, result := range results {
+		if strings.HasPrefix(name, "BenchmarkInsertNoWait") {
+			baseline = result[0].NsPerOp
+		}
+
+		if strings.HasPrefix(name, "BenchmarkInsertWaitForRedis") {
+			withOverhead = result[0].NsPerOp
+		}
+	}
 
 	return (withOverhead / baseline) - 1
-	//fmt.Printf("Overhead: %.1f%%\n", overhead*100)
 }
 
 func mean(in []float64) float64 {

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Runs unit tests via go test
 

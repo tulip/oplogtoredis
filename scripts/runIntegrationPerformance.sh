@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -eu
 cd `dirname "$0"`'/../integration-tests/performance'

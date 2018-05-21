@@ -13,6 +13,7 @@ install: skip
 jobs:
   include:
     - stage: test
+      install: go get github.com/golang/lint/golint
       script: ./scripts/runLint.sh
     - script: ./scripts/runUnitTests.sh
     - script: ./scripts/runIntegrationAcceptance.sh
