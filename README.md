@@ -104,10 +104,15 @@ The additional `docker-compose.meteor.yml` file contains:
 There are a number of testing tools and suites that are used to check the
 correctness of oplogtoredis. All of these are run by Travis on each commit.
 
+You can run all of the tests locally with `scripts/runAllTests.sh`.
+
 ### Linting and static analysis
 
-We use `gofmt`, `go vet`, and `golint` to detect stylistic and correctness
-issues.  Run `scripts/runLint.sh` to run the suite.
+We use `gofmt -s`, `go vet`, and `gometalinter` to detect stylistic and
+correctness issues.  Run `scripts/runLint.sh` to run the suite.
+
+You'll need `gometalinter` and its dependencies installed. You can install
+them with `go get github.com/alecthomas/gometalinter; gometalinter --install`.
 
 ### Unit tests
 

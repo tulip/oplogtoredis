@@ -1,3 +1,7 @@
+// Package redispub reads messages from an input channel and publishes them to
+// redis. It handles deduplicating messages (across multiple running copies of
+// oplogtoredis), and tracking the timestamp of the last message we successfully
+// publishes (so we can pick up from where we left off if oplogtoredis restarts).
 package redispub
 
 import (
@@ -47,7 +51,7 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 
 	for {
 		select {
-		case _ = <-stop:
+		case <-stop:
 			close(timestampC)
 			return
 
@@ -140,7 +144,7 @@ func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan
 			mostRecentTimestamp = timestamp
 			needFlush = true
 
-			if time.Now().Sub(lastFlush) > opts.FlushInterval {
+			if time.Since(lastFlush) > opts.FlushInterval {
 				flush()
 			}
 		case <-time.After(opts.FlushInterval):

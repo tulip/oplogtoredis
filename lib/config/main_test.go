@@ -64,6 +64,7 @@ var envTests = map[string]struct {
 	},
 }
 
+// nolint: gocyclo
 func TestParseEnv(t *testing.T) {
 	for name, envTest := range envTests {
 		t.Run(name, func(t *testing.T) {
@@ -100,62 +101,50 @@ func TestParseEnv(t *testing.T) {
 
 			// Check config expectations
 			if envTest.expectedConfig != nil {
-				if envTest.expectedConfig.MongoURL != MongoURL() {
-					t.Errorf(
-						"Incorrect Mongo URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, MongoURL(),
-					)
-				}
-
-				if envTest.expectedConfig.RedisURL != RedisURL() {
-					t.Errorf(
-						"Incorrect Redis URL while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, RedisURL(),
-					)
-				}
-
-				if envTest.expectedConfig.HTTPServerAddr != HTTPServerAddr() {
-					t.Errorf(
-						"Incorrect HTTPServerAddr while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, HTTPServerAddr(),
-					)
-				}
-
-				if envTest.expectedConfig.BufferSize != BufferSize() {
-					t.Errorf(
-						"Incorrect BufferSize while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, BufferSize(),
-					)
-				}
-
-				if envTest.expectedConfig.TimestampFlushInterval != TimestampFlushInterval() {
-					t.Errorf(
-						"Incorrect TimestampFlushInterval while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, TimestampFlushInterval(),
-					)
-				}
-
-				if envTest.expectedConfig.MaxCatchUp != MaxCatchUp() {
-					t.Errorf(
-						"Incorrect MaxCatchUp while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, MaxCatchUp(),
-					)
-				}
-
-				if envTest.expectedConfig.RedisDedupeExpiration != RedisDedupeExpiration() {
-					t.Errorf(
-						"Incorrect RedisDedupeExpiration while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, RedisDedupeExpiration(),
-					)
-				}
-
-				if envTest.expectedConfig.RedisMetadataPrefix != RedisMetadataPrefix() {
-					t.Errorf(
-						"Incorrect RedisMetadataPrefix while parsing env: %#v.\n    Expected %#v\n    Got %#v",
-						envTest.env, envTest.expectedConfig, RedisMetadataPrefix(),
-					)
-				}
+				checkConfigExpectation(t, envTest.expectedConfig)
 			}
 		})
+	}
+}
+
+func checkConfigExpectation(t *testing.T, expectedConfig *oplogtoredisConfiguration) {
+	if expectedConfig.MongoURL != MongoURL() {
+		t.Errorf("Incorrect Mongo URL. Got \"%s\", Expected \"%s\"",
+			expectedConfig.MongoURL, MongoURL())
+	}
+
+	if expectedConfig.RedisURL != RedisURL() {
+		t.Errorf("Incorrect Redis URL. Got \"%s\", Expected \"%s\"",
+			expectedConfig.RedisURL, RedisURL())
+	}
+
+	if expectedConfig.HTTPServerAddr != HTTPServerAddr() {
+		t.Errorf("Incorrect HTTPServerAddr. Got \"%s\", Expected \"%s\"",
+			expectedConfig.HTTPServerAddr, HTTPServerAddr())
+	}
+
+	if expectedConfig.BufferSize != BufferSize() {
+		t.Errorf("Incorrect BufferSize. Got %d, Expected %d",
+			expectedConfig.BufferSize, BufferSize())
+	}
+
+	if expectedConfig.TimestampFlushInterval != TimestampFlushInterval() {
+		t.Errorf("Incorrect TimestampFlushInterval. Got %d, Expected %d",
+			expectedConfig.TimestampFlushInterval, TimestampFlushInterval())
+	}
+
+	if expectedConfig.MaxCatchUp != MaxCatchUp() {
+		t.Errorf("Incorrect MaxCatchUp. Got %d, Expected %d",
+			expectedConfig.MaxCatchUp, MaxCatchUp())
+	}
+
+	if expectedConfig.RedisDedupeExpiration != RedisDedupeExpiration() {
+		t.Errorf("Incorrect RedisDedupeExpiration. Got %d, Expected %d",
+			expectedConfig.RedisDedupeExpiration, RedisDedupeExpiration())
+	}
+
+	if expectedConfig.RedisMetadataPrefix != RedisMetadataPrefix() {
+		t.Errorf("Incorrect RedisMetadataPrefix. Got \"%s\", Expected \"%s\"",
+			expectedConfig.RedisMetadataPrefix, RedisMetadataPrefix())
 	}
 }

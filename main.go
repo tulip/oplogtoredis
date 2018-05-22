@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"context"
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -20,7 +21,7 @@ import (
 )
 
 func main() {
-	defer log.RawLog.Sync()
+	defer log.Sync()
 
 	err := config.ParseEnv()
 	if err != nil {
@@ -38,7 +39,13 @@ func main() {
 	if err != nil {
 		panic("Error initializing Redis client: " + err.Error())
 	}
-	defer redisClient.Close()
+	defer func() {
+		redisCloseErr := redisClient.Close()
+		if redisCloseErr != nil {
+			log.Log.Errorw("Error closing Redis client",
+				"error", redisCloseErr)
+		}
+	}()
 	log.Log.Info("Initialized connection to Redis")
 
 	// We crate two goroutines:
@@ -86,9 +93,9 @@ func main() {
 	// Start one more goroutine for the HTTP server
 	httpServer := makeHTTPServer(redisClient, mongoSession)
 	go func() {
-		err := httpServer.ListenAndServe()
-		if err != nil {
-			panic("Could not start up HTTP server: " + err.Error())
+		httpErr := httpServer.ListenAndServe()
+		if httpErr != nil {
+			panic("Could not start up HTTP server: " + httpErr.Error())
 		}
 	}()
 
@@ -113,7 +120,11 @@ func main() {
 	stopOplogTail <- true
 	stopRedisPub <- true
 
-	httpServer.Shutdown(nil)
+	err = httpServer.Shutdown(context.Background())
+	if err != nil {
+		log.Log.Errorw("Error shutting down HTTP server",
+			"error", err)
+	}
 
 	waitGroup.Wait()
 }

@@ -64,7 +64,7 @@ func (verifier *RedisVerifier) Verify(t *testing.T, ids []string) {
 				t.Errorf("On message %d, received %s but expected %s",
 					idx, receivedID, id)
 			}
-		case _ = <-time.After(10 * time.Second):
+		case <-time.After(10 * time.Second):
 			t.Errorf("Timed out waiting for redis message %d", idx)
 			return
 		}

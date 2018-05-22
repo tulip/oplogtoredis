@@ -13,13 +13,17 @@ import (
 func waitTCP(addr string) {
 	log.Printf("Waiting for TCP to be available at %s", addr)
 	// Try once a second to connect
-	for startTime := time.Now(); time.Now().Sub(startTime) < 10*time.Second; time.Sleep(time.Second) {
+	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Second) {
 		conn, err := net.DialTimeout("tcp", addr, time.Second)
 
 		if err == nil {
 			// Connection successful
 			log.Printf("TCP came up on %s", addr)
-			conn.Close()
+			closeErr := conn.Close()
+			if closeErr != nil {
+				log.Printf("Error closing TCP connection in waitTCP: %s", closeErr)
+			}
+
 			return
 		}
 
@@ -36,7 +40,7 @@ func waitTCP(addr string) {
 func waitTCPDown(addr string) {
 	log.Printf("Waiting for TCP to be down at %s", addr)
 	// Try once a second to connect
-	for startTime := time.Now(); time.Now().Sub(startTime) < 10*time.Second; time.Sleep(time.Second) {
+	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Second) {
 		conn, err := net.DialTimeout("tcp", addr, time.Second)
 
 		if err != nil {
@@ -45,7 +49,11 @@ func waitTCPDown(addr string) {
 			return
 		}
 
-		conn.Close()
+		closeErr := conn.Close()
+		if closeErr != nil {
+			log.Printf("Error closing TCP connection in waitTCP: %s", closeErr)
+		}
+
 		log.Printf("Tried to connect to %s, was successful. Will retry in 1 second.", addr)
 	}
 

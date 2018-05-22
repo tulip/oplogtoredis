@@ -188,19 +188,22 @@ func (server *MongoServer) StepDown() {
 // startNode starts a single node of a mongo cluster, panicing on failure
 func (server *MongoServer) startNode(name string, port int) *exec.Cmd {
 	dbPath := filepath.Join(server.dataPrefix, name)
-	os.MkdirAll(dbPath, 0777)
+	err := os.MkdirAll(dbPath, 0700)
+	if err != nil {
+		panic(err)
+	}
 
 	cmd := exec.Command(
 		"mongod",
 		"--replSet=test",
 		fmt.Sprintf("--dbpath=%s", dbPath),
 		fmt.Sprintf("--port=%d", port),
-	)
+	) // #nosec
 
 	cmd.Stderr = makeLogStreamer(name, "stderr")
 	cmd.Stdout = makeLogStreamer(name, "stdout")
 
-	err := cmd.Start()
+	err = cmd.Start()
 
 	if err != nil {
 		panic("Error starting up mongo node: " + err.Error())

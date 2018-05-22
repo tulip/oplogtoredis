@@ -1,3 +1,5 @@
+// Package log is a small wrapper around go.uber.org/zap to provide logging
+// facilities for oplogtoredis
 package log
 
 import (
@@ -62,5 +64,9 @@ func init() {
 // in the main() function to guarantee that the log will be synced before
 // the program exits
 func Sync() {
-	RawLog.Sync()
+	err := RawLog.Sync()
+
+	if err != nil {
+		golog.Printf("Error syncing zap log: %s", err)
+	}
 }

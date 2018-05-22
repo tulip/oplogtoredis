@@ -39,6 +39,6 @@ ADD ./integration-tests/fault-injection /go/src/github.com/tulip/oplogtoredis/in
 ADD ./integration-tests/helpers /go/src/github.com/tulip/oplogtoredis/integration-tests/helpers
 
 WORKDIR /go/src/github.com/tulip/oplogtoredis/integration-tests/fault-injection
-CMD go test . -timeout 5m -v -test.run TestMongoStopStart
+CMD go test . -timeout 5m -v
 
 

@@ -1,3 +1,6 @@
+// Package config reads oplogtoredis configuration values from environment
+// variables. The documentation for this package also documents all of the
+// configuration options that are available to configure oplogtoredis.
 package config
 
 import (

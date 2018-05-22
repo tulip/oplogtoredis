@@ -45,7 +45,7 @@ func StartOTRProcessWithEnv(mongoURL string, redisURL string, port int, extraEnv
 func (proc *OTRProcess) Start() {
 	log.Printf("Starting up oplogtoredis with HTTP on %d", proc.port)
 
-	proc.cmd = exec.Command("oplogtoredis")
+	proc.cmd = exec.Command("/bin/oplogtoredis") // #nosec
 	proc.cmd.Stdout = makeLogStreamer(fmt.Sprintf("otr:%d", proc.port), "stdout")
 	proc.cmd.Stderr = makeLogStreamer(fmt.Sprintf("otr:%d", proc.port), "stderr")
 	proc.cmd.Env = proc.env
@@ -63,7 +63,11 @@ func (proc *OTRProcess) Start() {
 func (proc *OTRProcess) Stop() {
 	log.Printf("Stopping oplogtoredis with HTTP on %d", proc.port)
 
-	proc.cmd.Process.Kill()
+	err := proc.cmd.Process.Kill()
+	if err != nil {
+		panic(err)
+	}
+
 	waitTCPDown(fmt.Sprintf("localhost:%d", proc.port))
 
 	log.Printf("Stopped oplogtoredis with HTTP on %d", proc.port)

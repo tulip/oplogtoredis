@@ -11,6 +11,8 @@ RUN meteor npm install && \
 
 FROM node:8.9.4-slim
 
+RUN apt-get update && apt-get install -y mongodb-clients
+
 COPY --from=0 /app/bundle /app
 WORKDIR /app
 CMD node main.js

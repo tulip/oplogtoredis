@@ -1,3 +1,5 @@
+// Package mongourl parses Mongo URLs. It includes support for URL parameters
+// not supported by mgo.ParseURL, such as `?ssl=true`.
 package mongourl
 
 /*
@@ -52,51 +54,88 @@ func Parse(mongoURL string) (*mgo.DialInfo, error) {
 
 	query := url.Query()
 	for key, values := range query {
-		var value string
-		if len(values) > 0 {
-			value = values[0]
-		}
-
-		switch key {
-		case "authSource":
-			info.Source = value
-		case "authMechanism":
-			info.Mechanism = value
-		case "gssapiServiceName":
-			info.Service = value
-		case "replicaSet":
-			info.ReplicaSetName = value
-		case "maxPoolSize":
-			poolLimit, err := strconv.Atoi(value)
-			if err != nil {
-				return nil, errors.New("bad value for maxPoolSize: " + value)
-			}
-			info.PoolLimit = poolLimit
-		case "ssl":
-			// Unfortunately, mgo doesn't support the ssl parameter in its MongoDB URI parsing logic, so we have to handle that
-			// ourselves. See https://github.com/go-mgo/mgo/issues/84
-			ssl, err := strconv.ParseBool(value)
-			if err != nil {
-				return nil, errors.New("bad value for ssl: " + value)
-			}
-			if ssl {
-				info.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
-					return tls.Dial("tcp", addr.String(), tlsConfig)
-				}
-			}
-		case "connect":
-			if value == "direct" {
-				info.Direct = true
-				break
-			}
-			if value == "replicaSet" {
-				break
-			}
-			fallthrough
-		default:
-			return nil, errors.New("unsupported connection URL option: " + key + "=" + value)
+		optionErr := handleOption(&info, key, values)
+		if optionErr != nil {
+			return nil, optionErr
 		}
 	}
 
 	return &info, nil
+}
+
+func handleOption(info *mgo.DialInfo, key string, values []string) error {
+	var value string
+	if len(values) > 0 {
+		value = values[0]
+	}
+
+	switch key {
+	case "authSource":
+		info.Source = value
+	case "authMechanism":
+		info.Mechanism = value
+	case "gssapiServiceName":
+		info.Service = value
+	case "replicaSet":
+		info.ReplicaSetName = value
+	case "maxPoolSize":
+		err := handleMaxPoolSize(info, value)
+		if err != nil {
+			return err
+		}
+	case "ssl":
+		err := handleSSL(info, value)
+		if err != nil {
+			return err
+		}
+	case "connect":
+		err := handleConnect(info, value)
+		if err != nil {
+			return err
+		}
+	default:
+		return errors.New("unsupported connection URL option: " + key + "=" + value)
+	}
+
+	return nil
+}
+
+func handleMaxPoolSize(info *mgo.DialInfo, value string) error {
+	poolLimit, err := strconv.Atoi(value)
+
+	if err != nil {
+		return errors.New("bad value for maxPoolSize: " + value)
+	}
+
+	info.PoolLimit = poolLimit
+	return nil
+}
+
+// Unfortunately, mgo doesn't support the ssl parameter in its MongoDB URI parsing logic, so we have to handle that
+// ourselves. See https://github.com/go-mgo/mgo/issues/84
+func handleSSL(info *mgo.DialInfo, value string) error {
+	ssl, err := strconv.ParseBool(value)
+	if err != nil {
+		return errors.New("bad value for ssl: " + value)
+	}
+	if ssl {
+		info.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
+			return tls.Dial("tcp", addr.String(), tlsConfig)
+		}
+	}
+
+	return nil
+}
+
+func handleConnect(info *mgo.DialInfo, value string) error {
+	if value == "direct" {
+		info.Direct = true
+		return nil
+	}
+
+	if value == "replicaSet" {
+		return nil
+	}
+
+	return errors.New("Unsupported ?connect= value: " + value)
 }

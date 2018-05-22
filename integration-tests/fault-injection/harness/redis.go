@@ -34,7 +34,7 @@ func StartRedisServer() *RedisServer {
 // connections.
 func (server *RedisServer) Start() {
 	log.Print("Startinf up Redis server")
-	server.node = exec.Command("redis-server", "--loglevel", "debug")
+	server.node = exec.Command("redis-server", "--loglevel", "debug") // #nosec
 
 	server.node.Stdout = makeLogStreamer("redis", "stdout")
 	server.node.Stderr = makeLogStreamer("mongo", "stderr")
@@ -49,7 +49,7 @@ func (server *RedisServer) Start() {
 	log.Print("Started up Redis server")
 
 	log.Print("Starting up Redis monitor")
-	server.monitor = exec.Command("redis-cli", "monitor")
+	server.monitor = exec.Command("redis-cli", "monitor") // #nosec
 	server.monitor.Stdout = makeLogStreamer("redismon", "stdout")
 	server.monitor.Stderr = makeLogStreamer("redismon", "stderr")
 	err = server.monitor.Start()
@@ -63,10 +63,16 @@ func (server *RedisServer) Start() {
 func (server *RedisServer) Stop() {
 	log.Print("Shutting down Redis server")
 
-	server.node.Process.Kill()
+	err := server.node.Process.Kill()
+	if err != nil {
+		log.Printf("Error killing redis: %s", err)
+	}
 
 	if server.monitor != nil {
-		server.monitor.Process.Kill()
+		err := server.monitor.Process.Kill()
+		if  err != nil {
+			log.Printf("Error killing redis monitor: %s", err)
+		}
 	}
 
 	// Wait for them to start

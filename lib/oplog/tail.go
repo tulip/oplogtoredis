@@ -1,3 +1,6 @@
+// Package oplog tails a MongoDB oplog, process each message, and generates
+// the message that should be sent to Redis. It writes these to an output
+// channel that should be read by package redispub and sent to the Redis server.
 package oplog
 
 import (

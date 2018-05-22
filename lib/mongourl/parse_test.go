@@ -110,7 +110,7 @@ func TestParse(t *testing.T) {
 		},
 		"bad ?connect": {
 			URL:           "mongodb://foo?connect=notValid",
-			expectedError: errors.New("unsupported connection URL option: connect=notValid"),
+			expectedError: errors.New("Unsupported ?connect= value: notValid"),
 		},
 		"unknown option": {
 			URL:           "mongodb://foo?xxx=yyy",
