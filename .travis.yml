@@ -13,7 +13,11 @@ install: skip
 jobs:
   include:
     - stage: test
-      install: go get github.com/golang/lint/golint
+      before_script:
+        - curl -Lo /tmp/gml.tgz https://github.com/alecthomas/gometalinter/releases/download/v2.0.5/gometalinter-2.0.5-linux-amd64.tar.gz
+        - tar xzvf /tmp/gml.tgz
+        - mv gometalinter-*/ gml/
+        - export PATH=$PATH:$PWD/gml/
       script: ./scripts/runLint.sh
     - script: ./scripts/runUnitTests.sh
     - script: ./scripts/runIntegrationAcceptance.sh
