@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
@@ -51,7 +50,6 @@ func TestRestart(t *testing.T) {
 	// no more than 10 of the original ones. So we check here that we processed
 	// between 70 and 80 messages.
 	metrics := otr.GetPromMetrics()
-	pretty.Print(metrics)
 	entriesReceived := harness.FindPromMetric(metrics, "otr_oplog_entries_received", map[string]string{
 		"database": "testdb",
 		"status":   "processed",
