@@ -15,7 +15,7 @@ to Redis.
 
 ## Project Status
 
-The project is currently pre-alpha. It shouldn't be used in production environments (or really any environment other than experimentation / testing). We expect to have an initial 0.1 release that is ready for general usage within the next couple months.
+The project is currently in early beta. It shouldn't be used in production environments. We expect to have an initial 0.1 release that is ready for general usage within the next couple months. We'd love for you to give it a test in a staging or development environment!
 
 ## Configuring redis-oplog
 
@@ -49,7 +49,8 @@ docker image](https://hub.docker.com/r/tulip/oplogtoredis/tags/)
 You must set the following environment variables:
 
 - `OTR_MONGO_URL`: Required. Mongo URL to read the oplog from. This should
-  point to the `local` database of the Mongo server.
+  point to the `local` database of the Mongo server and will match the
+  `MONGO_OPLOG_URL` you give to your Meteor server.
 
 - `OTR_REDIS_URL`: Required: Redis URL to publish updates to.
 
@@ -66,11 +67,68 @@ various performance and reliability settings. See the
 [config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
 for more details.
 
+## Running oplogtoredis in production
+
+oplogtoredis includes a number of features to support its use in
+production-critical scenarios.
+
+### High Availability
+
+oplogtoredis uses Redis to deduplicate messages, so it's safe (and recommended!)
+to run multiple instances of oplogtoredis to ensure availability in the event
+of a partial outage or a bug in oplogtoredis that causes it to crash or hang.
+
+Just run two copies of oplogtoredis with the same configuration. Each copy
+will process each oplog message and send it to Redis, where we use a small
+Lua script to deduplicate the messages. It's not recommended to run more than
+2 or 3 copies of oplogtoredis, because the load it puts on your Mongo and Redis
+databases increases linearly with the number of copies of oplogtoredis that
+you're running.
+
+### Resumption
+
+oplogtoredis uses Redis to keep track of the last message it processed. When
+it starts up, it check to see where it left off, and will resume tailing the
+oplog from that timestamp, as long as it's not too far in the past (we don't
+want to try to reply too much of the oplog, or we could could overload the
+Redis or Meteor servers). The [config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
+have more detail on how to tune the behavior, but this feature should keep
+your system working propertly even if every copy of oplogtoredis that you're
+running goes down for a brief period.
+
+### Monitoring
+
+oplogtoredis exposes an HTTP server that can be used to monitor the state of
+the program. By default, it serves on `0.0.0.0:9000`, but you can change this
+with the environment variable `HTTP_SERVER_ADDR`.
+
+The HTTP server exposes a health-checking endpoint at `/healthz`. This endpoint
+checks connectivity to Mongo and Redis, and then returns 200. If HTTP requests
+to this endpoint time our or return non-200 codes for more than a brief
+period (10-15 seconds), you should consider the program unhealthy and restart
+it. You can do this using [Kubernetes liveness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/),
+an [Icinga health check](https://www.icinga.com/docs/icinga2/latest/doc/10-icinga-template-library/#http),
+or any other mechanism.
+
+The HTTP server also exposes a [Prometheus](https://prometheus.io/) endpoint
+at `/metrics` that your Prometheus server can scrape to collect a number
+of useful metrics. In particular, if you see the value of the metric
+`otr_redispub_processed_messages` with the label `status=sent` fall to lower
+than the writes to your Mongo database, it likely indicates an issue with
+oplogtoredis.
+
+### Logging
+
+oplogtoredis by default emits info, warning, and error messages as JSON,
+for easy consumption by structured logging systems. When debugging
+oplogtoredis, you may want to set `OTR_LOG_DEBUG=true`, which will log
+more detailed messages and log in a human-readable format for manual review.
+
 ## Development
 
 You can use `go build` to build and test oplogtoredis, or you can use
-the docker-compose environment, which spins us a full environment with
-Mongo, Redis, and oplogtoredis.
+the docker-compose environment (`docker-compose up`), which spins us a full
+environment with Mongo, Redis, and oplogtoredis.
 
 The components of the docker-compose environment are:
 
@@ -108,8 +166,8 @@ You can run all of the tests locally with `scripts/runAllTests.sh`.
 
 ### Linting and static analysis
 
-We use `gofmt -s`, `go vet`, and `gometalinter` to detect stylistic and
-correctness issues.  Run `scripts/runLint.sh` to run the suite.
+We use `gometalinter` to detect stylistic and correctness issues. Run
+`scripts/runLint.sh` to run the suite.
 
 You'll need `gometalinter` and its dependencies installed. You can install
 them with `go get github.com/alecthomas/gometalinter; gometalinter --install`.
