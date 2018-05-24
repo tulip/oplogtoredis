@@ -36,8 +36,8 @@ func (server *RedisServer) Start() {
 	log.Print("Startinf up Redis server")
 	server.node = exec.Command("redis-server", "--loglevel", "debug") // #nosec
 
-	server.node.Stdout = makeLogStreamer("redis", "stdout")
-	server.node.Stderr = makeLogStreamer("mongo", "stderr")
+	// server.node.Stdout = makeLogStreamer("redis", "stdout")
+	// server.node.Stderr = makeLogStreamer("mongo", "stderr")
 
 	err := server.node.Start()
 

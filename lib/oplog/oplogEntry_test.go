@@ -107,43 +107,6 @@ func TestUpdateIsReplace(t *testing.T) {
 	}
 }
 
-func TestParseNamespace(t *testing.T) {
-	tests := map[string]struct {
-		in             string
-		wantDB         string
-		wantCollection string
-	}{
-		"DB and collection": {
-			in:             "foo.bar",
-			wantDB:         "foo",
-			wantCollection: "bar",
-		},
-		"DB only": {
-			in:             "foo",
-			wantDB:         "foo",
-			wantCollection: "",
-		},
-		"Empty string": {
-			in:             "",
-			wantDB:         "",
-			wantCollection: "",
-		},
-	}
-
-	for testName, test := range tests {
-		t.Run(testName, func(t *testing.T) {
-			gotDB, gotCollection := (&oplogEntry{
-				Namespace: test.in,
-			}).ParseNamespace()
-
-			if (gotDB != test.wantDB) || (gotCollection != test.wantCollection) {
-				t.Errorf("parseDBAndCollection(%s) = %s, %s; want %s, %s",
-					test.in, gotDB, gotCollection, test.wantDB, test.wantCollection)
-			}
-		})
-	}
-}
-
 func TestChangedFields(t *testing.T) {
 	tests := map[string]struct {
 		input *oplogEntry

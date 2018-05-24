@@ -114,11 +114,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Doc:       map[string]interface{}{"_id": "someid", "foo": "bar"},
 			},
 			want: &oplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
-				Operation: "i",
-				Namespace: "foo.Bar",
-				Data:      map[string]interface{}{"_id": "someid", "foo": "bar"},
-				DocID:     interface{}("someid"),
+				Timestamp:  bson.MongoTimestamp(1234),
+				Operation:  "i",
+				Namespace:  "foo.Bar",
+				Data:       map[string]interface{}{"_id": "someid", "foo": "bar"},
+				DocID:      interface{}("someid"),
+				Database:   "foo",
+				Collection: "Bar",
 			},
 		},
 		"Update": {
@@ -130,11 +132,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Update:    rawOplogEntryID{ID: "updateid"},
 			},
 			want: &oplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
-				Operation: "u",
-				Namespace: "foo.Bar",
-				Data:      map[string]interface{}{"new": "data"},
-				DocID:     interface{}("updateid"),
+				Timestamp:  bson.MongoTimestamp(1234),
+				Operation:  "u",
+				Namespace:  "foo.Bar",
+				Data:       map[string]interface{}{"new": "data"},
+				DocID:      interface{}("updateid"),
+				Database:   "foo",
+				Collection: "Bar",
 			},
 		},
 		"Remove": {
@@ -145,11 +149,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Doc:       map[string]interface{}{"_id": "someid"},
 			},
 			want: &oplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
-				Operation: "d",
-				Namespace: "foo.Bar",
-				Data:      map[string]interface{}{"_id": "someid"},
-				DocID:     interface{}("someid"),
+				Timestamp:  bson.MongoTimestamp(1234),
+				Operation:  "d",
+				Namespace:  "foo.Bar",
+				Data:       map[string]interface{}{"_id": "someid"},
+				DocID:      interface{}("someid"),
+				Database:   "foo",
+				Collection: "Bar",
 			},
 		},
 		"Command": {
@@ -169,6 +175,46 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestParseNamespace(t *testing.T) {
+	tests := map[string]struct {
+		in             string
+		wantDB         string
+		wantCollection string
+	}{
+		"DB and collection": {
+			in:             "foo.bar",
+			wantDB:         "foo",
+			wantCollection: "bar",
+		},
+		"Dot in collection": {
+			in:             "foo.system.indexes",
+			wantDB:         "foo",
+			wantCollection: "system.indexes",
+		},
+		"DB only": {
+			in:             "foo",
+			wantDB:         "foo",
+			wantCollection: "",
+		},
+		"Empty string": {
+			in:             "",
+			wantDB:         "",
+			wantCollection: "",
+		},
+	}
+
+	for testName, test := range tests {
+		t.Run(testName, func(t *testing.T) {
+			gotDB, gotCollection := parseNamespace(test.in)
+
+			if (gotDB != test.wantDB) || (gotCollection != test.wantCollection) {
+				t.Errorf("parseNamespace(%s) = %s, %s; want %s, %s",
+					test.in, gotDB, gotCollection, test.wantDB, test.wantCollection)
 			}
 		})
 	}

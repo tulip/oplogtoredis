@@ -1,9 +1,9 @@
 package oplog
 
 import (
-	"strings"
-
 	"github.com/globalsign/mgo/bson"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
 )
 
@@ -11,14 +11,23 @@ const operationInsert = "i"
 const operationUpdate = "u"
 const operationRemove = "d"
 
+var metricUnprocessableChangedFields = promauto.NewCounter(prometheus.CounterOpts{
+	Namespace: "otr",
+	Subsystem: "oplog",
+	Name:      "unprocessable_changed_fields",
+	Help:      "Oplog messages containing data that we couldn't parse to determine changed fields",
+})
+
 // Oplog entry after basic processing to extract the document ID that was
 // affected
 type oplogEntry struct {
-	DocID     interface{}
-	Timestamp bson.MongoTimestamp
-	Data      map[string]interface{}
-	Operation string
-	Namespace string
+	DocID      interface{}
+	Timestamp  bson.MongoTimestamp
+	Data       map[string]interface{}
+	Operation  string
+	Namespace  string
+	Database   string
+	Collection string
 }
 
 // Returns whether this oplogEntry is for an insert
@@ -48,19 +57,6 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 	}
 }
 
-// Parses op.Namespace into (database, collection)
-func (op *oplogEntry) ParseNamespace() (string, string) {
-	namespaceParts := strings.SplitN(op.Namespace, ".", 2)
-
-	database := namespaceParts[0]
-	collection := ""
-	if len(namespaceParts) > 1 {
-		collection = namespaceParts[1]
-	}
-
-	return database, collection
-}
-
 // Given an operation, returned the fields affected by that operation
 func (op *oplogEntry) ChangedFields() []string {
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
@@ -77,6 +73,7 @@ func (op *oplogEntry) ChangedFields() []string {
 
 			operationMap, operationMapOK := operation.(map[string]interface{})
 			if !operationMapOK {
+				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement update contained a key with a non-map value",
 					"op", op)
 				continue

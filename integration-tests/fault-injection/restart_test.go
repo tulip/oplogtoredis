@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
@@ -29,7 +30,7 @@ func TestRestart(t *testing.T) {
 	verifier := harness.NewRedisVerifier(redisClient)
 	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
 
-	time.Sleep(time.Second)
+	time.Sleep(3 * time.Second)
 	otr.Stop()
 
 	time.Sleep(3 * time.Second)
@@ -42,4 +43,21 @@ func TestRestart(t *testing.T) {
 	}
 
 	verifier.Verify(t, insertedIDs)
+
+	// We also want to verify that we picked up from where we left off (rather
+	// that starting from the beginning of the oplog or something). The first
+	// oplogtoredis should process 30 of the 100 messages, and the second
+	// run of oplog to redis should process the remaining 70, plus re-process
+	// no more than 10 of the original ones. So we check here that we processed
+	// between 70 and 80 messages.
+	metrics := otr.GetPromMetrics()
+	pretty.Print(metrics)
+	entriesReceived := harness.FindPromMetric(metrics, "otr_oplog_entries_received", map[string]string{
+		"database": "testdb",
+		"status":   "processed",
+	}).Counter.Value
+
+	if (*entriesReceived < 70) || (*entriesReceived > 80) {
+		t.Errorf("Expected second otr run to process between 70 and 80 messages; but it processed %d", entriesReceived)
+	}
 }

@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -33,6 +36,20 @@ var publishDedupe = redis.NewScript(`
 	return true
 `)
 
+var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "processed_messages",
+	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them",
+}, []string{"status"})
+
+var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "temporary_send_failures",
+	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
+})
+
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
 func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
@@ -49,6 +66,9 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 		return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
 	}
 
+	metricSendFailed := metricSentMessages.WithLabelValues("failed")
+	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
+
 	for {
 		select {
 		case <-stop:
@@ -59,10 +79,13 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 			err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 
 			if err != nil {
+				metricSendFailed.Inc()
 				log.Log.Errorw("Permanent error while trying to publish message; giving up",
 					"error", err,
 					"message", p)
 			} else {
+				metricSendSuccess.Inc()
+
 				// We want to make sure we do this *after* we've successfully published
 				// the messages
 				timestampC <- p.OplogTimestamp
@@ -83,6 +106,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 				"retryNumber", retries)
 
 			// failure, retry
+			metricTemporaryFailures.Inc()
 			retries++
 			time.Sleep(sleepTime)
 		} else {

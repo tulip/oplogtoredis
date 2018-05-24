@@ -18,6 +18,8 @@ import (
 
 	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -224,6 +226,8 @@ func makeHTTPServer(redis redis.UniversalClient, mongo *mgo.Session) *http.Serve
 			http.Error(w, jsonErr.Error(), http.StatusInternalServerError)
 		}
 	})
+
+	mux.Handle("/metrics", promhttp.Handler())
 
 	return &http.Server{Addr: config.HTTPServerAddr(), Handler: mux}
 }

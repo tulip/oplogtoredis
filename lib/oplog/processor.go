@@ -2,6 +2,8 @@ package oplog
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/globalsign/mgo/bson"
@@ -14,7 +16,7 @@ import (
 //
 // TODO PERF: Add options for filtering to specific collections or
 // databases (https://github.com/tulip/oplogtoredis/issues/8)
-func processOplogEntry(op *oplogEntry) *redispub.Publication {
+func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	// Struct that matches the message format redis-oplog expects
 	type outgoingMessageDocument struct {
 		ID interface{} `json:"_id"`
@@ -25,10 +27,9 @@ func processOplogEntry(op *oplogEntry) *redispub.Publication {
 		Fields []string                `json:"f"`
 	}
 
-	database, collection := op.ParseNamespace()
-	if strings.HasPrefix(collection, "system.") {
+	if strings.HasPrefix(op.Collection, "system.") {
 		// We don't publish index creation events
-		return nil
+		return nil, nil
 	}
 
 	var idForChannel string
@@ -45,16 +46,10 @@ func processOplogEntry(op *oplogEntry) *redispub.Publication {
 			"$value": idHex,
 		}
 	} else {
-		log.Log.Errorw("op.ID was not a string or ObjectID",
-			"id", op.DocID,
-			"op", op,
-			"db", database,
-			"collection", collection)
-
 		// We don't know how to handle IDs that aren't strings or ObjectIDs,
 		// because we don't what what the specific channel (the channel for
 		// this specific document) should be.
-		return nil
+		return nil, errors.New("op.ID was not a string or ObjectID")
 	}
 
 	// Construct the JSON we're going to send to Redis
@@ -70,12 +65,7 @@ func processOplogEntry(op *oplogEntry) *redispub.Publication {
 	msgJSON, err := json.Marshal(&msg)
 
 	if err != nil {
-		log.Log.Error("Error marshalling outgoing message",
-			"msg", msg,
-			"db", database,
-			"collection", collection)
-
-		return nil
+		return nil, fmt.Errorf("Error marshalling outgoing message: %s", err)
 	}
 
 	// We need to publish on both the full-collection channel and the
@@ -91,7 +81,7 @@ func processOplogEntry(op *oplogEntry) *redispub.Publication {
 
 		Msg:            msgJSON,
 		OplogTimestamp: op.Timestamp,
-	}
+	}, nil
 }
 
 func eventNameForOperation(op *oplogEntry) string {

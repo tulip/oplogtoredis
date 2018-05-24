@@ -66,7 +66,7 @@ func (conn *DDPConn) Send(msg *DDPMsg) error {
 }
 
 // VerifyReceive reads messages from the Meteor server until no messages have
-// been received for a second, and then checks that the received messages match
+// been received for 3 seconds, and then checks that the received messages match
 // the expected messages.
 //
 // VerifyReceive takes an arbitrary number of "message groups". When checking
@@ -86,7 +86,7 @@ func (conn *DDPConn) VerifyReceive(t *testing.T, expectedMessageGroups ...DDPMsg
 
 // ClearReceiveBuffer clears the buffer of messages that will be compared on the
 // next call to VerifyReceive. It doesn't return until no message have been
-// received for 1 second.
+// received for 3 seconds.
 func (conn *DDPConn) ClearReceiveBuffer() {
 	conn.receiveAll()
 }
@@ -98,7 +98,7 @@ func (conn *DDPConn) receiveAll() []*DDPMsg {
 		select {
 		case msg := <-conn.receivedMessages:
 			actualMessages = append(actualMessages, msg)
-		case <-time.After(time.Second):
+		case <-time.After(3 * time.Second):
 			return actualMessages
 		}
 	}

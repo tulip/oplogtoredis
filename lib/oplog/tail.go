@@ -4,7 +4,11 @@
 package oplog
 
 import (
+	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
@@ -39,6 +43,13 @@ type rawOplogEntryID struct {
 
 const requeryDuration = time.Second
 
+var metricOplogEntriesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "otr",
+	Subsystem: "oplog",
+	Name:      "entries_received",
+	Help:      "Oplog entries received, partitioned by database and status",
+}, []string{"database", "status"})
+
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
 func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
@@ -72,8 +83,12 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 	startTime := tailer.getStartTime(func() (bson.MongoTimestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
-		var entry oplogEntry
-		mongoErr := session.DB("local").C("oplog.rs").Find(nil).Sort("-$natural").One(&entry)
+		var entry rawOplogEntry
+		mongoErr := oplogCollection.Find(bson.M{}).Sort("-$natural").One(&entry)
+
+		log.Log.Infow("Got latest oplog entry",
+			"entry", entry,
+			"error", mongoErr)
 
 		return entry.Timestamp, mongoErr
 	})
@@ -96,19 +111,29 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 			lastTimestamp = result.Timestamp
 
 			entry := tailer.parseRawOplogEntry(&result)
-			if entry == nil {
-				continue
-			}
-
 			log.Log.Debugw("Received oplog entry",
-				"entry", entry)
+				"entry", result)
 
-			pub := processOplogEntry(entry)
-			if pub == nil {
+			if entry == nil {
+				metricOplogEntriesReceived.WithLabelValues("(no database)", "ignored").Inc()
 				continue
 			}
 
-			out <- pub
+			pub, err := processOplogEntry(entry)
+
+			if err != nil {
+				metricOplogEntriesReceived.WithLabelValues(entry.Database, "error").Inc()
+				log.Log.Errorw("Error processing oplog entry",
+					"op", entry,
+					"error", err,
+					"database", entry.Database,
+					"collection", entry.Collection)
+			} else if pub == nil {
+				metricOplogEntriesReceived.WithLabelValues(entry.Database, "ignored").Inc()
+			} else {
+				metricOplogEntriesReceived.WithLabelValues(entry.Database, "processed").Inc()
+				out <- pub
+			}
 		}
 
 		if iter.Err() != nil {
@@ -156,7 +181,7 @@ func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (bson.Mon
 		log.Log.Warnf("Found last processed timestamp, but it was too far in the past (%d). Will start from end of oplog", tsTime.Unix())
 	}
 
-	if redisErr != redis.Nil {
+	if (redisErr != nil) && (redisErr != redis.Nil) {
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
@@ -186,6 +211,8 @@ func (tailer *Tailer) parseRawOplogEntry(rawEntry *rawOplogEntry) *oplogEntry {
 		return nil
 	}
 
+	entry.Database, entry.Collection = parseNamespace(rawEntry.Namespace)
+
 	if rawEntry.Operation == operationUpdate {
 		entry.DocID = rawEntry.Update.ID
 	} else {
@@ -193,4 +220,17 @@ func (tailer *Tailer) parseRawOplogEntry(rawEntry *rawOplogEntry) *oplogEntry {
 	}
 
 	return &entry
+}
+
+// Parses op.Namespace into (database, collection)
+func parseNamespace(namespace string) (string, string) {
+	namespaceParts := strings.SplitN(namespace, ".", 2)
+
+	database := namespaceParts[0]
+	collection := ""
+	if len(namespaceParts) > 1 {
+		collection = namespaceParts[1]
+	}
+
+	return database, collection
 }

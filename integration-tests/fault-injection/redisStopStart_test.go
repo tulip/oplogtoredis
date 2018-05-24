@@ -51,4 +51,29 @@ func TestRedisStopStart(t *testing.T) {
 		// succedd
 		t.Errorf("Expected at least 60 received messages, got %d", receivedCount)
 	}
+
+	// We want to make sure that even if our verifier didn't get all 100
+	// messages, we did send all 100. To do this, we look at the metrics.
+	// We want to see exactly 100 successful redis publications, 0 permanent
+	// failures, and >0 temporary failures
+	metrics := otr.GetPromMetrics()
+
+	nSuccess := harness.FindPromMetricCounter(metrics, "otr_redispub_processed_messages", map[string]string{
+		"status": "sent",
+	})
+	if nSuccess != 100 {
+		t.Errorf("Metric otr_redispub_processed_messages(status: sent) = %d, expected 100", nSuccess)
+	}
+
+	nPermFail := harness.FindPromMetricCounter(metrics, "otr_redispub_processed_messages", map[string]string{
+		"status": "failed",
+	})
+	if nPermFail != 0 {
+		t.Errorf("Metric otr_redispub_processed_messages(status: failed) = %d, expected 0", nPermFail)
+	}
+
+	nTempFail := harness.FindPromMetricCounter(metrics, "otr_redispub_temporary_send_failures", map[string]string{})
+	if nTempFail <= 0 {
+		t.Errorf("Metric otr_redispub_processed_messages = %d, expected >0", nTempFail)
+	}
 }

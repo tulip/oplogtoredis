@@ -3,7 +3,12 @@ package harness
 import (
 	"fmt"
 	"log"
+	"math/rand"
+	"net/http"
 	"os/exec"
+
+	promdata "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 )
 
 // OTRProcess represents a running oplogtoredis process
@@ -30,6 +35,7 @@ func StartOTRProcessWithEnv(mongoURL string, redisURL string, port int, extraEnv
 			"OTR_MONGO_URL=" + mongoURL,
 			"OTR_REDIS_URL=" + redisURL,
 			"OTR_LOG_DEBUG=true",
+			"OTR_METADATA_PREFIX=" + randString(16),
 			fmt.Sprintf("OTR_HTTP_SERVER_ADDR=0.0.0.0:%d", port),
 		}, extraEnv...),
 	}
@@ -71,4 +77,28 @@ func (proc *OTRProcess) Stop() {
 	waitTCPDown(fmt.Sprintf("localhost:%d", proc.port))
 
 	log.Printf("Stopped oplogtoredis with HTTP on %d", proc.port)
+}
+
+// GetPromMetrics scrapes the prometheus metrics from the OTR process
+func (proc *OTRProcess) GetPromMetrics() map[string]*promdata.MetricFamily {
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", proc.port))
+	if err != nil {
+		panic(err)
+	}
+
+	metrics, err := (&expfmt.TextParser{}).TextToMetricFamilies(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	return metrics
+}
+
+func randString(n int) string {
+	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
