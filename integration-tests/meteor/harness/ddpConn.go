@@ -122,7 +122,7 @@ func (conn *DDPConn) backgroundHandler() {
 
 			err := conn.ws.Close()
 			if err != nil {
-				// ignore close errors
+				fmt.Printf("Error closing webocket connection to %s: %s\n", conn.url, err)
 			}
 
 			return
