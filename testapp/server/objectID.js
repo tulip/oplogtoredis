@@ -12,39 +12,38 @@ Meteor.publish('objectIDTest.pub', function() {
   });
 })
 
-Meteor.startup(() => {
-  if (!objectIDTestCollection.findOne({
+function initializeFixtures() {
+  try {
+    objectIDTestCollection.insert({
       _id: objectID,
-  })) {
-    try {
-        objectIDTestCollection.insert({
-        _id: objectID,
-        value: 0,
-        })
-    } catch (e) {
-        if (e.clode === 11000) {
-            // Ignore -- it was a duplicate key error; some other server just
-            // beat us to the insert
-            return;
-        } else {
-            throw e;
-        }
-    }
+      value: 0,
+    })
 
     // add a few distractors
     objectIDTestCollection.insert({
-        _id: new Mongo.Collection.ObjectID('5ae7d0042b2acc1fdeadbeef'),
-        value: 1000,
+      _id: new Mongo.Collection.ObjectID('5ae7d0042b2acc1fdeadbeef'),
+      value: 1000,
     })
 
     objectIDTestCollection.insert({
-        _id: 'somestring',
-        value: 2000,
+      _id: 'somestring',
+      value: 2000,
     })
+  } catch (e) {
+      if (e.code === 11000) {
+        // Ignore -- it was a duplicate key error; some other server just
+        // beat us to the insert
+        return;
+      } else {
+        throw e;
+      }
   }
-})
+}
+Meteor.startup(initializeFixtures)
 
 Meteor.methods({
+  'objectIDTest.initializeFixtures': initializeFixtures,
+
   'objectIDTest.increment'() {
     objectIDTestCollection.update({
       _id: objectID,

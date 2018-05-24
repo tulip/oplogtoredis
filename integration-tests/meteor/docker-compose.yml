@@ -1,0 +1,85 @@
+version: "3"
+services:
+  test:
+    build: .
+    depends_on:
+      - oplogtoredis
+      - mongo
+      - redis
+    command:
+      - /wait-for.sh
+      - --timeout=600
+      - testapp1:8080
+      - '--'
+      - /wait-for.sh
+      - --timeout=600
+      - testapp2:8080
+      - '--'
+      - /wait-for.sh
+      - --timeout=600
+      - oplogtoredis:9000
+      - '--'
+      - sh
+      - -c
+      - cd /go/src/github.com/tulip/oplogtoredis/integration-tests/meteor && go test . -timeout 5m -v
+    environment:
+      - MONGO_URL=mongodb://mongo/tests
+      - REDIS_URL=redis://redis
+      - TESTAPP_1_URL=ws://testapp1:8080/websocket
+      - TESTAPP_2_URL=ws://testapp2:8080/websocket
+    volumes:
+      - ../../scripts/wait-for.sh:/wait-for.sh
+      - ../..:/go/src/github.com/tulip/oplogtoredis
+  oplogtoredis:
+    build: ../..
+    environment:
+      - OTR_MONGO_URL=mongodb://mongo/tests
+      - OTR_REDIS_URL=redis://redis
+      # - OTR_LOG_DEBUG=true
+    depends_on:
+      - mongo
+      - redis
+    volumes:
+      - ../../scripts/wait-for.sh:/wait-for.sh
+    command:
+      - /wait-for.sh
+      - --timeout=600
+      - testapp1:8080
+      - '--'
+      - /bin/oplogtoredis
+  mongo:
+    image: mongo:3.2.19
+    command: "mongod --replSet myapp --port 27017"
+    logging:
+      driver: none
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:3.2.4
+    logging:
+      driver: none
+  testapp1: &meteor
+    build: ../../testapp
+    environment:
+      - MONGO_URL_NO_RS=mongodb://mongo/tests
+      - MONGO_URL=mongodb://mongo/tests?replicaSet=myapp
+      - MONGO_OPLOG_URL=mongodb://mongo/local?replicaSet=myapp
+      - ROOT_URL=http://testapp1:8080
+    volumes:
+      - ../../scripts/wait-for.sh:/wait-for.sh
+      - ./meteor-entry.sh:/meteor-entry.sh
+      - ./meteor-settings.json:/meteor-settings.json
+    command:
+      - /wait-for.sh
+      - --timeout=60
+      - mongo:27017
+      - '--'
+      - /wait-for.sh
+      - --timeout=60
+      - redis:6379
+      - '--'
+      - /meteor-entry.sh
+  testapp2: *meteor
+
+volumes:
+  mongo_data:

@@ -18,7 +18,6 @@ Meteor.methods({
 
     Tasks.insert({
       text,
-      createdAt: new Date(),
       owner: 'testuser',
       username: 'Test User'
     });

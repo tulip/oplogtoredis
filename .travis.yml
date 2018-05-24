@@ -23,3 +23,4 @@ jobs:
     - script: ./scripts/runIntegrationAcceptance.sh
     - script: ./scripts/runIntegrationPerformance.sh
     - script: ./scripts/runIntegrationFaultInjection.sh
+    - script: ./scripts/runIntegrationMeteor.sh

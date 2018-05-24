@@ -11,7 +11,7 @@ Template.arrayTest.onDestroyed(function() {
 
 Template.arrayTest.helpers({
     recordJSON() {
-        return JSON.stringify(arrayTestCollection.findOne({ _id: 'test' }), null, 4)
+        return JSON.stringify(arrayTestCollection.find().fetch(), null, 4)
     }
 })
 

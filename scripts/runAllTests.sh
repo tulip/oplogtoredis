@@ -7,4 +7,5 @@ cd `dirname "$0"`
 ./runUnitTests.sh
 ./runIntegrationAcceptance.sh
 ./runIntegrationFaultInjection.sh
+./runIntegrationMeteor.sh
 ./runIntegrationPerformance.sh

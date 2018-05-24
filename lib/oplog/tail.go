@@ -126,7 +126,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 		if iter.Timeout() {
 			// Didn't get any messages for a while, keep trying
-			log.Log.Warn("Oplog cursor timed out, will retry")
+			log.Log.Info("Oplog cursor timed out, will retry")
 			continue
 		}
 
