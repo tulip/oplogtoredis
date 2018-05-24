@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/tulip/oplogtoredis.svg?branch=master)](https://travis-ci.org/tulip/oplogtoredis)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tulip/oplogtoredis)](https://goreportcard.com/report/github.com/tulip/oplogtoredis)
-
+[![GoDoc](https://godoc.org/github.com/tulip/oplogtoredis?status.svg)](http://godoc.org/github.com/tulip/oplogtoredis)
 
 This program tails the oplog of a Mongo server, and publishes changes to Redis.
 It's designed to work with the [redis-oplog Meteor package](https://github.com/cult-of-coders/redis-oplog).
