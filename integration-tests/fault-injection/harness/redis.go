@@ -70,7 +70,7 @@ func (server *RedisServer) Stop() {
 
 	if server.monitor != nil {
 		err := server.monitor.Process.Kill()
-		if  err != nil {
+		if err != nil {
 			log.Printf("Error killing redis monitor: %s", err)
 		}
 	}
