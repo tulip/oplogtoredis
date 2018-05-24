@@ -100,7 +100,7 @@ running goes down for a brief period.
 
 oplogtoredis exposes an HTTP server that can be used to monitor the state of
 the program. By default, it serves on `0.0.0.0:9000`, but you can change this
-with the environment variable `HTTP_SERVER_ADDR`.
+with the environment variable `OTR_HTTP_SERVER_ADDR`.
 
 The HTTP server exposes a health-checking endpoint at `/healthz`. This endpoint
 checks connectivity to Mongo and Redis, and then returns 200. If HTTP requests

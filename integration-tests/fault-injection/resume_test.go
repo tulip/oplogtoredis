@@ -34,6 +34,8 @@ func TestResume(t *testing.T) {
 	testCollection.Insert(bson.M{"_id": "id2"})
 	testCollection.Insert(bson.M{"_id": "id3"})
 
+	time.Sleep(time.Second)
+
 	otr := harness.StartOTRProcessWithEnv(mongo.Addr, redis.Addr, 9000, []string{
 		"OTR_MAX_CATCH_UP=8s",
 	})
