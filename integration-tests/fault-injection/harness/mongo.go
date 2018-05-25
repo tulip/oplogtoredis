@@ -200,8 +200,8 @@ func (server *MongoServer) startNode(name string, port int) *exec.Cmd {
 		fmt.Sprintf("--port=%d", port),
 	) // #nosec
 
-	// cmd.Stderr = makeLogStreamer(name, "stderr")
-	// cmd.Stdout = makeLogStreamer(name, "stdout")
+	cmd.Stderr = makeLogStreamer(name, "stderr")
+	cmd.Stdout = makeLogStreamer(name, "stdout")
 
 	err = cmd.Start()
 

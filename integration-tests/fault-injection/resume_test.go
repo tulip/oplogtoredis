@@ -27,6 +27,8 @@ func TestResume(t *testing.T) {
 
 	verifier := harness.NewRedisVerifier(redisClient)
 
+	time.Sleep(5 * time.Second)
+
 	// We insert a couple things into the oplog to make sure they don't
 	// get processed by oplogtoredis
 	testCollection := mongoClient.DB("").C("Test")
