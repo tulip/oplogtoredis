@@ -27,8 +27,6 @@ func TestResume(t *testing.T) {
 
 	verifier := harness.NewRedisVerifier(redisClient)
 
-	time.Sleep(5 * time.Second)
-
 	// We insert a couple things into the oplog to make sure they don't
 	// get processed by oplogtoredis
 	testCollection := mongoClient.DB("").C("Test")
@@ -36,7 +34,7 @@ func TestResume(t *testing.T) {
 	testCollection.Insert(bson.M{"_id": "id2"})
 	testCollection.Insert(bson.M{"_id": "id3"})
 
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 
 	otr := harness.StartOTRProcessWithEnv(mongo.Addr, redis.Addr, 9000, []string{
 		"OTR_MAX_CATCH_UP=8s",
