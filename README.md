@@ -88,11 +88,11 @@ you're running.
 ### Resumption
 
 oplogtoredis uses Redis to keep track of the last message it processed. When
-it starts up, it check to see where it left off, and will resume tailing the
+it starts up, it checks to see where it left off, and will resume tailing the
 oplog from that timestamp, as long as it's not too far in the past (we don't
-want to try to reply too much of the oplog, or we could could overload the
+want to replay too much of the oplog, or we could could overload the
 Redis or Meteor servers). The [config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
-have more detail on how to tune the behavior, but this feature should keep
+have more detail on how to tune this behavior, but this feature should keep
 your system working propertly even if every copy of oplogtoredis that you're
 running goes down for a brief period.
 
@@ -104,7 +104,7 @@ with the environment variable `OTR_HTTP_SERVER_ADDR`.
 
 The HTTP server exposes a health-checking endpoint at `/healthz`. This endpoint
 checks connectivity to Mongo and Redis, and then returns 200. If HTTP requests
-to this endpoint time our or return non-200 codes for more than a brief
+to this endpoint time out or return non-200 codes for more than a brief
 period (10-15 seconds), you should consider the program unhealthy and restart
 it. You can do this using [Kubernetes liveness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/),
 an [Icinga health check](https://www.icinga.com/docs/icinga2/latest/doc/10-icinga-template-library/#http),
