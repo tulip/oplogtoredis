@@ -17,6 +17,13 @@ to Redis.
 
 The project is currently in early beta. It shouldn't be used in production environments. We expect to have an initial 0.1 release that is ready for general usage within the next couple months. We'd love for you to give it a test in a staging or development environment!
 
+### Known Limitations
+
+There are a few things that don't currently work in `redis-oplog` when using the `externalRedisPublisher` option, so those features won't work when using `redis-oplog` together with `oplogtoredis`. These features are part of [`redis-oplog`'s fine-tuning options](https://github.com/cult-of-coders/redis-oplog/blob/master/docs/finetuning.md). If you don't use any of redis-oplog's fine-tuning options, you won't run into any of these limitations.
+
+- Custom namespaces and channels ([`redis-oplog` issue #279](https://github.com/cult-of-coders/redis-oplog/issues/279))
+- Synthetic mutations ([`redis-oplog` issue #277](https://github.com/cult-of-coders/redis-oplog/issues/277))
+
 ## Configuring redis-oplog
 
 To use this with redis-oplog, configure redis-oplog with:
