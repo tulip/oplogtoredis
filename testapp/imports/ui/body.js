@@ -8,6 +8,7 @@ import './task.js';
 import './body.html';
 import './arrayTest.js';
 import './objectIDTest.js';
+import './replacementTest.js';
 
 Template.body.onCreated(function bodyOnCreated() {
   this.state = new ReactiveDict();
