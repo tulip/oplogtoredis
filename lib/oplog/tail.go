@@ -50,6 +50,13 @@ var metricOplogEntriesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Oplog entries received, partitioned by database and status",
 }, []string{"database", "status"})
 
+var metricOplogEntriesReceivedSize = promauto.NewCounterVec(prometheus.CounterOpts{
+	Namespace: "otr",
+	Subsystem: "oplog",
+	Name:      "entries_received_size",
+	Help:      "Size of oplog entries received in bytes, partitioned by database",
+}, []string{"database"})
+
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
 func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
@@ -105,10 +112,19 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		default:
 		}
 
+		var rawData bson.Raw
 		var result rawOplogEntry
 
-		for iter.Next(&result) {
+		for iter.Next(&rawData) {
 			lastTimestamp = result.Timestamp
+
+			err := rawData.Unmarshal(&result)
+			if err != nil {
+				log.Log.Errorw("Error unmarshaling oplog entry",
+					"error", err)
+
+				continue
+			}
 
 			entry := tailer.parseRawOplogEntry(&result)
 			log.Log.Debugw("Received oplog entry",
@@ -116,8 +132,11 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 			if entry == nil {
 				metricOplogEntriesReceived.WithLabelValues("(no database)", "ignored").Inc()
+				metricOplogEntriesReceivedSize.WithLabelValues("(no database)").Add(float64(len(rawData.Data)))
 				continue
 			}
+
+			metricOplogEntriesReceivedSize.WithLabelValues(entry.Database).Add(float64(len(rawData.Data)))
 
 			pub, err := processOplogEntry(entry)
 
