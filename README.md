@@ -15,7 +15,7 @@ to Redis.
 
 ## Project Status
 
-The project is currently in early beta. It shouldn't be used in production environments. We expect to have an initial 0.1 release that is ready for general usage within the next couple months. We'd love for you to give it a test in a staging or development environment!
+The project is currently stable and used in production in Tulip. Before using this project in production, review the Known Limitations below, and test it out in a staging environment.
 
 ### Known Limitations
 
