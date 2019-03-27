@@ -4,7 +4,7 @@ set -eu
 cd `dirname "$0"`'/../integration-tests/acceptance'
 
 # Use docker-compose to spin up the test environment
-mongo_tag="3.6.4"
+mongo_tag="3.6.11"
 redis_tag="3.2.4"
 otr_dockerfile="Dockerfile.racedetector"
 

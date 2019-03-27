@@ -1,6 +1,6 @@
 # This expects to be run with the root of the repo as the context directory
 
-FROM ubuntu:16.04
+FROM ubuntu:xenial-20190222
 
 # Install add-apt-repository
 # Add mongo, redis, and go repos
@@ -13,12 +13,12 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y \
         golang-1.10-go \
-        mongodb-org=3.6.4 \
-        mongodb-org-server=3.6.4 \
-        mongodb-org-shell=3.6.4 \
-        mongodb-org-mongos=3.6.4 \
-        mongodb-org-tools=3.6.4 \
-        redis-server=2:3.0.6-1
+        mongodb-org=3.6.11 \
+        mongodb-org-server=3.6.11 \
+        mongodb-org-shell=3.6.11 \
+        mongodb-org-mongos=3.6.11 \
+        mongodb-org-tools=3.6.11 \
+        redis-server=2:3.0.6-1ubuntu0.3
 
 ENV PATH="/usr/lib/go-1.10/bin:${PATH}"
 ENV GOPATH="/go"
