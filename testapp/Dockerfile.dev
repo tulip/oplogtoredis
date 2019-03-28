@@ -1,4 +1,4 @@
-FROM tulip/meteor-build-env:1.6.1.1_0
+FROM tulip/meteor-build-env:1.6.1.1_1
 
 RUN mkdir /src
 WORKDIR /src

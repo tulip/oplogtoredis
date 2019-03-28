@@ -3,7 +3,7 @@
 # e.g. tulip/meteor-build-env:1.6.1_0 (for the first revision of the build env
 # for 1.6.1)
 
-FROM node:8.9.4
+FROM node:8.15.1-jessie
 
 ENV METEOR_ALLOW_SUPERUSER=true
 
