@@ -29,7 +29,7 @@ There are a few things that don't currently work in `redis-oplog` when using the
 To use this with redis-oplog, configure redis-oplog with:
 
 - `externalRedisPublisher: true`
-- `redis.prefix: "<name of the Mongo database>."`
+- `globalRedisPrefix: "<name of the Mongo database>."`
 
 For example, if your MONGO_URL for Meteor is `mongodb://mymongoserver/mydb`,
 you might use this config:
@@ -39,9 +39,9 @@ you might use this config:
     "redisOplog": {
         "redis": {
             "port": 6379,
-            "host": "myredisserver",
-            "prefix": "mydb."
+            "host": "myredisserver"
         },
+        "globalRedisPrefix": "mydb.",
         "externalRedisPublisher": true
     }
 }
