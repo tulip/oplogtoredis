@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
-	"github.com/tulip/oplogtoredis/lib/log"
-	"github.com/tulip/oplogtoredis/lib/redispub"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Tailer persistently tails the oplog of a Mongo cluster, handling
@@ -43,19 +43,14 @@ type rawOplogEntryID struct {
 
 const requeryDuration = time.Second
 
-var metricOplogEntriesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "otr",
-	Subsystem: "oplog",
-	Name:      "entries_received",
-	Help:      "Oplog entries received, partitioned by database and status",
-}, []string{"database", "status"})
-
-var metricOplogEntriesReceivedSize = promauto.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "otr",
-	Subsystem: "oplog",
-	Name:      "entries_received_size",
-	Help:      "Size of oplog entries received in bytes, partitioned by database",
-}, []string{"database"})
+var (
+	metricOplogEntriesReceived = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_by_size",
+		Help:      "Oplog entries by size.",
+	}, []string{"database", "status"})
+)
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
@@ -113,47 +108,16 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		}
 
 		var rawData bson.Raw
-		var result rawOplogEntry
 
 		for iter.Next(&rawData) {
-			lastTimestamp = result.Timestamp
+			ts, pubs := tailer.unmarshalEntry(rawData)
 
-			err := rawData.Unmarshal(&result)
-			if err != nil {
-				log.Log.Errorw("Error unmarshaling oplog entry",
-					"error", err)
-
-				continue
+			if ts != nil {
+				lastTimestamp = *ts
 			}
 
-			entries := tailer.parseRawOplogEntry(result, nil)
-			log.Log.Debugw("Received oplog entries",
-				"entry", result)
-
-			if entries == nil {
-				metricOplogEntriesReceived.WithLabelValues("(no database)", "ignored").Inc()
-				metricOplogEntriesReceivedSize.WithLabelValues("(no database)").Add(float64(len(rawData.Data)))
-				continue
-			}
-
-			metricOplogEntriesReceivedSize.WithLabelValues(entries[0].Database).Add(float64(len(rawData.Data)))
-
-			for _, entry := range entries {
-				pub, err := processOplogEntry(&entry)
-
-				if err != nil {
-					metricOplogEntriesReceived.WithLabelValues(entry.Database, "error").Inc()
-					log.Log.Errorw("Error processing oplog entry",
-						"op", entries,
-						"error", err,
-						"database", entry.Database,
-						"collection", entry.Collection)
-				} else if pub == nil {
-					metricOplogEntriesReceived.WithLabelValues(entry.Database, "ignored").Inc()
-				} else {
-					metricOplogEntriesReceived.WithLabelValues(entry.Database, "processed").Inc()
-					out <- pub
-				}
+			for _, pub := range pubs {
+				out <- pub
 			}
 		}
 
@@ -181,6 +145,53 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		query := oplogCollection.Find(bson.M{"ts": bson.M{"$gt": lastTimestamp}})
 		iter = query.LogReplay().Sort("$natural").Tail(requeryDuration)
 	}
+}
+
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTimestamp, pubs []*redispub.Publication) {
+	var result rawOplogEntry
+
+	err := rawData.Unmarshal(&result)
+	if err != nil {
+		log.Log.Errorw("Error unmarshaling oplog entry", "error", err)
+		return
+	}
+
+	timestamp = &result.Timestamp
+
+	entries := tailer.parseRawOplogEntry(result, nil)
+	log.Log.Debugw("Received oplog entry",
+		"entry", result)
+
+	status := "ignored"
+	database := "(no database)"
+	defer func() {
+		metricOplogEntriesReceived.WithLabelValues(database, status).Observe(float64(len(rawData.Data)))
+	}()
+
+	if len(entries) == 0 {
+		return
+	}
+
+	database = entries[0].Database
+
+	for _, entry := range entries {
+		pub, err := processOplogEntry(&entry)
+		if err != nil {
+			status = "error"
+			pub = nil
+
+			log.Log.Errorw("Error processing oplog entry",
+				"op", entry,
+				"error", err,
+				"database", entry.Database,
+				"collection", entry.Collection)
+		} else {
+			status = "processed"
+			pubs = append(pubs, pub)
+		}
+	}
+
+	return
 }
 
 // Gets the bson.MongoTimestamp from which we should start tailing
