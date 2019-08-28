@@ -147,6 +147,10 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 	}
 }
 
+// unmarshalEntry unmarshals a single entry from the oplog.
+//
+// The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
+// ignored it or failed at some later step.
 func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTimestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
