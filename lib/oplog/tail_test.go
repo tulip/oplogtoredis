@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kylelemons/godebug/pretty"
+	"github.com/stretchr/testify/require"
 
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
@@ -72,7 +73,7 @@ func TestGetStartTime(t *testing.T) {
 				panic(err)
 			}
 			defer redisServer.Close()
-			redisServer.Set("someprefix.lastProcessedEntry", strconv.FormatInt(int64(test.redisTimestamp), 10))
+			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", strconv.FormatInt(int64(test.redisTimestamp), 10)))
 
 			redisClient := redis.NewUniversalClient(&redis.UniversalOptions{
 				Addrs: []string{redisServer.Addr()},

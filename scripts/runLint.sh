@@ -6,6 +6,6 @@
 set -e
 cd `dirname "$0"`'/..'
 
-gometalinter . ./lib/... ./integration-tests/...
+golangci-lint run ./lib/... ./integration-tests/...
 
 echo 'Lint passed.'

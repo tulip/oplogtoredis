@@ -7,6 +7,7 @@ import (
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
+	"github.com/stretchr/testify/require"
 )
 
 func startMiniredis() (*miniredis.Miniredis, redis.UniversalClient) {
@@ -30,7 +31,7 @@ func TestLastProcessedTimestampSuccess(t *testing.T) {
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
 
-	redisServer.Set("someprefix.lastProcessedEntry", encodeMongoTimestamp(nowTS))
+	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", encodeMongoTimestamp(nowTS)))
 
 	gotTS, gotTime, err := LastProcessedTimestamp(redisClient, "someprefix.")
 
@@ -63,7 +64,7 @@ func TestLastProcessedTimestampNoRecord(t *testing.T) {
 func TestLastProcessedTimestampInvalidRecord(t *testing.T) {
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
-	redisServer.Set("someprefix.lastProcessedEntry", "not a number")
+	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", "not a number"))
 
 	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.")
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -30,9 +31,9 @@ func TestResume(t *testing.T) {
 	// We insert a couple things into the oplog to make sure they don't
 	// get processed by oplogtoredis
 	testCollection := mongoClient.DB("").C("Test")
-	testCollection.Insert(bson.M{"_id": "id1"})
-	testCollection.Insert(bson.M{"_id": "id2"})
-	testCollection.Insert(bson.M{"_id": "id3"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id1"}))
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id2"}))
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id3"}))
 
 	time.Sleep(5 * time.Second)
 
@@ -42,7 +43,7 @@ func TestResume(t *testing.T) {
 	defer otr.Stop()
 
 	// Test that on first run, we start from the end of the oplog
-	testCollection.Insert(bson.M{"_id": "id4"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id4"}))
 	verifier.Verify(t, []string{"id4"})
 
 	nProcessed := harness.PromMetricOplogEntriesProcessed(otr.GetPromMetrics())
@@ -56,10 +57,10 @@ func TestResume(t *testing.T) {
 	// Pause for less than OTR_MAX_CATCH_UP and make sure we publish the things
 	// we missed when we start back up
 	otr.Stop()
-	testCollection.Insert(bson.M{"_id": "id5"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id5"}))
 
 	otr.Start()
-	testCollection.Insert(bson.M{"_id": "id6"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id6"}))
 
 	verifier.Verify(t, []string{"id5", "id6"})
 
@@ -71,11 +72,11 @@ func TestResume(t *testing.T) {
 	// Pause for more than OTR_MAX_CATCH_UP and make sure we don't try to
 	// catch up when we start back up
 	otr.Stop()
-	testCollection.Insert(bson.M{"_id": "id7"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id7"}))
 
 	time.Sleep(8 * time.Second)
 	otr.Start()
-	testCollection.Insert(bson.M{"_id": "id8"})
+	require.NoError(t, testCollection.Insert(bson.M{"_id": "id8"}))
 
 	verifier.Verify(t, []string{"id8"})
 
