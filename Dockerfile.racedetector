@@ -1,4 +1,6 @@
-FROM golang:1.10.0
+FROM golang:1.12.9
+# This dockerfile doesn't use alpine because race detection doesn't work.
+# https://github.com/golang/go/issues/14481
 
 RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
 WORKDIR /go/src/github.com/tulip/oplogtoredis

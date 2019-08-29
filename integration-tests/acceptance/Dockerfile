@@ -1,2 +1,3 @@
-FROM golang:1.10.0-alpine3.7
-RUN apk add --update mongodb
+FROM golang:1.12.9-alpine3.9
+
+RUN apk --update add mongodb gcc musl-dev jq
