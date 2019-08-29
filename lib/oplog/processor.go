@@ -2,9 +2,9 @@ package oplog
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -35,21 +35,42 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	var idForChannel string
 	var idForMessage interface{}
 
-	if id, idOK := op.DocID.(string); idOK {
+	switch id := op.DocID.(type) {
+	case string:
 		idForChannel = id
 		idForMessage = id
-	} else if id, idOK := op.DocID.(bson.ObjectId); idOK {
+
+	case bson.ObjectId:
 		idHex := id.Hex()
 		idForChannel = idHex
 		idForMessage = map[string]string{
 			"$type":  "oid",
 			"$value": idHex,
 		}
-	} else {
+
+	case bson.M:
+		_, cOk := id["c"]
+		idVal, idOk := id["id"]
+
+		if idOk && cOk {
+			idForChannel = idVal.(string)
+			idForMessage = idVal.(string)
+		}
+
+	case map[string]interface{}:
+		_, cOk := id["c"]
+		idVal, idOk := id["id"]
+
+		if idOk && cOk {
+			idForChannel = idVal.(string)
+			idForMessage = idVal.(string)
+		}
+
+	default:
 		// We don't know how to handle IDs that aren't strings or ObjectIDs,
 		// because we don't what what the specific channel (the channel for
 		// this specific document) should be.
-		return nil, errors.New("op.ID was not a string or ObjectID")
+		return nil, errors.Errorf("expected op.DocID to be string or ObjectID, got %T instead", op.DocID)
 	}
 
 	// Construct the JSON we're going to send to Redis
@@ -65,7 +86,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	msgJSON, err := json.Marshal(&msg)
 
 	if err != nil {
-		return nil, fmt.Errorf("Error marshalling outgoing message: %s", err)
+		return nil, errors.Errorf("marshalling outgoing message: %s", err)
 	}
 
 	// We need to publish on both the full-collection channel and the
