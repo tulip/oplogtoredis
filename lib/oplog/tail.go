@@ -44,11 +44,27 @@ type rawOplogEntryID struct {
 const requeryDuration = time.Second
 
 var (
-	metricOplogEntriesReceived = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	// Deprecated: use metricOplogEntriesBySize instead
+	metricOplogEntriesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_received",
+		Help:      "Oplog entries received, partitioned by database and status",
+	}, []string{"database", "status"})
+
+	// Deprecated: use metricOplogEntriesBySize instead
+	metricOplogEntriesReceivedSize = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_received_size",
+		Help:      "Size of oplog entries received in bytes, partitioned by database",
+	}, []string{"database"})
+
+	metricOplogEntriesBySize = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "entries_by_size",
-		Help:      "Oplog entries by size.",
+		Help:      "Histogram of oplog entries received by size, partitioned by database and status.",
 	}, []string{"database", "status"})
 )
 
@@ -169,7 +185,11 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 	status := "ignored"
 	database := "(no database)"
 	defer func() {
-		metricOplogEntriesReceived.WithLabelValues(database, status).Observe(float64(len(rawData.Data)))
+		// TODO: remove these in a future version
+		metricOplogEntriesReceived.WithLabelValues(database, status).Inc()
+		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(float64(len(rawData.Data)))
+
+		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(float64(len(rawData.Data)))
 	}()
 
 	if len(entries) == 0 {
