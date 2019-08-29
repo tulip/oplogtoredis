@@ -28,13 +28,13 @@ type Tailer struct {
 
 // Raw oplog entry from Mongo
 type rawOplogEntry struct {
-	Timestamp    bson.MongoTimestamp    `bson:"ts"`
-	HistoryID    int64                  `bson:"h"`
-	MongoVersion int                    `bson:"v"`
-	Operation    string                 `bson:"op"`
-	Namespace    string                 `bson:"ns"`
-	Doc          map[string]interface{} `bson:"o"`
-	Update       rawOplogEntryID        `bson:"o2"`
+	Timestamp    bson.MongoTimestamp `bson:"ts"`
+	HistoryID    int64               `bson:"h"`
+	MongoVersion int                 `bson:"v"`
+	Operation    string              `bson:"op"`
+	Namespace    string              `bson:"ns"`
+	Doc          bson.Raw            `bson:"o"`
+	Update       rawOplogEntryID     `bson:"o2"`
 }
 
 type rawOplogEntryID struct {
@@ -126,32 +126,34 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 				continue
 			}
 
-			entry := tailer.parseRawOplogEntry(&result)
-			log.Log.Debugw("Received oplog entry",
+			entries := tailer.parseRawOplogEntry(result)
+			log.Log.Debugw("Received oplog entries",
 				"entry", result)
 
-			if entry == nil {
+			if entries == nil {
 				metricOplogEntriesReceived.WithLabelValues("(no database)", "ignored").Inc()
 				metricOplogEntriesReceivedSize.WithLabelValues("(no database)").Add(float64(len(rawData.Data)))
 				continue
 			}
 
-			metricOplogEntriesReceivedSize.WithLabelValues(entry.Database).Add(float64(len(rawData.Data)))
+			metricOplogEntriesReceivedSize.WithLabelValues(entries[0].Database).Add(float64(len(rawData.Data)))
 
-			pub, err := processOplogEntry(entry)
+			for _, entry := range entries {
+				pub, err := processOplogEntry(&entry)
 
-			if err != nil {
-				metricOplogEntriesReceived.WithLabelValues(entry.Database, "error").Inc()
-				log.Log.Errorw("Error processing oplog entry",
-					"op", entry,
-					"error", err,
-					"database", entry.Database,
-					"collection", entry.Collection)
-			} else if pub == nil {
-				metricOplogEntriesReceived.WithLabelValues(entry.Database, "ignored").Inc()
-			} else {
-				metricOplogEntriesReceived.WithLabelValues(entry.Database, "processed").Inc()
-				out <- pub
+				if err != nil {
+					metricOplogEntriesReceived.WithLabelValues(entry.Database, "error").Inc()
+					log.Log.Errorw("Error processing oplog entry",
+						"op", entries,
+						"error", err,
+						"database", entry.Database,
+						"collection", entry.Collection)
+				} else if pub == nil {
+					metricOplogEntriesReceived.WithLabelValues(entry.Database, "ignored").Inc()
+				} else {
+					metricOplogEntriesReceived.WithLabelValues(entry.Database, "processed").Inc()
+					out <- pub
+				}
 			}
 		}
 
@@ -217,28 +219,58 @@ func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (bson.Mon
 }
 
 // converts a rawOplogEntry to an oplogEntry
-func (tailer *Tailer) parseRawOplogEntry(rawEntry *rawOplogEntry) *oplogEntry {
-	entry := oplogEntry{
-		Operation: rawEntry.Operation,
-		Timestamp: rawEntry.Timestamp,
-		Namespace: rawEntry.Namespace,
-		Data:      rawEntry.Doc,
-	}
+func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry) []oplogEntry {
+	switch entry.Operation {
+	case operationInsert, operationUpdate, operationRemove:
+		var data map[string]interface{}
+		if err := entry.Doc.Unmarshal(&data); err != nil {
+			log.Log.Errorf("unmarshalling oplog entry data: %v", err)
+			return nil
+		}
 
-	if !(entry.IsInsert() || entry.IsUpdate() || entry.IsRemove()) {
-		// discard commands like dropDatabase, etc.
+		out := oplogEntry{
+			Operation: entry.Operation,
+			Timestamp: entry.Timestamp,
+			Namespace: entry.Namespace,
+			Data:      data,
+		}
+
+		out.Database, out.Collection = parseNamespace(out.Namespace)
+
+		if out.Operation == operationUpdate {
+			out.DocID = entry.Update.ID
+		} else {
+			out.DocID = data["_id"]
+		}
+
+		return []oplogEntry{out}
+
+	case operationCommand:
+		if entry.Namespace != "admin.$cmd" {
+			return nil
+		}
+
+		var txData struct {
+			ApplyOps []rawOplogEntry `bson:"applyOps"`
+		}
+
+		if err := entry.Doc.Unmarshal(&txData); err != nil {
+			log.Log.Errorf("unmarshaling transaction data: %v", err)
+			return nil
+		}
+
+		var ret []oplogEntry
+
+		for _, v := range txData.ApplyOps {
+			v.Timestamp = entry.Timestamp
+			ret = append(ret, tailer.parseRawOplogEntry(v)...)
+		}
+
+		return ret
+
+	default:
 		return nil
 	}
-
-	entry.Database, entry.Collection = parseNamespace(rawEntry.Namespace)
-
-	if rawEntry.Operation == operationUpdate {
-		entry.DocID = rawEntry.Update.ID
-	} else {
-		entry.DocID = rawEntry.Doc["_id"]
-	}
-
-	return &entry
 }
 
 // Parses op.Namespace into (database, collection)
