@@ -18,7 +18,7 @@ RUN apt-get update && \
         mongodb-org-shell=3.6.11 \
         mongodb-org-mongos=3.6.11 \
         mongodb-org-tools=3.6.11 \
-        redis-server=2:3.0.6-1ubuntu0.3
+        redis-server=2:3.0.6-1ubuntu0.4
 
 ENV PATH="/usr/lib/go-1.10/bin:${PATH}"
 ENV GOPATH="/go"
