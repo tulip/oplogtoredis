@@ -7,7 +7,9 @@ RUN apk add --no-cache gcc cyrus-sasl cyrus-sasl-dev musl-dev
 RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
 WORKDIR /go/src/github.com/tulip/oplogtoredis
 
-ADD . ./
+COPY vendor ./vendor
+COPY lib ./lib
+COPY main.go .
 RUN go build -o app
 
 # We're using a multistage build -- the previous stage has the full go toolchain

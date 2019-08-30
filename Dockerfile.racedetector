@@ -5,7 +5,9 @@ FROM golang:1.12.9
 RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
 WORKDIR /go/src/github.com/tulip/oplogtoredis
 
-ADD . ./
+COPY vendor ./vendor
+COPY lib ./lib
+COPY main.go .
 RUN go build -o app -race && mv ./app /bin/oplogtoredis
 
 ENV PORT 8080
