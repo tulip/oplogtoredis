@@ -2,7 +2,7 @@
 
 FROM golang:1.12.9-alpine3.9 AS integration_base
 
-RUN apk --update add gcc musl-dev
+RUN apk add --update --no-cache gcc musl-dev
 WORKDIR /go/src/github.com/tulip/oplogtoredis
 COPY vendor ./vendor
 COPY lib ./lib
@@ -35,7 +35,7 @@ RUN go build -o /analyze analyzeBench.go
 
 
 FROM alpine:3.9.4
-RUN apk --update add mongodb jq
+RUN apk add --update --no-cache mongodb jq
 RUN mkdir -p /integration/bin
 
 COPY --from=acceptance          /test       /integration/bin/acceptance.test

@@ -2,7 +2,7 @@ FROM golang:1.12.9-alpine3.9
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
 # parts of mgo
-RUN apk add --no-cache gcc cyrus-sasl cyrus-sasl-dev musl-dev
+RUN apk add --no-cache --update gcc cyrus-sasl cyrus-sasl-dev musl-dev
 
 RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
 WORKDIR /go/src/github.com/tulip/oplogtoredis

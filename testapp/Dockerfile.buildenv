@@ -9,6 +9,7 @@ ENV METEOR_ALLOW_SUPERUSER=true
 
 RUN apt-get update && \
   apt-get install -y g++ build-essential curl && \
+  rm -rf /var/lib/apt/lists/* && \
   curl https://install.meteor.com/ | sh
 
 RUN meteor create --release 1.6.1.1 /throwaway && rm -rf /throwaway

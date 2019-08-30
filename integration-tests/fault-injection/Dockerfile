@@ -17,11 +17,12 @@ RUN apt-get update && \
         mongodb-org-mongos=3.6.11 \
         mongodb-org-tools=3.6.11 \
         redis-server=2:3.0.6-1ubuntu0.4 \
-        musl
+        musl && \
         # did you know that if you build a binary with one libc and try to run it on a machine with a different one,
         # your shell will tell you `[executable]: No such file or directory.`? pretty fun thing to debug. this is why we
         # need musl--oltr and oltr-integration are built on alpine with musl, but ubuntu doesn't have it installed by
         # default.
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=local-oplogtoredis:latest   /bin/oplogtoredis                       /bin/oplogtoredis
 COPY --from=oltr-integration:latest     /integration/bin/fault-injection.test   /integration/bin/fault-injection.test
