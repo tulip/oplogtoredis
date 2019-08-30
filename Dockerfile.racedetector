@@ -2,13 +2,12 @@ FROM golang:1.12.9
 # This dockerfile doesn't use alpine because race detection doesn't work.
 # https://github.com/golang/go/issues/14481
 
-RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
-WORKDIR /go/src/github.com/tulip/oplogtoredis
+WORKDIR /oplogtoredis
 
-COPY vendor ./vendor
+COPY main.go go.sum go.mod ./
 COPY lib ./lib
-COPY main.go .
-RUN go build -o app -race && mv ./app /bin/oplogtoredis
+
+RUN go build -o /bin/oplogtoredis -race && rm -rf $GOPATH
 
 ENV PORT 8080
 EXPOSE 8080

@@ -2,13 +2,17 @@
 
 FROM golang:1.12.9-alpine3.9 AS integration_base
 
-RUN apk add --update --no-cache gcc musl-dev
-WORKDIR /go/src/github.com/tulip/oplogtoredis
-COPY vendor ./vendor
+RUN apk add --update --no-cache gcc musl-dev git
+
+WORKDIR /oplogtoredis
+
+COPY go.mod go.sum ./
 COPY lib ./lib
 COPY integration-tests/helpers ./integration-tests/helpers
+RUN go mod download
 
-WORKDIR /go/src/github.com/tulip/oplogtoredis/integration-tests
+WORKDIR /oplogtoredis/integration-tests
+
 
 FROM integration_base AS acceptance
 COPY integration-tests/acceptance/*.go ./acceptance/
