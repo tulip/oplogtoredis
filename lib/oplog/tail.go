@@ -68,12 +68,16 @@ var (
 		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(1, 2, 27)...),
 	}, []string{"database", "status"})
 
-	metricMaxOplogEntryByMinute = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Subsystem: "oplog",
-		Name:      "entries_size_gauge",
-		Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
-	}, []string{"database", "status"})
+	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(IntervalMaxOpts{
+		Opts: prometheus.Opts{
+			Namespace: "otr",
+			Subsystem: "oplog",
+			Name:      "entries_size_gauge",
+			Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
+		},
+
+		ReportInterval: 1 * time.Minute,
+	}, []string{})
 )
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
@@ -200,7 +204,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(messageLen)
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
-		metricMaxOplogEntryByMinute.WithLabelValues(database, status).Set(messageLen)
+		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
 	}()
 
 	if len(entries) == 0 {
