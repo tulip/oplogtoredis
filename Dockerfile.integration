@@ -2,6 +2,8 @@
 
 FROM golang:1.12.9-alpine3.9 AS integration_base
 
+ENV GO111MODULE on
+
 RUN apk add --update --no-cache gcc musl-dev git
 
 WORKDIR /oplogtoredis
