@@ -65,7 +65,7 @@ var (
 		Subsystem: "oplog",
 		Name:      "entries_by_size",
 		Help:      "Histogram of oplog entries received by size, partitioned by database and status.",
-		Buckets:   entrySizeHistogramBuckets,
+		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(1, 2, 27)...),
 	}, []string{"database", "status"})
 
 	metricMaxOplogEntryByMinute = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -75,16 +75,6 @@ var (
 		Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
 	}, []string{"database", "status"})
 )
-
-var entrySizeHistogramBuckets = []float64{0}
-
-const maxHistogramBucket = 1 << 27
-
-func init() {
-	for i := 1; i <= maxHistogramBucket; i <<= 1 {
-		entrySizeHistogramBuckets = append(entrySizeHistogramBuckets, float64(i))
-	}
-}
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
