@@ -3,10 +3,17 @@ sudo: required
 services:
   - docker
 
+addons:
+  apt:
+    packages:
+      - docker-ce
 
 language: go
 go:
   - "1.12"
+
+before_install:
+  - docker --version
 
 install: skip
 
