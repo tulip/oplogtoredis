@@ -65,8 +65,26 @@ var (
 		Subsystem: "oplog",
 		Name:      "entries_by_size",
 		Help:      "Histogram of oplog entries received by size, partitioned by database and status.",
+		Buckets:   entrySizeHistogramBuckets,
+	}, []string{"database", "status"})
+
+	metricMaxOplogEntryByMinute = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_size_gauge",
+		Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
 	}, []string{"database", "status"})
 )
+
+var entrySizeHistogramBuckets = []float64{0}
+
+const maxHistogramBucket = 1 << 27
+
+func init() {
+	for i := 1; i <= maxHistogramBucket; i <<= 1 {
+		entrySizeHistogramBuckets = append(entrySizeHistogramBuckets, float64(i))
+	}
+}
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
@@ -184,12 +202,15 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 
 	status := "ignored"
 	database := "(no database)"
+	messageLen := float64(len(rawData.Data))
+
 	defer func() {
 		// TODO: remove these in a future version
 		metricOplogEntriesReceived.WithLabelValues(database, status).Inc()
-		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(float64(len(rawData.Data)))
+		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(messageLen)
 
-		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(float64(len(rawData.Data)))
+		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
+		metricMaxOplogEntryByMinute.WithLabelValues(database, status).Set(messageLen)
 	}()
 
 	if len(entries) == 0 {
