@@ -25,6 +25,9 @@ FROM integration_base AS fault-injection
 COPY integration-tests/fault-injection/*.go ./fault-injection/
 COPY integration-tests/fault-injection/harness/*.go ./fault-injection/harness/
 WORKDIR ./fault-injection
+RUN pwd
+RUN ls
+RUN ls harness
 RUN go test -c -o /test
 
 FROM integration_base AS meteor
