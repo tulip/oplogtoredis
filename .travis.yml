@@ -17,27 +17,35 @@ before_install:
 
 install: skip
 
+cache:
+  - directories:
+      - $GOPATH/src
+      - $GOPATH/pkg
+
+env:
+  - GO111MODULE=on
+
 jobs:
   include:
-    - stage: test
-      env: GO111MODULE=on
+    - name: Lint
+      stage: test
       before_script:
         - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.17.1
         - export PATH=$PATH:$(go env GOPATH)/bin
         - golangci-lint --version
       script: ./scripts/runLint.sh
 
-    - script: ./scripts/runUnitTests.sh
-      env: GO111MODULE=on
+    - name: Unit Tests
+      script: ./scripts/runUnitTests.sh
 
-    - script: ./scripts/runIntegrationAcceptance.sh
-      env: GO111MODULE=on
+    - name: Acceptance
+      script: ./scripts/runIntegrationAcceptance.sh
 
-    - script: ./scripts/runIntegrationPerformance.sh
-      env: GO111MODULE=on
+    - name: Performance
+      script: ./scripts/runIntegrationPerformance.sh
 
-    - script: ./scripts/runIntegrationFaultInjection.sh
-      env: GO111MODULE=on
+    - name: Fault Injection
+      script: ./scripts/runIntegrationFaultInjection.sh
 
-    - script: ./scripts/runIntegrationMeteor.sh
-      env: GO111MODULE=on
+    - name: Meteor
+      script: ./scripts/runIntegrationMeteor.sh
