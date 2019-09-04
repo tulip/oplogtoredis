@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -62,7 +63,7 @@ func (c *IntervalMaxMetric) Collect(mtcs chan<- prometheus.Metric) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
 
-	currentBucket := c.thisTimeBucket()
+	currentBucket := c.opts.thisTimeBucket()
 	c.rotate(currentBucket)
 
 	if c.previousMax == nil {
@@ -80,7 +81,7 @@ func (c *IntervalMaxMetric) Report(value float64) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
 
-	thisTimeBucket := c.thisTimeBucket()
+	thisTimeBucket := c.opts.thisTimeBucket()
 	c.rotate(thisTimeBucket)
 
 	maxVal := &lastMax{
@@ -93,8 +94,11 @@ func (c *IntervalMaxMetric) Report(value float64) {
 		return
 	}
 
-	if thisTimeBucket.Equal(c.currentMax.bucketedTime) && c.currentMax.value < value {
-		c.currentMax = maxVal
+	if thisTimeBucket.Equal(c.currentMax.bucketedTime) {
+		if c.currentMax.value < value {
+			c.currentMax = maxVal
+		}
+
 		return
 	}
 
@@ -116,22 +120,42 @@ func (c *IntervalMaxMetric) rotate(timeBucket time.Time) {
 		return
 	}
 
+	// this behavior is expected by IntervalMaxMetricVec: must set currentMax nil if we've advanced a bucket
 	c.previousMax = c.currentMax
 	c.currentMax = nil
 }
 
-func (c *IntervalMaxMetric) thisTimeBucket() time.Time {
-	return time.Now().Truncate(c.opts.ReportInterval)
+func (opts IntervalMaxOpts) thisTimeBucket() time.Time {
+	return time.Now().Truncate(opts.ReportInterval)
 }
+
+type IntervalMaxVecOpts struct {
+	IntervalMaxOpts
+
+	// GCInterval is the interval on which the IntervalMaxMetricVec will clean up old state. This operation acquires
+	// an exclusive lock on the entire metric, so this should be relatively long. Default 5s.
+	GCInterval time.Duration
+}
+
+const DefaultMaxVecGCInterval = 5 * time.Second
 
 type IntervalMaxMetricVec struct {
 	mp     sync.Map
 	labels []string
 	desc   *prometheus.Desc
-	opts   IntervalMaxOpts
+	opts   IntervalMaxVecOpts
+
+	// lock locks mp. "read" access is more clearly interpreted as shared access, and "write" access as exclusive:
+	// mp can be mutated with shared access, but gcs (and mutations to lastGc) must hold the lock exclusively.
+	lock   sync.RWMutex
+	lastGc time.Time
 }
 
-func NewIntervalMaxMetricVec(opts IntervalMaxOpts, labels []string) *IntervalMaxMetricVec {
+func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *IntervalMaxMetricVec {
+	if opts.GCInterval == 0 {
+		opts.GCInterval = DefaultMaxVecGCInterval
+	}
+
 	return &IntervalMaxMetricVec{
 		labels: labels,
 		opts:   opts,
@@ -141,6 +165,8 @@ func NewIntervalMaxMetricVec(opts IntervalMaxOpts, labels []string) *IntervalMax
 			labels,
 			opts.ConstLabels,
 		),
+
+		lastGc: time.Now(),
 	}
 }
 
@@ -149,6 +175,11 @@ func (c *IntervalMaxMetricVec) Describe(descs chan<- *prometheus.Desc) {
 }
 
 func (c *IntervalMaxMetricVec) Collect(coll chan<- prometheus.Metric) {
+	defer c.checkGc()
+
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	c.mp.Range(func(_, v interface{}) bool {
 		v.(*IntervalMaxMetric).Collect(coll)
 		return true
@@ -156,11 +187,16 @@ func (c *IntervalMaxMetricVec) Collect(coll chan<- prometheus.Metric) {
 }
 
 func (c *IntervalMaxMetricVec) Report(value float64, labelValues ...string) {
+	defer c.checkGc()
+
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
 	key := labelKey(labelValues)
 
 	m, ok := c.mp.Load(key)
 	if !ok {
-		m, _ = c.mp.LoadOrStore(key, NewIntervalMaxMetric(c.opts, c.labels, labelValues))
+		m, _ = c.mp.LoadOrStore(key, NewIntervalMaxMetric(c.opts.IntervalMaxOpts, c.labels, labelValues))
 	}
 
 	m.(*IntervalMaxMetric).Report(value)
@@ -168,4 +204,43 @@ func (c *IntervalMaxMetricVec) Report(value float64, labelValues ...string) {
 
 func labelKey(labels []string) string {
 	return "imv::" + strings.Join(labels, "::")
+}
+
+func (c *IntervalMaxMetricVec) checkGc() {
+	c.lock.RLock()
+	timedOut := time.Since(c.lastGc) < c.opts.GCInterval
+	c.lock.RUnlock()
+	if timedOut {
+		return
+	}
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if time.Since(c.lastGc) < c.opts.GCInterval { // another caller beat us to the bunch
+		return
+	}
+
+	c.gc()
+}
+
+// pre: exclusive lock acquired
+func (c *IntervalMaxMetricVec) gc() {
+	toEvict := mapset.NewSet()
+
+	c.mp.Range(func(k, v interface{}) bool {
+		m := v.(*IntervalMaxMetric)
+
+		if m.currentMax == nil && (m.previousMax == nil || time.Since(m.previousMax.bucketedTime) > 2*c.opts.ReportInterval) {
+			toEvict.Add(k)
+		}
+
+		return true
+	})
+
+	for k := range toEvict.Iter() {
+		c.mp.Delete(k)
+	}
+
+	c.lastGc = time.Now()
 }

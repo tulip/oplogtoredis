@@ -68,17 +68,23 @@ var (
 		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(1, 2, 27)...),
 	}, []string{"database", "status"})
 
-	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(IntervalMaxOpts{
-		Opts: prometheus.Opts{
-			Namespace: "otr",
-			Subsystem: "oplog",
-			Name:      "entries_size_gauge",
-			Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
-		},
+	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(IntervalMaxVecOpts{
+		IntervalMaxOpts: IntervalMaxOpts{
+			Opts: prometheus.Opts{
+				Namespace: "otr",
+				Subsystem: "oplog",
+				Name:      "entries_max_size",
+				Help:      "Gauge recording maximum size recorded in the last minute, partitioned by database and status",
+			},
 
-		ReportInterval: 1 * time.Minute,
+			ReportInterval: 1 * time.Minute,
+		},
 	}, []string{})
 )
+
+func init() {
+	prometheus.MustRegister(metricMaxOplogEntryByMinute)
+}
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
