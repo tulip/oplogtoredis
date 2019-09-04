@@ -236,7 +236,7 @@ func (c *IntervalMaxMetricVec) checkGc() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if time.Since(c.lastGc) < c.opts.GCInterval { // another caller beat us to the bunch
+	if time.Since(c.lastGc) < c.opts.GCInterval { // another caller beat us to the punch
 		return
 	}
 
