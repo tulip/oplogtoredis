@@ -64,8 +64,8 @@ var (
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "entries_by_size",
-		Help:      "Histogram of oplog entries received by size, partitioned by database and status.",
-		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(1, 2, 27)...),
+		Help:      "Histogram of oplog entries received by size in bytes, partitioned by database and status.",
+		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(8, 2, 29)...),
 	}, []string{"database", "status"})
 
 	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(IntervalMaxVecOpts{
