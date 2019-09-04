@@ -9,6 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// IntervalMaxMetric is a prometheus metric that reports the maximum value reported to it within a configurable
+// interval. These intervals are disjoint windows, and the *last* completed window is reported, if it immediately
+// precedes the current one.
 type IntervalMaxMetric struct {
 	desc        *prometheus.Desc
 	opts        IntervalMaxOpts
@@ -25,8 +28,10 @@ type lastMax struct {
 	bucketedTime time.Time
 }
 
+// DefaultInterval is the default interval for the
 const DefaultInterval = 1 * time.Minute
 
+// IntervalMaxOpts are options for IntervalMaxMetric.
 type IntervalMaxOpts struct {
 	prometheus.Opts
 
@@ -34,6 +39,7 @@ type IntervalMaxOpts struct {
 	ReportInterval time.Duration
 }
 
+// NewIntervalMaxMetric constructs a new IntervalMaxMetric.
 func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []string) *IntervalMaxMetric {
 	if opts.ReportInterval == 0 {
 		opts.ReportInterval = DefaultInterval
@@ -55,10 +61,12 @@ func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []s
 	}
 }
 
+// Describe implements the prometheus.Collector interface.
 func (c *IntervalMaxMetric) Describe(descs chan<- *prometheus.Desc) {
 	descs <- c.desc
 }
 
+// Collect implements the prometheus.Collector interface.
 func (c *IntervalMaxMetric) Collect(mtcs chan<- prometheus.Metric) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
@@ -77,6 +85,9 @@ func (c *IntervalMaxMetric) Collect(mtcs chan<- prometheus.Metric) {
 	mtcs <- prometheus.MustNewConstMetric(c.desc, prometheus.GaugeValue, c.previousMax.value, c.labelValues...)
 }
 
+// Report reports a value to the IntervalMaxMetric. If it is the greatest seen so far in the current window, it will be
+// recorded as such until either another, greater value is reported, or the window ends (it will then be the
+// value this IntervalMaxMetric returns when polled via Collect, until another window elapses).
 func (c *IntervalMaxMetric) Report(value float64) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
@@ -105,9 +116,10 @@ func (c *IntervalMaxMetric) Report(value float64) {
 	if thisTimeBucket.After(c.currentMax.bucketedTime) {
 		c.currentMax = maxVal
 		return
-	} else { // this bucket is before previous bucket
-		panic("interval max metric time traveled")
 	}
+
+	// this bucket is before previous bucket
+	panic("interval max metric time traveled")
 }
 
 // pre: c is locked
@@ -129,6 +141,7 @@ func (opts IntervalMaxOpts) thisTimeBucket() time.Time {
 	return time.Now().Truncate(opts.ReportInterval)
 }
 
+// IntervalMaxVecOpts is options for IntervalMaxMetricVec.
 type IntervalMaxVecOpts struct {
 	IntervalMaxOpts
 
@@ -137,8 +150,10 @@ type IntervalMaxVecOpts struct {
 	GCInterval time.Duration
 }
 
+// DefaultMaxVecGCInterval is the default interval for cleaning up old state in IntervalMaxMetricVec.
 const DefaultMaxVecGCInterval = 5 * time.Second
 
+// IntervalMaxMetricVec is a Vec version of IntervalMaxMetric.
 type IntervalMaxMetricVec struct {
 	mp     sync.Map
 	labels []string
@@ -151,6 +166,7 @@ type IntervalMaxMetricVec struct {
 	lastGc time.Time
 }
 
+// NewIntervalMaxMetricVec constructs a new IntervalMaxMetricVec.
 func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *IntervalMaxMetricVec {
 	if opts.GCInterval == 0 {
 		opts.GCInterval = DefaultMaxVecGCInterval
@@ -170,10 +186,12 @@ func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *Interval
 	}
 }
 
+// Describe implements the prometheus.Collector interface.
 func (c *IntervalMaxMetricVec) Describe(descs chan<- *prometheus.Desc) {
 	descs <- c.desc
 }
 
+// Collect implements the prometheus.Collector interface.
 func (c *IntervalMaxMetricVec) Collect(coll chan<- prometheus.Metric) {
 	defer c.checkGc()
 
@@ -186,6 +204,7 @@ func (c *IntervalMaxMetricVec) Collect(coll chan<- prometheus.Metric) {
 	})
 }
 
+// Report reports a value to this collector. See IntervalMaxMetric.Report for details.
 func (c *IntervalMaxMetricVec) Report(value float64, labelValues ...string) {
 	defer c.checkGc()
 
