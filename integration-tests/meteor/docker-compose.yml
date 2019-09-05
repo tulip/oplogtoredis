@@ -1,7 +1,9 @@
 version: "3"
 services:
   test:
-    build: .
+    build:
+      context: ../..
+      dockerfile: Dockerfile.integration
     depends_on:
       - oplogtoredis
       - mongo
@@ -21,15 +23,12 @@ services:
       - '--'
       - sh
       - -c
-      - cd /go/src/github.com/tulip/oplogtoredis/integration-tests/meteor && go test . -timeout 5m -v
+      - cd /integration/meteor && /integration/bin/meteor.test -test.timeout 5m -test.v
     environment:
       - MONGO_URL=mongodb://mongo/tests
       - REDIS_URL=redis://redis
       - TESTAPP_1_URL=ws://testapp1:8080/websocket
       - TESTAPP_2_URL=ws://testapp2:8080/websocket
-    volumes:
-      - ../../scripts/wait-for.sh:/wait-for.sh
-      - ../..:/go/src/github.com/tulip/oplogtoredis
   oplogtoredis:
     build: ../..
     environment:

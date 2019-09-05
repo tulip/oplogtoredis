@@ -1,13 +1,14 @@
-FROM golang:1.10.0-alpine3.7
+FROM golang:1.12.9-alpine3.9
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
 # parts of mgo
-RUN apk add --no-cache gcc cyrus-sasl cyrus-sasl-dev musl-dev
+RUN apk add --no-cache --update gcc cyrus-sasl cyrus-sasl-dev musl-dev git
 
-RUN mkdir -p /go/src/github.com/tulip/oplogtoredis
-WORKDIR /go/src/github.com/tulip/oplogtoredis
+WORKDIR /oplogtoredis
 
-ADD . ./
+COPY main.go go.mod go.sum ./
+COPY lib ./lib
+
 RUN go build -o app
 
 # We're using a multistage build -- the previous stage has the full go toolchain
@@ -17,7 +18,7 @@ FROM alpine:3.6
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=0 /go/src/github.com/tulip/oplogtoredis/app /bin/oplogtoredis
+COPY --from=0 /oplogtoredis/app /bin/oplogtoredis
 CMD /bin/oplogtoredis
 
 ENV PORT 8080

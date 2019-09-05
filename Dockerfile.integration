@@ -1,0 +1,54 @@
+# expects build context of oplogtoredis
+
+FROM golang:1.12.9-alpine3.9 AS integration_base
+
+ENV GO111MODULE on
+
+RUN apk add --update --no-cache gcc musl-dev git
+
+WORKDIR /oplogtoredis
+
+COPY go.mod go.sum ./
+COPY lib ./lib
+COPY integration-tests/helpers ./integration-tests/helpers
+RUN go mod download
+
+WORKDIR /oplogtoredis/integration-tests
+
+
+FROM integration_base AS acceptance
+COPY integration-tests/acceptance/*.go ./acceptance/
+WORKDIR ./acceptance
+RUN go test -c -o /test
+
+FROM integration_base AS fault-injection
+COPY integration-tests/fault-injection/*.go ./fault-injection/
+COPY integration-tests/fault-injection/harness/*.go ./fault-injection/harness/
+WORKDIR ./fault-injection
+RUN go test -c -o /test
+
+FROM integration_base AS meteor
+COPY integration-tests/meteor/*.go ./meteor/
+COPY integration-tests/meteor/harness/*.go ./meteor/harness/
+WORKDIR ./meteor
+RUN go test -c -o /test
+
+FROM integration_base AS performance
+COPY integration-tests/performance/*.go ./performance/
+WORKDIR ./performance
+RUN go test -c -o /test
+RUN go build -o /analyze analyzeBench.go
+
+
+FROM alpine:3.9.4
+RUN apk add --update --no-cache mongodb jq
+RUN mkdir -p /integration/bin
+
+COPY --from=acceptance          /test       /integration/bin/acceptance.test
+COPY --from=fault-injection     /test       /integration/bin/fault-injection.test
+COPY --from=meteor              /test       /integration/bin/meteor.test
+COPY --from=performance         /test       /integration/bin/performance.test
+COPY --from=performance         /analyze    /integration/bin/analyze
+
+COPY ./integration-tests /integration
+COPY ./scripts/wait-for.sh /wait-for.sh

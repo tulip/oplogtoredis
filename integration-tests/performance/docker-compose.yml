@@ -1,7 +1,9 @@
 version: "3"
 services:
   test:
-    build: .
+    build:
+      context: ../..
+      dockerfile: Dockerfile.integration
     depends_on:
       - oplogtoredis
       - mongo
@@ -15,13 +17,10 @@ services:
       - --timeout=60
       - redis:6379
       - '--'
-      - /go/src/github.com/tulip/oplogtoredis/integration-tests/performance/entry.sh
+      - /integration/performance/entry.sh
     environment:
       - MONGO_URL=mongodb://mongo/tests
       - REDIS_URL=redis://redis
-    volumes:
-      - ../../scripts/wait-for.sh:/wait-for.sh
-      - ../..:/go/src/github.com/tulip/oplogtoredis
   oplogtoredis:
     build: ../..
     environment:

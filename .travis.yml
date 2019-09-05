@@ -3,24 +3,49 @@ sudo: required
 services:
   - docker
 
+addons:
+  apt:
+    packages:
+      - docker-ce
 
 language: go
 go:
-  - "1.10"
+  - "1.12"
+
+before_install:
+  - docker --version
 
 install: skip
 
+cache:
+  - directories:
+      - $GOPATH/src
+      - $GOPATH/pkg
+
+env:
+  - GO111MODULE=on
+
 jobs:
   include:
-    - stage: test
+    - name: Lint
+      stage: test
       before_script:
-        - curl -Lo /tmp/gml.tgz https://github.com/alecthomas/gometalinter/releases/download/v2.0.5/gometalinter-2.0.5-linux-amd64.tar.gz
-        - tar xzvf /tmp/gml.tgz
-        - mv gometalinter-*/ gml/
-        - export PATH=$PATH:$PWD/gml/
+        - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.17.1
+        - export PATH=$PATH:$(go env GOPATH)/bin
+        - golangci-lint --version
       script: ./scripts/runLint.sh
-    - script: ./scripts/runUnitTests.sh
-    - script: ./scripts/runIntegrationAcceptance.sh
-    - script: ./scripts/runIntegrationPerformance.sh
-    - script: ./scripts/runIntegrationFaultInjection.sh
-    - script: ./scripts/runIntegrationMeteor.sh
+
+    - name: Unit Tests
+      script: ./scripts/runUnitTests.sh
+
+    - name: Acceptance
+      script: ./scripts/runIntegrationAcceptance.sh
+
+    - name: Performance
+      script: ./scripts/runIntegrationPerformance.sh
+
+    - name: Fault Injection
+      script: ./scripts/runIntegrationFaultInjection.sh
+
+    - name: Meteor
+      script: ./scripts/runIntegrationMeteor.sh

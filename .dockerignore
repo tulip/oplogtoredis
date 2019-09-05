@@ -1,2 +1,7 @@
 .data
 testapp
+Dockerfile*
+*.yml
+*.json
+*.md
+.*ignore
