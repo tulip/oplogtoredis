@@ -9,6 +9,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// Read this documentation https://golang.org/pkg/time/#hdr-Monotonic_Clocks before making changes to this file that
+// affect the way time is handled.
+
 // IntervalMaxMetric is a prometheus metric that reports the maximum value reported to it within a configurable
 // interval. These intervals are disjoint windows, and the *last* completed window is reported, if it immediately
 // precedes the current one.
@@ -17,15 +20,31 @@ type IntervalMaxMetric struct {
 	opts        IntervalMaxOpts
 	labelValues []string
 
+	// startBucket is the start of the initial bucket that this IntervalMaxMetric cares about. Time buckets are reckoned
+	// in terms of interval-length offsets from this time; e.g. t0 = startBucket + 0.5*interval is in bucket 0, but
+	// t1 = startBucket + 2*interval is in bucket 2.
+	//
+	// This value is intended to be used only as a source of monotonic time. It is set initially by synchronizing to
+	// wall-clock time, truncated to our interval. This value will eventually drift from current wall-clock time, which
+	// will cause the buckets to drift as well. The effects of this drift will be that the buckets do not line up nicely
+	// with wall-clock time boundaries (e.g. a 1-minute interval may not break cleanly on the minute); and if the server
+	// expects to scrape exactly on the interval, it may very rarely see a double-report. Neither of these problems
+	// should be particularly concerning.
+	startBucket time.Time
+
 	lck sync.Mutex
 
-	currentMax  *lastMax
-	previousMax *lastMax
+	// currentMax contains the maximum record in the current time bucket, if any have been received.
+	currentMax *maxRecord
+
+	// previousMax contains the maximum record in the previous time bucket, if any were received. This value is what is
+	// reported by Collect.
+	previousMax *maxRecord
 }
 
-type lastMax struct {
-	value        float64
-	bucketedTime time.Time
+type maxRecord struct {
+	value      float64
+	timeBucket uint
 }
 
 // DefaultInterval is the default collection interval for IntervalMaxMetric.
@@ -45,6 +64,11 @@ func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []s
 		opts.ReportInterval = DefaultInterval
 	}
 
+	now := time.Now()
+
+	trunced := now.Truncate(opts.ReportInterval)
+	diff := now.Sub(trunced)
+
 	return &IntervalMaxMetric{
 		desc: prometheus.NewDesc(
 			prometheus.BuildFQName(
@@ -56,6 +80,9 @@ func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []s
 		),
 		opts:        opts,
 		labelValues: labelValues,
+
+		// maintain monotonic clock but truncate to minute boundary
+		startBucket: now.Add(-diff),
 
 		currentMax: nil,
 	}
@@ -71,14 +98,14 @@ func (c *IntervalMaxMetric) Collect(mtcs chan<- prometheus.Metric) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
 
-	currentBucket := c.opts.thisTimeBucket()
+	currentBucket := c.thisTimeBucket()
 	c.rotate(currentBucket)
 
 	if c.previousMax == nil {
 		return
 	}
 
-	if currentBucket.Sub(c.previousMax.bucketedTime) != c.opts.ReportInterval {
+	if currentBucket-(c.previousMax.timeBucket) != 1 {
 		return
 	}
 
@@ -92,12 +119,12 @@ func (c *IntervalMaxMetric) Report(value float64) {
 	c.lck.Lock()
 	defer c.lck.Unlock()
 
-	thisTimeBucket := c.opts.thisTimeBucket()
+	thisTimeBucket := c.thisTimeBucket()
 	c.rotate(thisTimeBucket)
 
-	maxVal := &lastMax{
-		value:        value,
-		bucketedTime: thisTimeBucket,
+	maxVal := &maxRecord{
+		value:      value,
+		timeBucket: thisTimeBucket,
 	}
 
 	if c.currentMax == nil {
@@ -105,7 +132,7 @@ func (c *IntervalMaxMetric) Report(value float64) {
 		return
 	}
 
-	if thisTimeBucket.Equal(c.currentMax.bucketedTime) {
+	if thisTimeBucket == c.currentMax.timeBucket {
 		if c.currentMax.value < value {
 			c.currentMax = maxVal
 		}
@@ -113,22 +140,22 @@ func (c *IntervalMaxMetric) Report(value float64) {
 		return
 	}
 
-	if thisTimeBucket.After(c.currentMax.bucketedTime) {
+	if thisTimeBucket > c.currentMax.timeBucket {
 		c.currentMax = maxVal
 		return
 	}
 
-	// this bucket is before previous bucket
+	// this bucket is before previous bucket. this should be impossible because
 	panic("interval max metric time traveled")
 }
 
 // pre: c is locked
-func (c *IntervalMaxMetric) rotate(timeBucket time.Time) {
+func (c *IntervalMaxMetric) rotate(timeBucket uint) {
 	if c.currentMax == nil {
 		return
 	}
 
-	if !timeBucket.After(c.currentMax.bucketedTime) {
+	if timeBucket <= c.currentMax.timeBucket {
 		return
 	}
 
@@ -137,8 +164,8 @@ func (c *IntervalMaxMetric) rotate(timeBucket time.Time) {
 	c.currentMax = nil
 }
 
-func (opts IntervalMaxOpts) thisTimeBucket() time.Time {
-	return time.Now().Truncate(opts.ReportInterval)
+func (c *IntervalMaxMetric) thisTimeBucket() uint {
+	return uint(time.Since(c.startBucket) / c.opts.ReportInterval)
 }
 
 // IntervalMaxVecOpts is options for IntervalMaxMetricVec.
@@ -250,7 +277,7 @@ func (c *IntervalMaxMetricVec) gc() {
 	c.mp.Range(func(k, v interface{}) bool {
 		m := v.(*IntervalMaxMetric)
 
-		if m.currentMax == nil && (m.previousMax == nil || time.Since(m.previousMax.bucketedTime) > 2*c.opts.ReportInterval) {
+		if m.currentMax == nil && (m.previousMax == nil || m.thisTimeBucket()-m.previousMax.timeBucket > 1) {
 			toEvict.Add(k)
 		}
 
