@@ -28,7 +28,7 @@ type lastMax struct {
 	bucketedTime time.Time
 }
 
-// DefaultInterval is the default interval for the
+// DefaultInterval is the default collection interval for IntervalMaxMetric.
 const DefaultInterval = 1 * time.Minute
 
 // IntervalMaxOpts are options for IntervalMaxMetric.

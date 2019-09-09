@@ -7,6 +7,7 @@ require (
 	github.com/alicebob/miniredis v0.0.0-20180509110325-c8ba25935377
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/deckarep/golang-set v1.7.1
 	github.com/globalsign/mgo v0.0.0-20180424091348-efe0945164a7
 	github.com/go-redis/redis v6.10.0+incompatible
 	github.com/go-stack/stack v1.8.0 // indirect
@@ -24,7 +25,7 @@ require (
 	github.com/juju/version v0.0.0-20180108022336-b64dbd566305 // indirect
 	github.com/kelseyhightower/envconfig v1.3.0
 	github.com/kvz/logstreamer v0.0.0-20150507115422-a635b98146f0
-	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
+	github.com/kylelemons/godebug v1.1.0
 	github.com/matttproud/golang_protobuf_extensions v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.10.1 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
