@@ -6,14 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
-	"github.com/kylelemons/godebug/pretty"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
+	"github.com/kylelemons/godebug/pretty"
+	"github.com/stretchr/testify/require"
 )
 
 // Converts a time to a mongo timestamp
