@@ -213,7 +213,7 @@ func TestIntervalMaxMetricVec(t *testing.T) {
 	req := require.New(t)
 	asrt := assert.New(t)
 
-	m := NewIntervalMaxMetricVec(IntervalMaxVecOpts{
+	m := NewIntervalMaxMetricVec(&IntervalMaxVecOpts{
 		IntervalMaxOpts: IntervalMaxOpts{
 			Opts:           prometheus.Opts{},
 			ReportInterval: interval,

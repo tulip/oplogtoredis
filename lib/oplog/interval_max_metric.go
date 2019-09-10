@@ -195,7 +195,7 @@ type IntervalMaxMetricVec struct {
 	mp     sync.Map
 	labels []string
 	desc   *prometheus.Desc
-	opts   IntervalMaxVecOpts
+	opts   *IntervalMaxVecOpts
 
 	// lock locks mp. "read" access is more clearly interpreted as shared access, and "write" access as exclusive:
 	// mp can be mutated with shared access, but gcs (and mutations to lastGc) must hold the lock exclusively.
@@ -204,7 +204,11 @@ type IntervalMaxMetricVec struct {
 }
 
 // NewIntervalMaxMetricVec constructs a new IntervalMaxMetricVec.
-func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *IntervalMaxMetricVec {
+func NewIntervalMaxMetricVec(opts *IntervalMaxVecOpts, labels []string) *IntervalMaxMetricVec {
+	if opts == nil {
+		opts = &IntervalMaxVecOpts{}
+	}
+
 	if opts.GCInterval == 0 {
 		opts.GCInterval = DefaultMaxVecGCInterval
 	}

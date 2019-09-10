@@ -68,7 +68,7 @@ var (
 		Buckets:   append([]float64{0}, prometheus.ExponentialBuckets(8, 2, 29)...),
 	}, []string{"database", "status"})
 
-	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(IntervalMaxVecOpts{
+	metricMaxOplogEntryByMinute = NewIntervalMaxMetricVec(&IntervalMaxVecOpts{
 		IntervalMaxOpts: IntervalMaxOpts{
 			Opts: prometheus.Opts{
 				Namespace: "otr",
