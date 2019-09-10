@@ -17,7 +17,7 @@ import (
 // precedes the current one.
 type IntervalMaxMetric struct {
 	desc        *prometheus.Desc
-	opts        IntervalMaxOpts
+	opts        *IntervalMaxOpts
 	labelValues []string
 
 	// startBucket is the start of the initial bucket that this IntervalMaxMetric cares about. Time buckets are reckoned
@@ -56,15 +56,25 @@ type IntervalMaxOpts struct {
 
 	// ReportInterval is the interval by which reports will be bucketed. Default 1m.
 	ReportInterval time.Duration
+
+	nowFunc func() time.Time
 }
 
 // NewIntervalMaxMetric constructs a new IntervalMaxMetric.
-func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []string) *IntervalMaxMetric {
+func NewIntervalMaxMetric(opts *IntervalMaxOpts, labels []string, labelValues []string) *IntervalMaxMetric {
+	if opts == nil {
+		opts = &IntervalMaxOpts{}
+	}
+
 	if opts.ReportInterval == 0 {
 		opts.ReportInterval = DefaultInterval
 	}
 
-	now := time.Now()
+	if opts.nowFunc == nil {
+		opts.nowFunc = time.Now
+	}
+
+	now := opts.nowFunc()
 
 	trunced := now.Truncate(opts.ReportInterval)
 	diff := now.Sub(trunced)
@@ -81,7 +91,7 @@ func NewIntervalMaxMetric(opts IntervalMaxOpts, labels []string, labelValues []s
 		opts:        opts,
 		labelValues: labelValues,
 
-		// maintain monotonic clock but truncate to minute boundary
+		// maintain monotonic clock but truncate to interval boundary
 		startBucket: now.Add(-diff),
 
 		currentMax: nil,
@@ -165,7 +175,7 @@ func (c *IntervalMaxMetric) rotate(timeBucket uint) {
 }
 
 func (c *IntervalMaxMetric) thisTimeBucket() uint {
-	return uint(time.Since(c.startBucket) / c.opts.ReportInterval)
+	return uint(c.opts.nowFunc().Sub(c.startBucket) / c.opts.ReportInterval)
 }
 
 // IntervalMaxVecOpts is options for IntervalMaxMetricVec.
@@ -199,6 +209,10 @@ func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *Interval
 		opts.GCInterval = DefaultMaxVecGCInterval
 	}
 
+	if opts.nowFunc == nil {
+		opts.nowFunc = time.Now
+	}
+
 	return &IntervalMaxMetricVec{
 		labels: labels,
 		opts:   opts,
@@ -209,7 +223,7 @@ func NewIntervalMaxMetricVec(opts IntervalMaxVecOpts, labels []string) *Interval
 			opts.ConstLabels,
 		),
 
-		lastGc: time.Now(),
+		lastGc: opts.nowFunc(),
 	}
 }
 
@@ -242,7 +256,7 @@ func (c *IntervalMaxMetricVec) Report(value float64, labelValues ...string) {
 
 	m, ok := c.mp.Load(key)
 	if !ok {
-		m, _ = c.mp.LoadOrStore(key, NewIntervalMaxMetric(c.opts.IntervalMaxOpts, c.labels, labelValues))
+		m, _ = c.mp.LoadOrStore(key, NewIntervalMaxMetric(&c.opts.IntervalMaxOpts, c.labels, labelValues))
 	}
 
 	m.(*IntervalMaxMetric).Report(value)
@@ -254,7 +268,7 @@ func labelKey(labels []string) string {
 
 func (c *IntervalMaxMetricVec) checkGc() {
 	c.lock.RLock()
-	timedOut := time.Since(c.lastGc) < c.opts.GCInterval
+	timedOut := c.opts.nowFunc().Sub(c.lastGc) < c.opts.GCInterval
 	c.lock.RUnlock()
 	if timedOut {
 		return
@@ -263,7 +277,7 @@ func (c *IntervalMaxMetricVec) checkGc() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if time.Since(c.lastGc) < c.opts.GCInterval { // another caller beat us to the punch
+	if c.opts.nowFunc().Sub(c.lastGc) < c.opts.GCInterval { // another caller beat us to the punch
 		return
 	}
 
@@ -277,7 +291,11 @@ func (c *IntervalMaxMetricVec) gc() {
 	c.mp.Range(func(k, v interface{}) bool {
 		m := v.(*IntervalMaxMetric)
 
-		if m.currentMax == nil && (m.previousMax == nil || m.thisTimeBucket()-m.previousMax.timeBucket > 1) {
+		if m.currentMax != nil {
+			return true
+		}
+
+		if m.previousMax == nil || m.thisTimeBucket()-m.previousMax.timeBucket > 1 {
 			toEvict.Add(k)
 		}
 
@@ -288,5 +306,5 @@ func (c *IntervalMaxMetricVec) gc() {
 		c.mp.Delete(k)
 	}
 
-	c.lastGc = time.Now()
+	c.lastGc = c.opts.nowFunc()
 }
