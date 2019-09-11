@@ -14,13 +14,14 @@ go:
 
 before_install:
   - docker --version
+  - go mod download
 
 install: skip
 
-cache:
-  - directories:
-      - $GOPATH/src
-      - $GOPATH/pkg
+#cache:
+#  - directories:
+#      - $GOPATH/src
+#      - $GOPATH/pkg
 
 env:
   - GO111MODULE=on
