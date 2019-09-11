@@ -10,6 +10,8 @@ import (
 	"github.com/tulip/oplogtoredis/lib/redispub"
 )
 
+var ErrUnsupportedDocIDType = errors.New("unsupported document _id type")
+
 // Process a signal oplog entry. Returns the redispub.Publication that should
 // be published for this oplog entry, or nil if nothing should be published.
 //
@@ -51,7 +53,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		// We don't know how to handle IDs that aren't strings or ObjectIDs,
 		// because we don't what what the specific channel (the channel for
 		// this specific document) should be.
-		return nil, errors.Errorf("expected op.DocID to be string or ObjectID, got %T instead", op.DocID)
+		return nil, errors.Wrapf(ErrUnsupportedDocIDType, "expected string or ObjectID, got %T instead", op.DocID)
 	}
 
 	// Construct the JSON we're going to send to Redis

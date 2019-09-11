@@ -2,13 +2,14 @@ package oplog
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"reflect"
-	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 )
 
@@ -185,7 +186,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				},
 				Timestamp: bson.MongoTimestamp(1234),
 			},
-			wantError: errors.New("op.ID was not a string or ObjectID"),
+			wantError: ErrUnsupportedDocIDType,
 			want:      nil,
 		},
 		"Index update": {
@@ -228,40 +229,18 @@ func TestProcessOplogEntry(t *testing.T) {
 
 			got, err := processOplogEntry(test.in)
 
-			if test.wantError != err {
-				if (err != nil) && (test.wantError == nil) {
-					t.Fatalf("Got an unexpected error: %s", err)
-				}
+			if test.wantError != nil {
+				assert.EqualError(t, errors.Cause(err), test.wantError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 
-				if (err == nil) && (test.wantError != nil) {
-					t.Fatal("Did not get an error, but expected one")
-				}
-
-				if test.wantError.Error() != err.Error() {
-					t.Fatalf("Got wrong error: %s; expected error: %s", err, test.wantError)
-				}
-
+			if got == nil {
+				require.Nil(t, test.want)
 				return
 			}
 
-			if (got == nil) && (test.want != nil) {
-				t.Errorf("Got nil when we expected a publication\n    Input: %#v\n    Wanted: %#v",
-					test.in, test.want)
-			} else if (got != nil) && (test.want == nil) {
-				t.Errorf("Got a publication when we expected nil\n    Input: %#v\n    Got: %#v",
-					test.in, got)
-			} else if (got != nil) && (test.want != nil) {
-				decodedGot := decodePublication(got)
-
-				// sort the array of fields so we can compare them
-				sort.Strings(test.want.Msg.Fields)
-				sort.Strings(decodedGot.Msg.Fields)
-
-				if !reflect.DeepEqual(decodedGot, test.want) {
-					t.Errorf("Got incorrect publication\n    Got: %#v\n    Want: %#v",
-						decodedGot, test.want)
-				}
-			}
+			assert.Equal(t, test.want, decodePublication(got))
 		})
 	}
 }

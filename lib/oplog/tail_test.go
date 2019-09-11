@@ -239,6 +239,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 						"_id": "id1",
 						"foo": "baz",
 					},
+					TxIdx: 0,
 				},
 				{
 					DocID:      "id1",
@@ -251,6 +252,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 						"_id": "id1",
 						"foo": "bar",
 					},
+					TxIdx: 1,
 				},
 				{
 					DocID:      "id2",
@@ -262,6 +264,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Data: map[string]interface{}{
 						"foo": "quux",
 					},
+					TxIdx: 2,
 				},
 				{
 					DocID:      "id3",
@@ -273,6 +276,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Data: map[string]interface{}{
 						"_id": "id3",
 					},
+					TxIdx: 3,
 				},
 			},
 		},
