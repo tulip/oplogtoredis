@@ -31,7 +31,7 @@ func TestTransaction(t *testing.T) {
 	require.NoError(t, client.Connect(ctx))
 
 	var serverStatus M
-	err = client.Database("test").RunCommand(ctx, D{{"serverStatus", 1}}).Decode(&serverStatus)
+	err = client.Database("test").RunCommand(ctx, D{{Key: "serverStatus", Value: 1}}).Decode(&serverStatus)
 	require.NoError(t, err)
 
 	ver := strings.SplitN(serverStatus["version"].(string), ".", 2)[0]
