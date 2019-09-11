@@ -12,7 +12,6 @@ as found at https://github.com/hashicorp/vault/blob/44aa151b78976c6da41dc63d93b4
 
 import (
 	"crypto/tls"
-	"errors"
 	"net"
 	"net/url"
 	"strconv"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/globalsign/mgo"
+	"github.com/pkg/errors"
 )
 
 // DefaultTimeout is the timeout value applied to all parsed URLs.
@@ -94,7 +94,7 @@ func handleOption(info *mgo.DialInfo, key string, values []string) error {
 			return err
 		}
 	default:
-		return errors.New("unsupported connection URL option: " + key + "=" + value)
+		return errors.Errorf("unsupported connection URL query param: %v=%v", key, value)
 	}
 
 	return nil
@@ -104,7 +104,7 @@ func handleMaxPoolSize(info *mgo.DialInfo, value string) error {
 	poolLimit, err := strconv.Atoi(value)
 
 	if err != nil {
-		return errors.New("bad value for maxPoolSize: " + value)
+		return errors.Errorf("bad value for maxPoolSize: %q", value)
 	}
 
 	info.PoolLimit = poolLimit
@@ -116,7 +116,7 @@ func handleMaxPoolSize(info *mgo.DialInfo, value string) error {
 func handleSSL(info *mgo.DialInfo, value string) error {
 	ssl, err := strconv.ParseBool(value)
 	if err != nil {
-		return errors.New("bad value for ssl: " + value)
+		return errors.Errorf("bad value for ssl: %q", value)
 	}
 	if ssl {
 		info.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
@@ -137,5 +137,5 @@ func handleConnect(info *mgo.DialInfo, value string) error {
 		return nil
 	}
 
-	return errors.New("Unsupported ?connect= value: " + value)
+	return errors.Errorf("unsupported ?connect= query parameter: %q", value)
 }

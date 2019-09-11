@@ -8,12 +8,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/tulip/oplogtoredis/lib/log"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
-	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // PublishOpts are configuration options you can pass to PublishStream.
@@ -115,7 +116,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 		}
 	}
 
-	return fmt.Errorf("Failed to send message after retrying %d times", maxRetries)
+	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
 func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {

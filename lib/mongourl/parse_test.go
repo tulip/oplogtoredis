@@ -102,19 +102,19 @@ func TestParse(t *testing.T) {
 		},
 		"bad ?maxPoolSize": {
 			URL:           "mongodb://foo?maxPoolSize=notANumber",
-			expectedError: errors.New("bad value for maxPoolSize: notANumber"),
+			expectedError: errors.New(`bad value for maxPoolSize: "notANumber"`),
 		},
 		"bad ?ssl": {
 			URL:           "mongodb://foo?ssl=notABoolean",
-			expectedError: errors.New("bad value for ssl: notABoolean"),
+			expectedError: errors.New(`bad value for ssl: "notABoolean"`),
 		},
 		"bad ?connect": {
 			URL:           "mongodb://foo?connect=notValid",
-			expectedError: errors.New("Unsupported ?connect= value: notValid"),
+			expectedError: errors.New(`unsupported ?connect= query parameter: "notValid"`),
 		},
 		"unknown option": {
 			URL:           "mongodb://foo?xxx=yyy",
-			expectedError: errors.New("unsupported connection URL option: xxx=yyy"),
+			expectedError: errors.New("unsupported connection URL query param: xxx=yyy"),
 		},
 	}
 

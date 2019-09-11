@@ -69,7 +69,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	msgJSON, err := json.Marshal(&msg)
 
 	if err != nil {
-		return nil, errors.Errorf("marshalling outgoing message: %s", err)
+		return nil, errors.Wrap(err, "marshalling outgoing message")
 	}
 
 	// We need to publish on both the full-collection channel and the
