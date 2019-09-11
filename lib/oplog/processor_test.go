@@ -3,10 +3,10 @@ package oplog
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
@@ -207,12 +207,18 @@ func TestProcessOplogEntry(t *testing.T) {
 
 	// helper to convert a redispub.Publication to a decodedPublication
 	decodePublication := func(pub *redispub.Publication) *decodedPublication {
+		if pub == nil {
+			return nil
+		}
+
 		msg := decodedPublicationMessage{}
 		err := json.Unmarshal(pub.Msg, &msg)
 		if err != nil {
 			panic(fmt.Sprintf("Error parsing Msg field of publication: %s\n    JSON: %s",
 				err, pub.Msg))
 		}
+
+		sort.Strings(msg.Fields)
 
 		return &decodedPublication{
 			CollectionChannel: pub.CollectionChannel,
@@ -223,6 +229,10 @@ func TestProcessOplogEntry(t *testing.T) {
 	}
 
 	for testName, test := range tests {
+		if test.want != nil {
+			sort.Strings(test.want.Msg.Fields)
+		}
+
 		t.Run(testName, func(t *testing.T) {
 			// Create an output channel. We create a buffered channel so that
 			// we can run Tail
@@ -233,11 +243,6 @@ func TestProcessOplogEntry(t *testing.T) {
 				assert.EqualError(t, errors.Cause(err), test.wantError.Error())
 			} else {
 				assert.NoError(t, err)
-			}
-
-			if got == nil {
-				require.Nil(t, test.want)
-				return
 			}
 
 			assert.Equal(t, test.want, decodePublication(got))

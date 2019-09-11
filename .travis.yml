@@ -18,10 +18,9 @@ before_install:
 
 install: skip
 
-#cache:
-#  - directories:
-#      - $GOPATH/src
-#      - $GOPATH/pkg
+cache:
+  - directories:
+      - $GOPATH/pkg
 
 env:
   - GO111MODULE=on
