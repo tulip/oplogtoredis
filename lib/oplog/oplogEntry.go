@@ -31,6 +31,8 @@ type oplogEntry struct {
 	Namespace  string
 	Database   string
 	Collection string
+
+	TxIdx uint
 }
 
 // Returns whether this oplogEntry is for an insert

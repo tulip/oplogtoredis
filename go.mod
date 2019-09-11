@@ -6,9 +6,12 @@ require (
 	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
 	github.com/alicebob/miniredis v0.0.0-20180509110325-c8ba25935377
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/globalsign/mgo v0.0.0-20180424091348-efe0945164a7
 	github.com/go-redis/redis v6.10.0+incompatible
+	github.com/go-stack/stack v1.8.0 // indirect
+	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible // indirect
 	github.com/gorilla/websocket v1.2.0
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c // indirect
@@ -23,6 +26,7 @@ require (
 	github.com/kvz/logstreamer v0.0.0-20150507115422-a635b98146f0
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/matttproud/golang_protobuf_extensions v1.0.0 // indirect
+	github.com/mongodb/mongo-go-driver v1.1.1 // indirect
 	github.com/onsi/ginkgo v1.10.1 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/pkg/errors v0.8.1
@@ -31,7 +35,10 @@ require (
 	github.com/prometheus/common v0.0.0-20180518154759-7600349dcfe1
 	github.com/prometheus/procfs v0.0.0-20180408092902-8b1c2da0d56d // indirect
 	github.com/stretchr/testify v1.4.0
+	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
+	github.com/xdg/stringprep v1.0.0 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20180416135241-b0fa786cf4ea // indirect
+	go.mongodb.org/mongo-driver v1.1.1
 	go.uber.org/atomic v1.3.1 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.7.1

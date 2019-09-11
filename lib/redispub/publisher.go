@@ -127,16 +127,22 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 			// where the first 32 bits are a unix timestamp (seconds since
 			// the epoch), and the next 32 bits are a monotonically-increasing
 			// sequence number for operations within that second. It's
-			// guaranteed-unique, so we can use it for deduplication
-			prefix + "processed::" + encodeMongoTimestamp(p.OplogTimestamp),
+			// guaranteed-unique, so we can use it for deduplication.
+			// However, timestamps are shared within transactions, so we need more information to ensure uniqueness.
+			// The TxIdx field is used to ensure that each entry in a transaction has its own unique key.
+			formatKey(p, prefix),
 		},
 		dedupeExpirationSeconds, // ARGV[1], expiration time
-		p.Msg,               // ARGV[2], message
-		p.CollectionChannel, // ARGV[3], channel #1
-		p.SpecificChannel,   // ARGV[4], channel #2
+		p.Msg,                   // ARGV[2], message
+		p.CollectionChannel,     // ARGV[3], channel #1
+		p.SpecificChannel,       // ARGV[4], channel #2
 	).Result()
 
 	return err
+}
+
+func formatKey(p *Publication, prefix string) string {
+	return fmt.Sprintf("%vprocessed::%v::%v", prefix, encodeMongoTimestamp(p.OplogTimestamp), p.TxIdx)
 }
 
 // Periodically updates the last-processed-entry timestamp in Redis.

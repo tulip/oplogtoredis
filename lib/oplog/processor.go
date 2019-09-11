@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/globalsign/mgo/bson"
+	"github.com/pkg/errors"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 )
@@ -102,6 +101,8 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 
 		Msg:            msgJSON,
 		OplogTimestamp: op.Timestamp,
+
+		TxIdx: op.TxIdx,
 	}, nil
 }
 

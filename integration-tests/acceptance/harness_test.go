@@ -63,7 +63,8 @@ func (h *harness) getMessages() map[string][]helpers.OTRMessage {
 				// make a new slice
 				msgs[msg.Channel] = []helpers.OTRMessage{parsedMsg}
 			}
-		case <-time.After(time.Second):
+
+		case <-time.After(100 * time.Millisecond):
 			return msgs
 		}
 	}

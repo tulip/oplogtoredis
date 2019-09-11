@@ -126,7 +126,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 				continue
 			}
 
-			entries := tailer.parseRawOplogEntry(result)
+			entries := tailer.parseRawOplogEntry(result, nil)
 			log.Log.Debugw("Received oplog entries",
 				"entry", result)
 
@@ -219,7 +219,12 @@ func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (bson.Mon
 }
 
 // converts a rawOplogEntry to an oplogEntry
-func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry) []oplogEntry {
+func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []oplogEntry {
+	if txIdx == nil {
+		idx := uint(0)
+		txIdx = &idx
+	}
+
 	switch entry.Operation {
 	case operationInsert, operationUpdate, operationRemove:
 		var data map[string]interface{}
@@ -233,7 +238,11 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry) []oplogEntry {
 			Timestamp: entry.Timestamp,
 			Namespace: entry.Namespace,
 			Data:      data,
+
+			TxIdx: *txIdx,
 		}
+
+		*txIdx++
 
 		out.Database, out.Collection = parseNamespace(out.Namespace)
 
@@ -263,7 +272,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry) []oplogEntry {
 
 		for _, v := range txData.ApplyOps {
 			v.Timestamp = entry.Timestamp
-			ret = append(ret, tailer.parseRawOplogEntry(v)...)
+			ret = append(ret, tailer.parseRawOplogEntry(v, txIdx)...)
 		}
 
 		return ret
