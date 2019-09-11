@@ -47,24 +47,6 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 			"$value": idHex,
 		}
 
-	case bson.M:
-		_, cOk := id["c"]
-		idVal, idOk := id["id"]
-
-		if idOk && cOk {
-			idForChannel = idVal.(string)
-			idForMessage = idVal.(string)
-		}
-
-	case map[string]interface{}:
-		_, cOk := id["c"]
-		idVal, idOk := id["id"]
-
-		if idOk && cOk {
-			idForChannel = idVal.(string)
-			idForMessage = idVal.(string)
-		}
-
 	default:
 		// We don't know how to handle IDs that aren't strings or ObjectIDs,
 		// because we don't what what the specific channel (the channel for

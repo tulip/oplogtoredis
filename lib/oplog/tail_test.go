@@ -280,7 +280,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{}).parseRawOplogEntry(test.in)
+			got := (&Tailer{}).parseRawOplogEntry(test.in, nil)
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)
