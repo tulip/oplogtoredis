@@ -49,7 +49,7 @@ var (
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "entries_received",
-		Help:      "Oplog entries received, partitioned by database and status",
+		Help:      "[Deprecated] Oplog entries received, partitioned by database and status",
 	}, []string{"database", "status"})
 
 	// Deprecated: use metricOplogEntriesBySize instead
@@ -57,7 +57,7 @@ var (
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "entries_received_size",
-		Help:      "Size of oplog entries received in bytes, partitioned by database",
+		Help:      "[Deprecated] Size of oplog entries received in bytes, partitioned by database",
 	}, []string{"database"})
 
 	metricOplogEntriesBySize = promauto.NewHistogramVec(prometheus.HistogramOpts{
