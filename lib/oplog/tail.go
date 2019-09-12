@@ -213,7 +213,9 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
 	}()
 
-	database = entries[0].Database
+	if len(entries) > 0 {
+		database = entries[0].Database
+	}
 
 	type errEntry struct {
 		err error
@@ -246,7 +248,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 				"collection", ent.op.Database,
 			)
 		}
-	} else {
+	} else if len(entries) > 0 {
 		status = "processed"
 	}
 
