@@ -155,7 +155,8 @@ func (c *IntervalMaxMetric) Report(value float64) {
 		return
 	}
 
-	// this bucket is before previous bucket. this should be impossible because
+	// this bucket is before previous bucket. this should be impossible because we're using the monotonic clock.
+	// *technically* the clock could have overflowed, but this should be extremely rare.
 	panic("interval max metric time traveled")
 }
 
