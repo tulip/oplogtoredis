@@ -190,7 +190,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 
 	err := rawData.Unmarshal(&result)
 	if err != nil {
-		log.Log.Errorw("Error unmarshaling oplog entry", "error", err)
+		log.Log.Errorw("Error unmarshalling oplog entry", "error", err)
 		return
 	}
 
@@ -213,27 +213,41 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
 	}()
 
-	if len(entries) == 0 {
-		return
-	}
-
 	database = entries[0].Database
 
-	for _, entry := range entries {
-		pub, err := processOplogEntry(&entry)
-		if err != nil {
-			status = "error"
-			pub = nil
+	type errEntry struct {
+		err error
+		op  *oplogEntry
+	}
 
-			log.Log.Errorw("Error processing oplog entry",
-				"op", entry,
-				"error", err,
-				"database", entry.Database,
-				"collection", entry.Collection)
+	var errs []errEntry
+	for i := range entries {
+		entry := &entries[i]
+		pub, err := processOplogEntry(entry)
+
+		if err != nil {
+			errs = append(errs, errEntry{
+				err: err,
+				op:  entry,
+			})
 		} else {
-			status = "processed"
 			pubs = append(pubs, pub)
 		}
+	}
+
+	if errs != nil {
+		status = "error"
+
+		for _, ent := range errs {
+			log.Log.Errorw("Error processing oplog entry",
+				"op", ent.op,
+				"error", ent.err,
+				"database", ent.op.Database,
+				"collection", ent.op.Database,
+			)
+		}
+	} else {
+		status = "processed"
 	}
 
 	return
