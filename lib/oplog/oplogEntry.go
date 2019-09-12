@@ -7,9 +7,12 @@ import (
 	"github.com/tulip/oplogtoredis/lib/log"
 )
 
-const operationInsert = "i"
-const operationUpdate = "u"
-const operationRemove = "d"
+const (
+	operationInsert  = "i"
+	operationUpdate  = "u"
+	operationRemove  = "d"
+	operationCommand = "c"
+)
 
 var metricUnprocessableChangedFields = promauto.NewCounter(prometheus.CounterOpts{
 	Namespace: "otr",
@@ -28,6 +31,8 @@ type oplogEntry struct {
 	Namespace  string
 	Database   string
 	Collection string
+
+	TxIdx uint
 }
 
 // Returns whether this oplogEntry is for an insert

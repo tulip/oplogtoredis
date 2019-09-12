@@ -11,11 +11,14 @@ type Publication struct {
 	CollectionChannel string
 	SpecificChannel   string
 
-	// Message to send
+	// Msg is the message to send.
 	Msg []byte
 
-	// The timestamp of the oplog entry. Note that this serves as *both*
+	// OplogTimestamp is the timestamp of the oplog entry. Note that this serves as *both*
 	// a monotonically increasing timestamp *and* a unique identifier --
 	// see https://docs.mongodb.com/manual/reference/bson-types/#timestamps
 	OplogTimestamp bson.MongoTimestamp
+
+	// TxIdx is the index of the operation within a transaction. Used to supplement OplogTimestamp in a transaction.
+	TxIdx uint
 }

@@ -92,7 +92,7 @@ func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 
 	if err == nil {
 		t.Errorf("Expected an error, but didn't get one")
-	} else if err.Error() != "Failed to send message after retrying 30 times" {
+	} else if err.Error() != "sending message (retried 30 times)" {
 		t.Errorf("Got wrong error: %s", err)
 	}
 }

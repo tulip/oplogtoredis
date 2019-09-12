@@ -1,10 +1,10 @@
 #!/bin/bash
 
 set -eu
-cd `dirname "$0"`'/../integration-tests/acceptance'
+cd "$(dirname "$0")/../integration-tests/acceptance"
 
 # Use docker-compose to spin up the test environment
-mongo_tag="3.6.11"
+mongo_tag="4.2.0"
 redis_tag="3.2.4"
 otr_dockerfile="Dockerfile.racedetector"
 
@@ -21,6 +21,8 @@ echo "=================================="
 export MONGO_TAG="$mongo_tag"
 export REDIS_TAG="$redis_tag"
 export OTR_DOCKERFILE="$otr_dockerfile"
+
+export MONGO_ARGS=""
 
 docker-compose rm -vf
 docker-compose down -v

@@ -19,7 +19,6 @@ install: skip
 
 cache:
   - directories:
-      - $GOPATH/src
       - $GOPATH/pkg
 
 env:

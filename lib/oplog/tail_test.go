@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kylelemons/godebug/pretty"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis"
+	"github.com/kylelemons/godebug/pretty"
+	"github.com/stretchr/testify/require"
 )
 
 // Converts a time to a mongo timestamp
@@ -102,19 +101,29 @@ func TestGetStartTime(t *testing.T) {
 	}
 }
 
+func mustRaw(t *testing.T, data interface{}) bson.Raw {
+	b, err := bson.Marshal(data)
+	require.NoError(t, err)
+
+	var raw bson.Raw
+	require.NoError(t, bson.Unmarshal(b, &raw))
+
+	return raw
+}
+
 func TestParseRawOplogEntry(t *testing.T) {
 	tests := map[string]struct {
-		in   *rawOplogEntry
-		want *oplogEntry
+		in   rawOplogEntry
+		want []oplogEntry
 	}{
 		"Insert": {
-			in: &rawOplogEntry{
+			in: rawOplogEntry{
 				Timestamp: bson.MongoTimestamp(1234),
 				Operation: "i",
 				Namespace: "foo.Bar",
-				Doc:       map[string]interface{}{"_id": "someid", "foo": "bar"},
+				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
 			},
-			want: &oplogEntry{
+			want: []oplogEntry{{
 				Timestamp:  bson.MongoTimestamp(1234),
 				Operation:  "i",
 				Namespace:  "foo.Bar",
@@ -122,17 +131,17 @@ func TestParseRawOplogEntry(t *testing.T) {
 				DocID:      interface{}("someid"),
 				Database:   "foo",
 				Collection: "Bar",
-			},
+			}},
 		},
 		"Update": {
-			in: &rawOplogEntry{
+			in: rawOplogEntry{
 				Timestamp: bson.MongoTimestamp(1234),
 				Operation: "u",
 				Namespace: "foo.Bar",
-				Doc:       map[string]interface{}{"new": "data"},
+				Doc:       mustRaw(t, map[string]interface{}{"new": "data"}),
 				Update:    rawOplogEntryID{ID: "updateid"},
 			},
-			want: &oplogEntry{
+			want: []oplogEntry{{
 				Timestamp:  bson.MongoTimestamp(1234),
 				Operation:  "u",
 				Namespace:  "foo.Bar",
@@ -140,16 +149,16 @@ func TestParseRawOplogEntry(t *testing.T) {
 				DocID:      interface{}("updateid"),
 				Database:   "foo",
 				Collection: "Bar",
-			},
+			}},
 		},
 		"Remove": {
-			in: &rawOplogEntry{
+			in: rawOplogEntry{
 				Timestamp: bson.MongoTimestamp(1234),
 				Operation: "d",
 				Namespace: "foo.Bar",
-				Doc:       map[string]interface{}{"_id": "someid"},
+				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid"}),
 			},
-			want: &oplogEntry{
+			want: []oplogEntry{{
 				Timestamp:  bson.MongoTimestamp(1234),
 				Operation:  "d",
 				Namespace:  "foo.Bar",
@@ -157,22 +166,125 @@ func TestParseRawOplogEntry(t *testing.T) {
 				DocID:      interface{}("someid"),
 				Database:   "foo",
 				Collection: "Bar",
-			},
+			}},
 		},
 		"Command": {
-			in: &rawOplogEntry{
+			in: rawOplogEntry{
 				Timestamp: bson.MongoTimestamp(1234),
 				Operation: "c",
 				Namespace: "foo.$cmd",
-				Doc:       map[string]interface{}{"drop": "Foo"},
+				Doc:       mustRaw(t, map[string]interface{}{"drop": "Foo"}),
 			},
 			want: nil,
+		},
+		"Transaction": {
+			in: rawOplogEntry{
+				Timestamp: bson.MongoTimestamp(1234),
+				Operation: "c",
+				Namespace: "admin.$cmd",
+				Doc: mustRaw(t, map[string]interface{}{
+					"applyOps": []rawOplogEntry{
+						{
+							Timestamp: bson.MongoTimestamp(1234),
+							Operation: "c",
+							Namespace: "admin.$cmd",
+							Doc: mustRaw(t, map[string]interface{}{
+								"applyOps": []rawOplogEntry{
+									{
+										Operation: "i",
+										Namespace: "foo.Bar",
+										Doc: mustRaw(t, map[string]interface{}{
+											"_id": "id1",
+											"foo": "baz",
+										}),
+									},
+								},
+							}),
+						},
+						{
+							Operation: "i",
+							Namespace: "foo.Bar",
+							Doc: mustRaw(t, map[string]interface{}{
+								"_id": "id1",
+								"foo": "bar",
+							}),
+						},
+						{
+							Operation: "u",
+							Namespace: "foo.Bar",
+							Doc: mustRaw(t, map[string]interface{}{
+								"foo": "quux",
+							}),
+							Update: rawOplogEntryID{"id2"},
+						},
+						{
+							Operation: "d",
+							Namespace: "foo.Bar",
+							Doc: mustRaw(t, map[string]interface{}{
+								"_id": "id3",
+							}),
+						},
+					},
+				}),
+			},
+			want: []oplogEntry{
+				{
+					DocID:      "id1",
+					Timestamp:  1234,
+					Operation:  "i",
+					Namespace:  "foo.Bar",
+					Database:   "foo",
+					Collection: "Bar",
+					Data: map[string]interface{}{
+						"_id": "id1",
+						"foo": "baz",
+					},
+					TxIdx: 0,
+				},
+				{
+					DocID:      "id1",
+					Timestamp:  1234,
+					Operation:  "i",
+					Namespace:  "foo.Bar",
+					Database:   "foo",
+					Collection: "Bar",
+					Data: map[string]interface{}{
+						"_id": "id1",
+						"foo": "bar",
+					},
+					TxIdx: 1,
+				},
+				{
+					DocID:      "id2",
+					Timestamp:  1234,
+					Operation:  "u",
+					Namespace:  "foo.Bar",
+					Database:   "foo",
+					Collection: "Bar",
+					Data: map[string]interface{}{
+						"foo": "quux",
+					},
+					TxIdx: 2,
+				},
+				{
+					DocID:      "id3",
+					Timestamp:  1234,
+					Operation:  "d",
+					Namespace:  "foo.Bar",
+					Database:   "foo",
+					Collection: "Bar",
+					Data: map[string]interface{}{
+						"_id": "id3",
+					},
+					TxIdx: 3,
+				},
+			},
 		},
 	}
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{}).parseRawOplogEntry(test.in)
+			got := (&Tailer{}).parseRawOplogEntry(test.in, nil)
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)

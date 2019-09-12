@@ -29,7 +29,7 @@ for mongo_tag in "${mongo_tags[@]}"; do
 
             read -r -d . MAJOR <<<"$MONGO_TAG"
             if [[ $MAJOR -lt 4 ]]; then
-                MONGO_ARGS="--smallFiles"
+                MONGO_ARGS="--smallfiles"
             fi
 
             export MONGO_ARGS

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,12 +13,12 @@ import (
 	"github.com/tulip/oplogtoredis/lib/mongourl"
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/redispub"
-	"go.uber.org/zap"
 
 	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis"
-
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -136,7 +135,7 @@ func createMongoClient() (*mgo.Session, error) {
 	// configure mgo to use our logger
 	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create a std logger: %s", err)
+		return nil, errors.Wrap(err, "creating std logger")
 	}
 
 	mgo.SetLogger(stdLog)
@@ -144,12 +143,12 @@ func createMongoClient() (*mgo.Session, error) {
 	// get a mgo session
 	dialInfo, err := mongourl.Parse(config.MongoURL())
 	if err != nil {
-		return nil, fmt.Errorf("Could not parse Mongo URL: %s", err)
+		return nil, errors.Wrap(err, "parsing Mongo URL")
 	}
 
 	session, err := mgo.DialWithInfo(dialInfo)
 	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Mongo: %s", err)
+		return nil, errors.Wrap(err, "connecting to mongo")
 	}
 
 	session.SetMode(mgo.Monotonic, true)
@@ -164,7 +163,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	// Configure go-redis to use our logger
 	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create a std logger: %s", err)
+		return nil, errors.Wrap(err, "creating std logger")
 	}
 
 	redis.SetLogger(stdLog)
@@ -172,7 +171,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	// Parse the Redis URL
 	parsedRedisURL, err := redis.ParseURL(config.RedisURL())
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing Redis URL: %s", err)
+		return nil, errors.Wrap(err, "parsing redis url")
 	}
 
 	// Create a Redis client
@@ -185,7 +184,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	// Check that we have a connection
 	_, err = client.Ping().Result()
 	if err != nil {
-		return nil, fmt.Errorf("Redis ping failed: %s", err)
+		return nil, errors.Wrap(err, "pinging redis")
 	}
 
 	return client, nil
