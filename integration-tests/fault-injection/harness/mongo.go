@@ -110,6 +110,10 @@ func (server *MongoServer) Client() *mgo.Session {
 		panic("Error parsing mongo URL: " + err.Error())
 	}
 
+	// NOTE(nathanp): in my experience, this makes the tests run a lot
+	// more consistently where we need to force failures to occur.
+	dialInfo.FailFast = true
+
 	dialInfo.Timeout = 3 * time.Second
 	client, err := mgo.DialWithInfo(dialInfo)
 
