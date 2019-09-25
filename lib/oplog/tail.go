@@ -79,7 +79,7 @@ var (
 
 			ReportInterval: 1 * time.Minute,
 		},
-	}, []string{})
+	}, []string{"database", "status"})
 )
 
 func init() {
