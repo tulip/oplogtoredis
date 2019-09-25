@@ -35,7 +35,7 @@ func TestMongoStepdown(t *testing.T) {
 
 	if len(insertedIDs) < 50 {
 		// We should have recovered fast enough for at least 50 writes to
-		// succedd
+		// succeed
 		t.Errorf("Expected at least 50 inserted IDs, got %d", len(insertedIDs))
 	}
 
