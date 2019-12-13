@@ -96,8 +96,11 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 }
 
 func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
-	retries := 0
+	if p == nil {
+		return errors.New("Nil Redis publication")
+	}
 
+	retries := 0
 	for retries < maxRetries {
 		err := publishFn(p)
 
@@ -134,9 +137,9 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 			formatKey(p, prefix),
 		},
 		dedupeExpirationSeconds, // ARGV[1], expiration time
-		p.Msg,                   // ARGV[2], message
-		p.CollectionChannel,     // ARGV[3], channel #1
-		p.SpecificChannel,       // ARGV[4], channel #2
+		p.Msg,               // ARGV[2], message
+		p.CollectionChannel, // ARGV[3], channel #1
+		p.SpecificChannel,   // ARGV[4], channel #2
 	).Result()
 
 	return err

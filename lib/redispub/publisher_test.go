@@ -174,3 +174,14 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 	close(timestampC)
 	waitGroup.Wait()
 }
+
+func TestNilPublicationMessage(t *testing.T) {
+	err := publishSingleMessageWithRetries(nil, 5, 1*time.Second, func(p *Publication) error {
+		t.Error("Should not have been called")
+		return nil
+	})
+
+	if err == nil {
+		t.Error("Exepcted error")
+	}
+}
