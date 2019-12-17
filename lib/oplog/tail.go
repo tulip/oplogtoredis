@@ -151,7 +151,11 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 			}
 
 			for _, pub := range pubs {
-				out <- pub
+				if pub != nil {
+					out <- pub
+				} else {
+					log.Log.Error("Nil Redis publication")
+				}
 			}
 		}
 
