@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/globalsign/mgo"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 )

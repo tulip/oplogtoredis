@@ -4,7 +4,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 )
 
 // RedisServer represents a running Redis server

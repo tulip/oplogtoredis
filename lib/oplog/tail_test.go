@@ -8,7 +8,7 @@ import (
 
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
 )

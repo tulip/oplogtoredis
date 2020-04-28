@@ -11,7 +11,7 @@ import (
 	"github.com/tulip/oplogtoredis/lib/log"
 
 	"github.com/globalsign/mgo/bson"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -137,9 +137,9 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 			formatKey(p, prefix),
 		},
 		dedupeExpirationSeconds, // ARGV[1], expiration time
-		p.Msg,               // ARGV[2], message
-		p.CollectionChannel, // ARGV[3], channel #1
-		p.SpecificChannel,   // ARGV[4], channel #2
+		p.Msg,                   // ARGV[2], message
+		p.CollectionChannel,     // ARGV[3], channel #1
+		p.SpecificChannel,       // ARGV[4], channel #2
 	).Result()
 
 	return err

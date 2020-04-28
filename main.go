@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"github.com/tulip/oplogtoredis/lib/redispub"
 
 	"github.com/globalsign/mgo"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -174,12 +175,18 @@ func createRedisClient() (redis.UniversalClient, error) {
 		return nil, errors.Wrap(err, "parsing redis url")
 	}
 
-	// Create a Redis client
-	client := redis.NewUniversalClient(&redis.UniversalOptions{
+	var clientOptions = redis.UniversalOptions{
 		Addrs:    []string{parsedRedisURL.Addr},
 		DB:       parsedRedisURL.DB,
 		Password: parsedRedisURL.Password,
-	})
+	}
+
+	if config.RedisTLS() {
+		clientOptions.TLSConfig = &tls.Config{}
+	}
+
+	// Create a Redis client
+	client := redis.NewUniversalClient(&clientOptions)
 
 	// Check that we have a connection
 	_, err = client.Ping().Result()

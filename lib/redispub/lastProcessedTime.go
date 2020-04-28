@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/globalsign/mgo/bson"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 )
 
 // LastProcessedTimestamp returns the timestamp of the last oplog entry that

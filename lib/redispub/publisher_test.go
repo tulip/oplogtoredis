@@ -8,7 +8,7 @@ import (
 
 	"github.com/alicebob/miniredis"
 	"github.com/globalsign/mgo/bson"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 )
 
 // We don't test PublishStream here -- it requires a real Redis server because

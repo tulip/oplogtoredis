@@ -16,6 +16,7 @@ var envTests = map[string]struct {
 		env: map[string]string{
 			"OTR_REDIS_URL":                "redis://something",
 			"OTR_MONGO_URL":                "mongodb://something",
+			"OTR_REDIS_TLS":                "true",
 			"OTR_HTTP_SERVER_ADDR":         "localhost:1234",
 			"OTR_BUFFER_SIZE":              "10",
 			"OTR_TIMESTAMP_FLUSH_INTERVAL": "10m",
@@ -26,6 +27,7 @@ var envTests = map[string]struct {
 		expectedConfig: &oplogtoredisConfiguration{
 			RedisURL:               "redis://something",
 			MongoURL:               "mongodb://something",
+			RedisTLS:               true,
 			HTTPServerAddr:         "localhost:1234",
 			BufferSize:             10,
 			TimestampFlushInterval: 10 * time.Minute,
@@ -42,6 +44,7 @@ var envTests = map[string]struct {
 		expectedConfig: &oplogtoredisConfiguration{
 			RedisURL:               "redis://yyy",
 			MongoURL:               "mongodb://xxx",
+			RedisTLS:               false,
 			HTTPServerAddr:         "0.0.0.0:9000",
 			BufferSize:             10000,
 			TimestampFlushInterval: time.Second,
@@ -116,6 +119,11 @@ func checkConfigExpectation(t *testing.T, expectedConfig *oplogtoredisConfigurat
 	if expectedConfig.RedisURL != RedisURL() {
 		t.Errorf("Incorrect Redis URL. Got \"%s\", Expected \"%s\"",
 			expectedConfig.RedisURL, RedisURL())
+	}
+
+	if expectedConfig.RedisTLS != RedisTLS() {
+		t.Errorf("Incorrect Redis TLS. Got \"%t\", Expected \"%t\"",
+			expectedConfig.RedisTLS, RedisTLS())
 	}
 
 	if expectedConfig.HTTPServerAddr != HTTPServerAddr() {
