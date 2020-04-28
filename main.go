@@ -175,7 +175,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 		return nil, errors.Wrap(err, "parsing redis url")
 	}
 
-	var clientOptions = redis.UniversalOptions{
+	clientOptions := redis.UniversalOptions{
 		Addrs:    []string{parsedRedisURL.Addr},
 		DB:       parsedRedisURL.DB,
 		Password: parsedRedisURL.Password,
