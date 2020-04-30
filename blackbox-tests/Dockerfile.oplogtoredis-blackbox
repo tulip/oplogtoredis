@@ -1,0 +1,15 @@
+FROM golang:1.12.9-alpine3.9
+
+# Install gcc, musl-dev, and sasl, which are needed to build the cgo
+# parts of mgo
+RUN apk add --no-cache --update gcc cyrus-sasl cyrus-sasl-dev musl-dev git
+
+WORKDIR /oplogtoredis
+
+COPY main.go go.mod go.sum ./
+COPY lib ./lib
+
+RUN go build -o /bin/oplogtoredis
+
+ADD scripts/wait-for.sh /wait-for.sh
+ADD blackbox-tests/oplogtoredis-entry.sh /oplogtoredis-entry.sh

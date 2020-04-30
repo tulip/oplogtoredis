@@ -1,0 +1,53 @@
+version: "3"
+services:
+  oplogtoredis:
+    build:
+      context: ..
+      dockerfile: blackbox-tests/Dockerfile.oplogtoredis-blackbox
+    command: 
+      - /wait-for.sh
+      - mongo:27017
+      - '--'
+      - /wait-for.sh
+      - redis_tls:6380
+      - '--'
+      - sh
+      - -c
+      - |
+        update-ca-certificates
+        oplogtoredis
+    environment:
+      - OTR_MONGO_URL=mongodb://mongo/dev
+      - OTR_REDIS_URL=redis://redis_tls:6380
+      - OTR_REDIS_TLS=true
+    ports:
+      - 9000:9000
+    depends_on:
+      - mongo
+      - redis_tls
+    volumes:
+      - ./certificates/ca.crt:/usr/local/share/ca-certificates/ca.crt:ro
+  mongo:
+    image: mongo:3.6.2
+    command: "mongod --replSet myapp --port 27017"
+    logging:
+      driver: none
+    volumes:
+      - '../.data/mongo-data:/data/db'
+  redis:
+    image: redis:3.2.11
+    logging:
+      driver: none
+    ports:
+      -  6379:6379
+  redis_tls:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.redis-tls
+    environment:
+      - REDIS_PORT_6379_TCP_ADDR=redis
+      - REDIS_PORT_6379_TCP_PORT=6379
+    volumes:
+      - ./certificates/rediscert.pem:/stunnel/private.pem:ro
+    ports:
+      - 6380:6380
