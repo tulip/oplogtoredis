@@ -1,6 +1,5 @@
 #!/bin/sh
-
-set -e
+set -eu
 
 /wait-for.sh mongo:27017
 /wait-for.sh redis_tls:6380
