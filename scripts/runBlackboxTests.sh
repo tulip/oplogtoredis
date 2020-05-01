@@ -11,7 +11,7 @@ mkdir -p $CERTS_DIR
 
 function cleanup() {
   rm -rf blackbox-tests/certificates
-  docker-compose -f blackbox-tests/docker-compose.yml down
+  docker-compose -f blackbox-tests/docker-compose.yml down --volumes
 }
 
 # # GENERATE CERTS FOR ENABLING TLS
