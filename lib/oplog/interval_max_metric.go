@@ -57,7 +57,7 @@ type IntervalMaxOpts struct {
 	// ReportInterval is the interval by which reports will be bucketed. Default 1m.
 	ReportInterval time.Duration
 
-	nowFunc func() time.Time
+	NowFunc func() time.Time
 }
 
 // NewIntervalMaxMetric constructs a new IntervalMaxMetric.
@@ -70,11 +70,11 @@ func NewIntervalMaxMetric(opts *IntervalMaxOpts, labels []string, labelValues []
 		opts.ReportInterval = DefaultInterval
 	}
 
-	if opts.nowFunc == nil {
-		opts.nowFunc = time.Now
+	if opts.NowFunc == nil {
+		opts.NowFunc = time.Now
 	}
 
-	now := opts.nowFunc()
+	now := opts.NowFunc()
 
 	trunced := now.Truncate(opts.ReportInterval)
 	diff := now.Sub(trunced)
@@ -176,7 +176,7 @@ func (c *IntervalMaxMetric) rotate(timeBucket uint) {
 }
 
 func (c *IntervalMaxMetric) thisTimeBucket() uint {
-	return uint(c.opts.nowFunc().Sub(c.startBucket) / c.opts.ReportInterval)
+	return uint(c.opts.NowFunc().Sub(c.startBucket) / c.opts.ReportInterval)
 }
 
 // IntervalMaxVecOpts is options for IntervalMaxMetricVec.
@@ -214,8 +214,8 @@ func NewIntervalMaxMetricVec(opts *IntervalMaxVecOpts, labels []string) *Interva
 		opts.GCInterval = DefaultMaxVecGCInterval
 	}
 
-	if opts.nowFunc == nil {
-		opts.nowFunc = time.Now
+	if opts.NowFunc == nil {
+		opts.NowFunc = time.Now
 	}
 
 	return &IntervalMaxMetricVec{
@@ -228,7 +228,7 @@ func NewIntervalMaxMetricVec(opts *IntervalMaxVecOpts, labels []string) *Interva
 			opts.ConstLabels,
 		),
 
-		lastGc: opts.nowFunc(),
+		lastGc: opts.NowFunc(),
 	}
 }
 
@@ -273,7 +273,7 @@ func labelKey(labels []string) string {
 
 func (c *IntervalMaxMetricVec) checkGc() {
 	c.lock.RLock()
-	timedOut := c.opts.nowFunc().Sub(c.lastGc) < c.opts.GCInterval
+	timedOut := c.opts.NowFunc().Sub(c.lastGc) < c.opts.GCInterval
 	c.lock.RUnlock()
 	if timedOut {
 		return
@@ -282,7 +282,7 @@ func (c *IntervalMaxMetricVec) checkGc() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	if c.opts.nowFunc().Sub(c.lastGc) < c.opts.GCInterval { // another caller beat us to the punch
+	if c.opts.NowFunc().Sub(c.lastGc) < c.opts.GCInterval { // another caller beat us to the punch
 		return
 	}
 
@@ -311,5 +311,5 @@ func (c *IntervalMaxMetricVec) gc() {
 		c.mp.Delete(k)
 	}
 
-	c.lastGc = c.opts.nowFunc()
+	c.lastGc = c.opts.NowFunc()
 }

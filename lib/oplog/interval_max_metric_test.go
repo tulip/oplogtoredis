@@ -298,10 +298,10 @@ func TestIntervalMaxMetric_TimeTravelingPanic(t *testing.T) {
 }
 
 func (opts *IntervalMaxOpts) withNow(t time.Time, f func()) {
-	oldNowFunc := opts.nowFunc
+	oldNowFunc := opts.NowFunc
 
-	opts.nowFunc = func() time.Time { return t }
-	defer func() { opts.nowFunc = oldNowFunc }()
+	opts.NowFunc = func() time.Time { return t }
+	defer func() { opts.NowFunc = oldNowFunc }()
 
 	f()
 }
