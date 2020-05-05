@@ -27,7 +27,7 @@ func TestBaseline(t *testing.T) {
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
-	verifier := harness.NewRedisVerifier(redisClient)
+	verifier := harness.NewRedisVerifier(redisClient, true)
 	inserter := harness.RunInsertsInBackground(mongoClient.DB(""), 100, 0)
 
 	insertedIDs := inserter.Result()

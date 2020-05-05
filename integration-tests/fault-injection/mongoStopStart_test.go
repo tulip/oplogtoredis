@@ -32,7 +32,7 @@ func TestMongoStopStart(t *testing.T) {
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
-	verifier := harness.NewRedisVerifier(redisClient)
+	verifier := harness.NewRedisVerifier(redisClient, true)
 
 	// We do this test over 60 seconds instead of 10 because we have to give
 	// mongo some extra time to run an election after the restart, and mgo

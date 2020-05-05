@@ -28,7 +28,7 @@ func TestRedisStopStart(t *testing.T) {
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
-	verifier := harness.NewRedisVerifier(redisClient)
+	verifier := harness.NewRedisVerifier(redisClient, false)
 	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
 
 	time.Sleep(2 * time.Second)

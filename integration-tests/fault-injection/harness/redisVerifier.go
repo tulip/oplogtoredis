@@ -20,7 +20,7 @@ type RedisVerifier struct {
 
 // NewRedisVerifier creates a RedisVerifier and starts reading messages from
 // Redis
-func NewRedisVerifier(client redis.UniversalClient) *RedisVerifier {
+func NewRedisVerifier(client redis.UniversalClient, stopReceivingOnError bool) *RedisVerifier {
 	if pingErr := client.Ping().Err(); pingErr != nil {
 		panic("Ping error to redis: " + pingErr.Error())
 	}
@@ -36,7 +36,12 @@ func NewRedisVerifier(client redis.UniversalClient) *RedisVerifier {
 			msg, err := verifier.pubsub.ReceiveMessage()
 			if err != nil {
 				log.Printf("Error receiving pubsub message: %s", err.Error())
-				break
+				if stopReceivingOnError {
+					break
+				} else {
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
 			}
 
 			parsedMsg := helpers.OTRMessage{}

@@ -27,7 +27,7 @@ func TestHA(t *testing.T) {
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
-	verifier := harness.NewRedisVerifier(redisClient)
+	verifier := harness.NewRedisVerifier(redisClient, true)
 	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
 
 	insertedIDs := inserter.Result()
