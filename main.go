@@ -185,7 +185,6 @@ func createRedisClient() (redis.UniversalClient, error) {
 		clientOptions.TLSConfig = &tls.Config{
 			InsecureSkipVerify: false,
 			MinVersion:         tls.VersionTLS12,
-			MaxVersion:         tls.VersionTLS13,
 		}
 	}
 
