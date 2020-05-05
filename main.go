@@ -182,7 +182,11 @@ func createRedisClient() (redis.UniversalClient, error) {
 	}
 
 	if config.RedisTLS() {
-		clientOptions.TLSConfig = &tls.Config{}
+		clientOptions.TLSConfig = &tls.Config{
+			InsecureSkipVerify: false,
+			MinVersion:         tls.VersionTLS12,
+			MaxVersion:         tls.VersionTLS13,
+		}
 	}
 
 	// Create a Redis client

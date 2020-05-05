@@ -34,7 +34,7 @@ services:
     volumes:
       - mongo_data:/data/db
   redis:
-    image: redis:3.2.11
+    image: redis:3.2.4
     logging:
       driver: none
     ports:
