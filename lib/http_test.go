@@ -40,7 +40,7 @@ func TestPromHTTP(t *testing.T) {
 				ConstLabels: nil,
 			},
 			ReportInterval: reportInterval,
-			NowFunc: func() time.Time {return *nowPt},
+			NowFunc:        func() time.Time { return *nowPt },
 		},
 	}, []string{"a"})
 	reg.MustRegister(coll)
