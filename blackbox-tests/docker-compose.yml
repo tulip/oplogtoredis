@@ -40,6 +40,8 @@ services:
     ports:
       -  6379:6379
   redis_tls:
+  # redis tls opens an stunnel port to the unencrypted redis instance
+  # redis only supports TLS directly for v6 and above.
     build:
       context: .
       dockerfile: ./Dockerfile.redis-tls

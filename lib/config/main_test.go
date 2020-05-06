@@ -122,7 +122,7 @@ func checkConfigExpectation(t *testing.T, expectedConfig *oplogtoredisConfigurat
 	}
 
 	if expectedConfig.RedisTLS != RedisTLS() {
-		t.Errorf("Incorrect Redis TLS. Got \"%t\", Expected \"%t\"",
+		t.Errorf("Incorrect Redis TLS. Got \"%v\", Expected \"%v\"",
 			expectedConfig.RedisTLS, RedisTLS())
 	}
 

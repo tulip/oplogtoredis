@@ -6,7 +6,7 @@ set -eu
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd $(dirname $SCRIPT_DIR)
 
-CERTS_DIR=$(pwd)"/blackbox-tests/certificates"
+CERTS_DIR="$(pwd)/blackbox-tests/certificates"
 mkdir -p $CERTS_DIR
 
 function cleanup() {
