@@ -17,7 +17,6 @@ services:
       - sh
       - -c
       - |
-        mongo "$$OTR_MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
         fresh -c scripts/fresh-runner.conf
     environment:
       - OTR_MONGO_URL=mongodb://mongo/dev
@@ -29,13 +28,10 @@ services:
       - ./scripts/wait-for.sh:/wait-for.sh
       - .:/oplogtoredis
   mongo:
-    image: mongo:3.6.2
-    command: "mongod --replSet myapp --port 27017"
-    logging:
-      driver: none
+    build:
+      context: .
+      dockerfile: ./Dockerfile.dev.mongo
     volumes:
       - './.data/mongo-data:/data/db'
   redis:
     image: redis:3.2.11
-    logging:
-      driver: none

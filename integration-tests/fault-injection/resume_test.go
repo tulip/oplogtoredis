@@ -26,7 +26,7 @@ func TestResume(t *testing.T) {
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
-	verifier := harness.NewRedisVerifier(redisClient)
+	verifier := harness.NewRedisVerifier(redisClient, true)
 
 	// We insert a couple things into the oplog to make sure they don't
 	// get processed by oplogtoredis

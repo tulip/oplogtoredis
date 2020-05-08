@@ -61,6 +61,8 @@ You must set the following environment variables:
 
 - `OTR_REDIS_URL`: Required: Redis URL to publish updates to.
 
+- `OTR_REDIS_TLS`: Optional: Defaults to `false`. Set to `true` in order connect via TLS to redis.
+
 You may also set the following environment variables to configure the
 level of logging:
 

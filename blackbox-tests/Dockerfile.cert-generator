@@ -1,0 +1,8 @@
+from ubuntu:18.04
+RUN apt-get update
+RUN apt-get install openssl -y
+WORKDIR generate-certificates
+COPY generate-certificates.sh ./generate-certificates.sh
+CMD ./generate-certificates.sh \
+  && cp -f rediscert.pem /shared-volume \
+  && cp -f ca.pem /shared-volume/ca.crt

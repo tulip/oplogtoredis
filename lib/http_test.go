@@ -16,6 +16,7 @@ import (
 
 func TestPromHTTP(t *testing.T) {
 	const (
+		// reportInterval is arbitrary since we manually increment the clock
 		reportInterval = 100 * time.Millisecond
 		namespace      = "test"
 		subsystem      = "promhttp"
@@ -25,6 +26,8 @@ func TestPromHTTP(t *testing.T) {
 	t.Parallel()
 
 	req := require.New(t)
+	now := time.Now()
+	nowPt := &now
 
 	reg := prometheus.NewRegistry()
 	coll := oplog.NewIntervalMaxMetricVec(&oplog.IntervalMaxVecOpts{
@@ -37,6 +40,7 @@ func TestPromHTTP(t *testing.T) {
 				ConstLabels: nil,
 			},
 			ReportInterval: reportInterval,
+			NowFunc:        func() time.Time { return *nowPt },
 		},
 	}, []string{"a"})
 	reg.MustRegister(coll)
@@ -67,7 +71,7 @@ func TestPromHTTP(t *testing.T) {
 	metricFamilies = update()
 	req.Len(metricFamilies, 0)
 
-	time.Sleep(reportInterval)
+	now = now.Add(reportInterval)
 
 	metricFamilies = update()
 	req.Contains(metricFamilies, fqName)
@@ -86,7 +90,7 @@ func TestPromHTTP(t *testing.T) {
 	req.Equal("a", *mtc.Label[0].Name)
 	req.Equal("b", *mtc.Label[0].Value)
 
-	time.Sleep(reportInterval)
+	now = now.Add(reportInterval)
 
 	metricFamilies = update()
 	req.Len(metricFamilies, 0)
