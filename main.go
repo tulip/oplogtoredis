@@ -182,6 +182,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	}
 
 	if config.RedisTLS() {
+		log.Log.Info("Connecting to Redis over TLS")
 		clientOptions.TLSConfig = &tls.Config{
 			InsecureSkipVerify: false,
 			MinVersion:         tls.VersionTLS12,
