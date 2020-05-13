@@ -60,8 +60,8 @@ You must set the following environment variables:
   `MONGO_OPLOG_URL` you give to your Meteor server.
 
 - `OTR_REDIS_URL`: Required: Redis URL to publish updates to.
-
-- `OTR_REDIS_TLS`: Optional: Defaults to `false`. Set to `true` in order connect via TLS to redis.
+	To connect to a instance over TLS be sure to specify the url with protocol
+	`rediss://`, otherwise use `redis://`
 
 You may also set the following environment variables to configure the
 level of logging:
@@ -75,6 +75,7 @@ There are a number of other environment variables you can set to tune
 various performance and reliability settings. See the
 [config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
 for more details.
+
 
 ## Running oplogtoredis in production
 

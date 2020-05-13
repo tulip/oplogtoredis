@@ -12,7 +12,6 @@ import (
 type oplogtoredisConfiguration struct {
 	RedisURL               string        `required:"true" split_words:"true"`
 	MongoURL               string        `required:"true" split_words:"true"`
-	RedisTLS               bool          `default:"false" envconfig:"REDIS_TLS"`
 	HTTPServerAddr         string        `default:"0.0.0.0:9000" envconfig:"HTTP_SERVER_ADDR"`
 	BufferSize             int           `default:"10000" split_words:"true"`
 	TimestampFlushInterval time.Duration `default:"1s" split_words:"true"`
@@ -25,6 +24,8 @@ var globalConfig *oplogtoredisConfiguration
 
 // RedisURL is the Redis URL configuration. It is required, and is set via the
 // environment variable `OTR_REDIS_URL`.
+// To connect to a instance over TLS be sure to specify the url with protocol
+// `rediss://`, otherwise use `redis://`
 func RedisURL() string {
 	return globalConfig.RedisURL
 }
@@ -33,11 +34,6 @@ func RedisURL() string {
 // environment variable `OTR_MONGO_URL`.
 func MongoURL() string {
 	return globalConfig.MongoURL
-}
-
-// RedisTLS determines if the connection to Redis will be made over TLS or not.
-func RedisTLS() bool {
-	return globalConfig.RedisTLS
 }
 
 // HTTPServerAddr the address we bind our HTTP server to. The HTTP server
