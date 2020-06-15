@@ -24,8 +24,7 @@ func TestProcessOplogEntry(t *testing.T) {
 		Fields []string    `json:"f"`
 	}
 	type decodedPublication struct {
-		CollectionChannel string
-		SpecificChannel   string
+		Channels          []string
 		Msg               decodedPublicationMessage
 		OplogTimestamp    bson.MongoTimestamp
 	}
@@ -53,8 +52,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Timestamp: bson.MongoTimestamp(1234),
 			},
 			want: &decodedPublication{
-				CollectionChannel: "foo.bar",
-				SpecificChannel:   "foo.bar::someid",
+				Channels: []string{"foo.bar", "foo.bar::someid"},
 				Msg: decodedPublicationMessage{
 					Event: "i",
 					Doc: map[string]interface{}{
@@ -79,8 +77,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Timestamp: bson.MongoTimestamp(1234),
 			},
 			want: &decodedPublication{
-				CollectionChannel: "foo.bar",
-				SpecificChannel:   "foo.bar::someid",
+				Channels: []string{"foo.bar", "foo.bar::someid"},
 				Msg: decodedPublicationMessage{
 					Event: "u",
 					Doc: map[string]interface{}{
@@ -111,8 +108,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Timestamp: bson.MongoTimestamp(1234),
 			},
 			want: &decodedPublication{
-				CollectionChannel: "foo.bar",
-				SpecificChannel:   "foo.bar::someid",
+				Channels: []string{"foo.bar", "foo.bar::someid"},
 				Msg: decodedPublicationMessage{
 					Event: "u",
 					Doc: map[string]interface{}{
@@ -134,8 +130,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Timestamp:  bson.MongoTimestamp(1234),
 			},
 			want: &decodedPublication{
-				CollectionChannel: "foo.bar",
-				SpecificChannel:   "foo.bar::someid",
+				Channels: []string{"foo.bar", "foo.bar::someid"},
 				Msg: decodedPublicationMessage{
 					Event: "r",
 					Doc: map[string]interface{}{
@@ -159,8 +154,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Timestamp: bson.MongoTimestamp(1234),
 			},
 			want: &decodedPublication{
-				CollectionChannel: "foo.bar",
-				SpecificChannel:   "foo.bar::deadbeefdeadbeefdeadbeef",
+				Channels: []string{"foo.bar", "foo.bar::deadbeefdeadbeefdeadbeef"},
 				Msg: decodedPublicationMessage{
 					Event: "i",
 					Doc: map[string]interface{}{
@@ -221,8 +215,7 @@ func TestProcessOplogEntry(t *testing.T) {
 		sort.Strings(msg.Fields)
 
 		return &decodedPublication{
-			CollectionChannel: pub.CollectionChannel,
-			SpecificChannel:   pub.SpecificChannel,
+			Channels:          pub.Channels,
 			Msg:               msg,
 			OplogTimestamp:    pub.OplogTimestamp,
 		}
