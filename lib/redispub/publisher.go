@@ -31,7 +31,7 @@ type PublishOpts struct {
 var publishDedupe = redis.NewScript(`
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
-		for w in string.gmatch(ARGV[3], "([^,]+)") do
+		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
 	end
@@ -140,7 +140,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		},
 		dedupeExpirationSeconds,       // ARGV[1], expiration time
 		p.Msg,                         // ARGV[2], message
-		strings.Join(p.Channels, ","), // ARGV[3], channels
+		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
 	return err
