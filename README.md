@@ -53,6 +53,14 @@ You can build oplogtoredis from source with `go build .`, which produces a
 statically-linked binary you can run. Alternatively, you can use [the public
 docker image](https://hub.docker.com/r/tulip/oplogtoredis/tags/)
 
+### TLS
+
+To connect to a instance over TLS be sure to specify the url with protocol
+`rediss://`, otherwise use `redis://`
+
+
+### Environment Variables
+
 You must set the following environment variables:
 
 - `OTR_MONGO_URL`: Required. Mongo URL to read the oplog from. This should
@@ -60,8 +68,7 @@ You must set the following environment variables:
   `MONGO_OPLOG_URL` you give to your Meteor server.
 
 - `OTR_REDIS_URL`: Required: Redis URL to publish updates to.
-	To connect to a instance over TLS be sure to specify the url with protocol
-	`rediss://`, otherwise use `redis://`
+
 
 You may also set the following environment variables to configure the
 level of logging:
