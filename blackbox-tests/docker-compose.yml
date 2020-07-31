@@ -19,8 +19,7 @@ services:
         oplogtoredis
     environment:
       - OTR_MONGO_URL=mongodb://mongo/dev
-      - OTR_REDIS_URL=redis://redis_tls:6380
-      - OTR_REDIS_TLS=true
+      - OTR_REDIS_URL=rediss://redis_tls:6380
     ports:
       - 9000:9000
     depends_on:

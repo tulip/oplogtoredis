@@ -176,12 +176,13 @@ func createRedisClient() (redis.UniversalClient, error) {
 	}
 
 	clientOptions := redis.UniversalOptions{
-		Addrs:    []string{parsedRedisURL.Addr},
-		DB:       parsedRedisURL.DB,
-		Password: parsedRedisURL.Password,
+		Addrs:     []string{parsedRedisURL.Addr},
+		DB:        parsedRedisURL.DB,
+		Password:  parsedRedisURL.Password,
+		TLSConfig: parsedRedisURL.TLSConfig,
 	}
 
-	if config.RedisTLS() {
+	if clientOptions.TLSConfig != nil {
 		clientOptions.TLSConfig = &tls.Config{
 			InsecureSkipVerify: false,
 			MinVersion:         tls.VersionTLS12,
