@@ -215,7 +215,7 @@ over the environment, they operate on a compiled binary of oplogtoredis
 rather than a docker image. They run inside a single docker container, with
 oplogtoredis, Mongo, and Redis spun up and down by the test harness itself.
 
-Run these tests with `scripts/runIntegrationFaultInjectionsh`.
+Run these tests with `scripts/runIntegrationFaultInjection.sh`.
 
 ### Integration tests part 3: meteor tests
 
