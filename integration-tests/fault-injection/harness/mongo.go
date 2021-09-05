@@ -13,8 +13,8 @@ import (
 
 	// We import the old mgo.v2 package in addition to the globalsign/mgo fork
 	// -- juju/replicaset still uses mgo.v2 instead of globalsign/mgo
+	legacymgo "github.com/juju/mgo/v2"
 	"github.com/juju/replicaset"
-	legacymgo "gopkg.in/mgo.v2"
 )
 
 // MongoServer represents a 3-node Mongo replica set running on this host
