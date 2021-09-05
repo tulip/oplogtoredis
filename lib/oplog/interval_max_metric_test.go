@@ -15,7 +15,9 @@ func TestIntervalMaxMetric(t *testing.T) {
 		t.Parallel()
 
 		m := NewIntervalMaxMetric(&IntervalMaxOpts{
-			Opts:           prometheus.Opts{},
+			Opts: prometheus.Opts{
+				Name: "testMetric",
+			},
 			ReportInterval: 0,
 		}, []string{"l1", "l2"}, []string{"a", "test"})
 
@@ -51,7 +53,9 @@ func TestIntervalMaxMetric(t *testing.T) {
 		const interval = 5 * time.Millisecond
 
 		m := NewIntervalMaxMetric(&IntervalMaxOpts{
-			Opts:           prometheus.Opts{},
+			Opts: prometheus.Opts{
+				Name: "testMetric",
+			},
 			ReportInterval: interval,
 		}, []string{"l1", "l2"}, []string{"a", "test"})
 
@@ -117,7 +121,9 @@ func TestIntervalMaxMetric(t *testing.T) {
 		const interval = 5 * time.Millisecond
 
 		m := NewIntervalMaxMetric(&IntervalMaxOpts{
-			Opts:           prometheus.Opts{},
+			Opts: prometheus.Opts{
+				Name: "testMetric",
+			},
 			ReportInterval: interval,
 		}, []string{"l1", "l2"}, []string{"a", "test"})
 
@@ -215,7 +221,9 @@ func TestIntervalMaxMetricVec(t *testing.T) {
 
 	m := NewIntervalMaxMetricVec(&IntervalMaxVecOpts{
 		IntervalMaxOpts: IntervalMaxOpts{
-			Opts:           prometheus.Opts{},
+			Opts: prometheus.Opts{
+				Name: "testMetric",
+			},
 			ReportInterval: interval,
 		},
 		GCInterval: interval,
@@ -280,7 +288,9 @@ func TestIntervalMaxMetric_TimeTravelingPanic(t *testing.T) {
 	asrt := assert.New(t)
 
 	m := NewIntervalMaxMetric(&IntervalMaxOpts{
-		Opts:           prometheus.Opts{},
+		Opts: prometheus.Opts{
+			Name: "testMetric",
+		},
 		ReportInterval: interval,
 	}, []string{"l1", "l2"}, []string{"a", "b"})
 

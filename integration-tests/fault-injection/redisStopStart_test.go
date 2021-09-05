@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test stops and restart redis during the test.

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test (not really a "fault injection" per se) runs two copies of

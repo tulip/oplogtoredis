@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test triggers a mongo stepdown during execution. We expect that every

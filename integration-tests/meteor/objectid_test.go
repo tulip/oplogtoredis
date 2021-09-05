@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/integration-tests/meteor/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/meteor/harness"
 )
 
 func TestObjectID(t *testing.T) {

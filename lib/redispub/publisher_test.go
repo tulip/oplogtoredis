@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis/v7"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // We don't test PublishStream here -- it requires a real Redis server because
@@ -20,7 +20,7 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 		CollectionChannel: "a",
 		SpecificChannel:   "b",
 		Msg:               []byte("asdf"),
-		OplogTimestamp:    bson.MongoTimestamp(0),
+		OplogTimestamp:    primitive.Timestamp{},
 	}
 
 	callCount := 0
@@ -50,7 +50,7 @@ func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 		CollectionChannel: "a",
 		SpecificChannel:   "b",
 		Msg:               []byte("asdf"),
-		OplogTimestamp:    bson.MongoTimestamp(0),
+		OplogTimestamp:    primitive.Timestamp{},
 	}
 
 	callCount := 0
@@ -81,7 +81,7 @@ func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 		CollectionChannel: "a",
 		SpecificChannel:   "b",
 		Msg:               []byte("asdf"),
-		OplogTimestamp:    bson.MongoTimestamp(0),
+		OplogTimestamp:    primitive.Timestamp{},
 	}
 
 	publishFn := func(p *Publication) error {
@@ -116,7 +116,7 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 	})
 
 	// Start up the periodic updater
-	timestampC := make(chan bson.MongoTimestamp)
+	timestampC := make(chan primitive.Timestamp)
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(1)
 
@@ -136,7 +136,7 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 	}
 
 	// Write something
-	timestampC <- bson.MongoTimestamp(1)
+	timestampC <- primitive.Timestamp{I: 1}
 	time.Sleep(testSpeed / 4) // t = 0.25
 
 	// Key should be set
@@ -144,14 +144,14 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 
 	// Wait less FlushInterval and write something
 	time.Sleep(testSpeed / 2) // t = 0.75
-	timestampC <- bson.MongoTimestamp(2)
+	timestampC <- primitive.Timestamp{I: 2}
 
 	// Key should not have updated
 	redisServer.CheckGet(t, key, "1")
 
 	// Wait FlushInterval and write something
 	time.Sleep(testSpeed / 2) // t = 1.25
-	timestampC <- bson.MongoTimestamp(3)
+	timestampC <- primitive.Timestamp{I: 3}
 	time.Sleep(testSpeed / 4) // t = 1.5
 
 	// Key should have been updated
@@ -159,7 +159,7 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 
 	// Wait less than FlushInterval and write something
 	time.Sleep(testSpeed / 4) // t = 1.75
-	timestampC <- bson.MongoTimestamp(4)
+	timestampC <- primitive.Timestamp{I: 4}
 
 	// Key should not have been updated (making sure that when it *was* updated, we reset the timer)
 	redisServer.CheckGet(t, key, "3")

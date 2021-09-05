@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 	"gopkg.in/mgo.v2/bson"
 )
 

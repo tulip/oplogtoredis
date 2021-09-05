@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
 
 	"github.com/globalsign/mgo/bson"
 )

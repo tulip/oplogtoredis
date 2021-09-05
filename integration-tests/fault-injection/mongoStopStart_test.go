@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test stops and restarts mongo during the test. We expect that every

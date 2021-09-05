@@ -18,6 +18,7 @@ type oplogtoredisConfiguration struct {
 	MaxCatchUp             time.Duration `default:"60s" split_words:"true"`
 	RedisDedupeExpiration  time.Duration `default:"120s" split_words:"true"`
 	RedisMetadataPrefix    string        `default:"oplogtoredis::" split_words:"true"`
+	MongoConnectTimeout    time.Duration `default:"10s" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -101,6 +102,12 @@ func RedisDedupeExpiration() time.Duration {
 // defaults to "oplogtoredis::".
 func RedisMetadataPrefix() string {
 	return globalConfig.RedisMetadataPrefix
+}
+
+// MongoConnectTimout controls how long we'll spend connecting to Mongo before
+// timing out at startup.
+func MongoConnectTimeout() time.Duration {
+	return globalConfig.MongoConnectTimeout
 }
 
 // ParseEnv parses the current environment variables and updates the stored

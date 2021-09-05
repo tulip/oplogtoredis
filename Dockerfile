@@ -1,4 +1,4 @@
-FROM golang:1.12.9-alpine3.9
+FROM golang:1.17.0-alpine3.14
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
 # parts of mgo

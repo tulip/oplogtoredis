@@ -9,7 +9,7 @@ import (
 	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
-	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
 )
 
 // This file is a simple test harness for acceptance tests

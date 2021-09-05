@@ -5,7 +5,7 @@ import (
 
 	mgo "github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
-	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
 )
 
 // We should ignore ensureIndex
