@@ -21,7 +21,12 @@ func RunInserts(client *mongo.Database, numInserts int, frequency time.Duration)
 	for i := 0; i < numInserts; i++ {
 		id := fmt.Sprintf("doc%d", i)
 
-		_, err := client.Collection("Test").InsertOne(context.Background(), bson.M{
+		// We set a 500ms timout for the insert: long enough that the insert will
+		// succeed if Mongo is working normally, but too short for it to retry during
+		// a failover
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		_, err := client.Collection("Test").InsertOne(ctx, bson.M{
 			"_id": id,
 		})
 

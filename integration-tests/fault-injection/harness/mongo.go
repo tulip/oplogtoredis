@@ -103,9 +103,9 @@ func (server *MongoServer) Start() {
 	}
 }
 
-// Client returns an mgo.Session configured to talk to the replica set
+// Client returns an mongo.Client configured to talk to the replica set
 func (server *MongoServer) Client() *mongo.Client {
-	cs, err := connstring.ParseAndValidate(os.Getenv("MONGO_URL"))
+	cs, err := connstring.ParseAndValidate(server.Addr)
 	if err != nil {
 		panic("Could not parse MONGO_URL " + err.Error())
 	}

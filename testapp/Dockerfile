@@ -1,4 +1,4 @@
-FROM node:14.17.6-bullseye
+FROM node:14.17.6-buster
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true
@@ -20,14 +20,14 @@ RUN meteor npm install && \
   npm install
 
 
-FROM node:14.17.6-bullseye-slim
+FROM node:14.17.6-buster-slim
 
 # Install mongoDB client
-# The keys can get stale; to force the key import to re-run increment the "cache-bust" echo
-RUN echo "cache-bust 20190328" && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5
-RUN echo "deb http://repo.mongodb.org/apt/debian jessie/mongodb-org/3.6 main" > /etc/apt/sources.list.d/mongodb-org-3.6.list
+RUN apt-get update && apt-get install -y gnupg wget
+RUN wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add -
+RUN echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" > /etc/apt/sources.list.d/mongodb-org-4.4.list
 
-RUN apt-get update && apt-get install -y mongodb-org-shell=3.6.11 netcat && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y mongodb-org-shell=4.4.8 netcat && rm -rf /var/lib/apt/lists/*
 
 COPY --from=0 /app/bundle /app
 WORKDIR /app
