@@ -5,9 +5,9 @@ go 1.17
 require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/deckarep/golang-set v1.7.1
-	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/gorilla/websocket v1.4.2
+	github.com/juju/mgo/v2 v2.0.0-20210302023703-70d5d206e208
 	github.com/juju/replicaset v0.0.0-20210302050932-0303c8575745
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kvz/logstreamer v0.0.0-20201023134116-02d20f4338f5
@@ -35,7 +35,6 @@ require (
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c // indirect
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f // indirect
 	github.com/juju/loggo v0.0.0-20200526014432-9ce3a2e09b5e // indirect
-	github.com/juju/mgo/v2 v2.0.0-20210302023703-70d5d206e208 // indirect
 	github.com/juju/utils/v2 v2.0.0-20200923005554-4646bfea2ef1 // indirect
 	github.com/klauspost/compress v1.9.5 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect

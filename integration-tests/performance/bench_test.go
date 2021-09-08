@@ -16,7 +16,7 @@ func BenchmarkInsertNoWait(b *testing.B) {
 	time.Sleep(2 * time.Second)
 
 	db := helpers.SeedTestDB(helpers.DBData{})
-	defer db.Client().Disconnect(context.Background())
+	defer func() { _ = db.Client().Disconnect(context.Background()) }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -39,7 +39,7 @@ func BenchmarkInsertWaitForRedis(b *testing.B) {
 	defer subscr.Close()
 
 	db := helpers.SeedTestDB(helpers.DBData{})
-	defer db.Client().Disconnect(context.Background())
+	defer func() { _ = db.Client().Disconnect(context.Background()) }()
 
 	var wg sync.WaitGroup
 	wg.Add(1)

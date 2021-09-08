@@ -21,9 +21,9 @@ type DBData map[string][]bson.M
 //
 // The givens records is a map of [collection name] -> [array of records]
 func SeedTestDB(records DBData) *mongo.Database {
-	cs, err := connstring.ParseAndValidate(os.Getenv("MONGO_DSN"))
+	cs, err := connstring.ParseAndValidate(os.Getenv("MONGO_URL"))
 	if err != nil {
-		panic("Could not parse MONGO_URL")
+		panic("Could not parse MONGO_URL " + err.Error())
 	}
 
 	clientOptions := options.Client()

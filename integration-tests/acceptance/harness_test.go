@@ -38,7 +38,7 @@ func startHarness() *harness {
 
 // Shuts down all the mongo/redis clients
 func (h *harness) stop() {
-	h.mongoClient.Client().Disconnect(context.Background())
+	_ = h.mongoClient.Client().Disconnect(context.Background())
 	h.redisClient.Close()
 	h.subscription.Close()
 }

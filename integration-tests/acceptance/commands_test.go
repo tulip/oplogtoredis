@@ -15,7 +15,7 @@ func TestAddIndex(t *testing.T) {
 	defer harness.stop()
 
 	_, err := harness.mongoClient.Collection("Foo").Indexes().CreateOne(context.Background(), mongo.IndexModel{
-		Keys: bson.D{{"name", 1}},
+		Keys: bson.D{{Key: "name", Value: 1}},
 	})
 	if err != nil {
 		panic(err)

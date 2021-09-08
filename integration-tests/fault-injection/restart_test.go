@@ -22,7 +22,7 @@ func TestRestart(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Disconnect(context.Background())
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()

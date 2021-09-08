@@ -62,7 +62,7 @@ func TestUpdateReplace(t *testing.T) {
 
 	harness.resetMessages()
 
-	_, err = harness.mongoClient.Collection("Foo").UpdateByID(context.Background(), "someid", bson.M{
+	_, err = harness.mongoClient.Collection("Foo").ReplaceOne(context.Background(), bson.M{"_id": "someid"}, bson.M{
 		"world": "new",
 	})
 	if err != nil {
