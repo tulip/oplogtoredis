@@ -130,13 +130,13 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		var entry rawOplogEntry
 		findOneOpts := &options.FindOneOptions{}
 		findOneOpts.SetSort(bson.M{"$natural": -1})
-		result := oplogCollection.FindOne(context.Background(), nil, findOneOpts)
+		result := oplogCollection.FindOne(context.Background(), bson.M{}, findOneOpts)
 
 		if result.Err() != nil {
 			return entry.Timestamp, result.Err()
 		}
 
-		decodeErr := result.Decode(&result)
+		decodeErr := result.Decode(&entry)
 
 		if decodeErr != nil {
 			return entry.Timestamp, decodeErr
