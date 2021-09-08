@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"testing"
 
-	mgo "github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
 	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // We should ignore ensureIndex
@@ -13,8 +14,8 @@ func TestAddIndex(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").EnsureIndex(mgo.Index{
-		Key: []string{"foo"},
+	_, err := harness.mongoClient.Collection("Foo").Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.D{{"name", 1}},
 	})
 	if err != nil {
 		panic(err)
@@ -28,7 +29,7 @@ func TestDropCollection(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id":   "someid",
 		"hello": "world",
 	})
@@ -37,7 +38,7 @@ func TestDropCollection(t *testing.T) {
 	}
 	harness.resetMessages()
 
-	err = harness.mongoClient.C("Foo").DropCollection()
+	err = harness.mongoClient.Collection("Foo").Drop(context.Background())
 	if err != nil {
 		panic(err)
 	}

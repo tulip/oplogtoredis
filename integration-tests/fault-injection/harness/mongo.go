@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -9,12 +10,14 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/globalsign/mgo"
-
 	// We import the old mgo.v2 package in addition to the globalsign/mgo fork
 	// -- juju/replicaset still uses mgo.v2 instead of globalsign/mgo
 	legacymgo "github.com/juju/mgo/v2"
 	"github.com/juju/replicaset"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 )
 
 // MongoServer represents a 3-node Mongo replica set running on this host
@@ -25,6 +28,7 @@ type MongoServer struct {
 	node2              *exec.Cmd
 	node3              *exec.Cmd
 	dataPrefix         string
+	DBName             string
 }
 
 // StartMongoServer starts a mongo replica set and returns a
@@ -43,10 +47,6 @@ func StartMongoServer() *MongoServer {
 	server.Start()
 
 	return &server
-}
-
-func init() {
-	mgo.SetLogger(makeLog("testmongo"))
 }
 
 // Start starts up the Mongo replica set. This is automatically called by
@@ -104,21 +104,28 @@ func (server *MongoServer) Start() {
 }
 
 // Client returns an mgo.Session configured to talk to the replica set
-func (server *MongoServer) Client() *mgo.Session {
-	dialInfo, err := mgo.ParseURL(server.Addr)
+func (server *MongoServer) Client() *mongo.Client {
+	cs, err := connstring.ParseAndValidate(os.Getenv("MONGO_DSN"))
 	if err != nil {
-		panic("Error parsing mongo URL: " + err.Error())
+		panic("Could not parse MONGO_URL")
 	}
 
-	// NOTE(nathanp): in my experience, this makes the tests run a lot
-	// more consistently where we need to force failures to occur.
-	dialInfo.FailFast = true
+	server.DBName = cs.Database
 
-	dialInfo.Timeout = 3 * time.Second
-	client, err := mgo.DialWithInfo(dialInfo)
+	clientOptions := options.Client()
+	clientOptions.ApplyURI(server.Addr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, clientOptions)
 
 	if err != nil {
-		panic("Error creating Mongo client: " + err.Error())
+		panic("Error connecting to Mongo")
+	}
+
+	err = client.Ping(ctx, readpref.Primary())
+	if err != nil {
+		panic("Error pinging Mongo")
 	}
 
 	return client

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
@@ -22,13 +23,13 @@ func TestHA(t *testing.T) {
 	defer otr2.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer mongoClient.Disconnect(context.Background())
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, true)
-	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
+	inserter := harness.Run100InsertsInBackground(mongoClient.Database(mongo.DBName))
 
 	insertedIDs := inserter.Result()
 

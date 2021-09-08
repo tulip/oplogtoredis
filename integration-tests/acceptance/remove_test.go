@@ -1,18 +1,19 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func TestRemove(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id":   "someid",
 		"hello": "world",
 	})
@@ -22,7 +23,7 @@ func TestRemove(t *testing.T) {
 
 	harness.resetMessages()
 
-	err = harness.mongoClient.C("Foo").RemoveId("someid")
+	_, err = harness.mongoClient.Collection("Foo").DeleteOne(context.Background(), bson.M{"_id": "someid"})
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +47,7 @@ func TestRemoveMultiple(t *testing.T) {
 	defer harness.stop()
 
 	// Initialize test data
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "someid",
 		"foo": "bar",
 	})
@@ -54,7 +55,7 @@ func TestRemoveMultiple(t *testing.T) {
 		panic(err)
 	}
 
-	err = harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "someid2",
 		"foo": "bar",
 	})
@@ -65,7 +66,7 @@ func TestRemoveMultiple(t *testing.T) {
 	harness.resetMessages()
 
 	// Run an update that increments the first value more than 15
-	_, err = harness.mongoClient.C("Foo").RemoveAll(bson.M{
+	_, err = harness.mongoClient.Collection("Foo").DeleteMany(context.Background(), bson.M{
 		"foo": "bar",
 	})
 	if err != nil {

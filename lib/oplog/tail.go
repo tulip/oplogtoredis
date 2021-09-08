@@ -254,7 +254,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 				err: err,
 				op:  entry,
 			})
-		} else {
+		} else if pub != nil {
 			pubs = append(pubs, pub)
 		}
 	}

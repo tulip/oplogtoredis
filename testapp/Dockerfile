@@ -1,5 +1,16 @@
-FROM tulip/meteor-build-env:1.6.1.1_1
+FROM node:14.17.6-bullseye
 
+# Install Meteor
+ENV METEOR_ALLOW_SUPERUSER=true
+
+RUN apt-get update && \
+  apt-get install -y g++ build-essential curl && \
+  rm -rf /var/lib/apt/lists/* && \
+  curl https://install.meteor.com/ | sh
+
+RUN meteor create --release 2.3.6 /throwaway && rm -rf /throwaway
+
+# Set up app
 ADD . /src
 WORKDIR /src
 
@@ -9,7 +20,7 @@ RUN meteor npm install && \
   npm install
 
 
-FROM node:8.15.1-jessie-slim
+FROM node:14.17.6-bullseye-slim
 
 # Install mongoDB client
 # The keys can get stale; to force the key import to re-run increment the "cache-bust" echo
