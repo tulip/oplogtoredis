@@ -161,7 +161,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		return
 	}
 
-	var lastTimestamp primitive.Timestamp
+	lastTimestamp := startTime
 	for {
 		select {
 		case <-stop:
@@ -243,7 +243,11 @@ func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, 
 	err = cursor.Err()
 
 	if err != nil {
-		time.Sleep(requeryDuration)
+		// Wait briefly before determining whether the failure was a timeout: because
+		// the MongoDB go driver passes the context on to lower-level networking
+		// components, it's possible for the query to fail *before* the context
+		// is marked as timed-out
+		time.Sleep(100 * time.Millisecond)
 		didTimeout = ctx.Err() != nil
 
 		// check if the error is a position-lost error. These errors are best handled
