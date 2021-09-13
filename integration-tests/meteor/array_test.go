@@ -13,6 +13,8 @@ func TestArrayModification(t *testing.T) {
 
 	require.NoError(t, meteor1.Send(harness.DDPMethod("insertCall", "arrayTest.initializeFixtures")))
 
+	meteor1.ClearReceiveBuffer()
+
 	// Subscribe to arrayTest from both servers
 	require.NoError(t, meteor1.Send(harness.DDPSub("subId", "arrayTest.pub")))
 	require.NoError(t, meteor2.Send(harness.DDPSub("subId", "arrayTest.pub")))
