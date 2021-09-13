@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
 	"testing"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // The baseline test does not inject any faults. It's here to test the
@@ -22,13 +23,13 @@ func TestBaseline(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, true)
-	inserter := harness.RunInsertsInBackground(mongoClient.DB(""), 100, 0)
+	inserter := harness.RunInsertsInBackground(mongoClient.Database(mongo.DBName), 100, 0)
 
 	insertedIDs := inserter.Result()
 

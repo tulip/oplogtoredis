@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
-	"github.com/tulip/oplogtoredis/lib/redispub"
+	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // nolint: gocyclo
@@ -27,7 +28,12 @@ func TestProcessOplogEntry(t *testing.T) {
 		CollectionChannel string
 		SpecificChannel   string
 		Msg               decodedPublicationMessage
-		OplogTimestamp    bson.MongoTimestamp
+		OplogTimestamp    primitive.Timestamp
+	}
+
+	testObjectId, err := primitive.ObjectIDFromHex("deadbeefdeadbeefdeadbeef")
+	if err != nil {
+		panic(err)
 	}
 
 	tests := map[string]struct {
@@ -50,7 +56,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Data: bson.M{
 					"some": "field",
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
 				CollectionChannel: "foo.bar",
@@ -62,7 +68,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 					Fields: []string{"some"},
 				},
-				OplogTimestamp: bson.MongoTimestamp(1234),
+				OplogTimestamp: primitive.Timestamp{T: 1234},
 			},
 		},
 		"Replacement update": {
@@ -76,7 +82,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"some": "field",
 					"new":  "field",
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
 				CollectionChannel: "foo.bar",
@@ -88,7 +94,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 					Fields: []string{"some", "new"},
 				},
-				OplogTimestamp: bson.MongoTimestamp(1234),
+				OplogTimestamp: primitive.Timestamp{T: 1234},
 			},
 		},
 		"Non-replacement update": {
@@ -108,7 +114,7 @@ func TestProcessOplogEntry(t *testing.T) {
 						"c": "foo",
 					},
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
 				CollectionChannel: "foo.bar",
@@ -120,7 +126,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 					Fields: []string{"a", "b", "c"},
 				},
-				OplogTimestamp: bson.MongoTimestamp(1234),
+				OplogTimestamp: primitive.Timestamp{T: 1234},
 			},
 		},
 		"Delete": {
@@ -131,7 +137,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Database:   "foo",
 				Collection: "bar",
 				Data:       bson.M{},
-				Timestamp:  bson.MongoTimestamp(1234),
+				Timestamp:  primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
 				CollectionChannel: "foo.bar",
@@ -143,12 +149,12 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 					Fields: []string{},
 				},
-				OplogTimestamp: bson.MongoTimestamp(1234),
+				OplogTimestamp: primitive.Timestamp{T: 1234},
 			},
 		},
 		"ObjectID id": {
 			in: &oplogEntry{
-				DocID:      bson.ObjectIdHex("deadbeefdeadbeefdeadbeef"),
+				DocID:      testObjectId,
 				Operation:  "i",
 				Namespace:  "foo.bar",
 				Database:   "foo",
@@ -156,7 +162,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Data: bson.M{
 					"some": "field",
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
 				CollectionChannel: "foo.bar",
@@ -171,7 +177,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 					Fields: []string{"some"},
 				},
-				OplogTimestamp: bson.MongoTimestamp(1234),
+				OplogTimestamp: primitive.Timestamp{T: 1234},
 			},
 		},
 		"Unsupported id type": {
@@ -184,7 +190,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Data: bson.M{
 					"some": "field",
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			wantError: ErrUnsupportedDocIDType,
 			want:      nil,
@@ -199,7 +205,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Data: bson.M{
 					"some": "field",
 				},
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: nil,
 		},

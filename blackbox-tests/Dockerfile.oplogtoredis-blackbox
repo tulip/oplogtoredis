@@ -1,9 +1,14 @@
-FROM golang:1.12.9-alpine3.9
+FROM golang:1.17.0-alpine3.14
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
-# parts of mgo
+# parts of the Mongo driver
 RUN apk add --no-cache --update \
-	gcc cyrus-sasl cyrus-sasl-dev musl-dev git mongodb
+	gcc cyrus-sasl cyrus-sasl-dev musl-dev git
+
+RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/main' >> /etc/apk/repositories
+RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/community' >> /etc/apk/repositories
+RUN apk update
+RUN apk add mongodb=3.4.4-r0
 
 WORKDIR /oplogtoredis
 

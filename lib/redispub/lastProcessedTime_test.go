@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis/v7"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func startMiniredis() (*miniredis.Miniredis, redis.UniversalClient) {
@@ -26,7 +26,7 @@ func startMiniredis() (*miniredis.Miniredis, redis.UniversalClient) {
 
 func TestLastProcessedTimestampSuccess(t *testing.T) {
 	now := time.Now()
-	nowTS := bson.MongoTimestamp((now.Unix() << 32) + 1234)
+	nowTS := primitive.Timestamp{T: uint32(now.Unix()), I: 1234}
 
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
@@ -70,7 +70,7 @@ func TestLastProcessedTimestampInvalidRecord(t *testing.T) {
 
 	if err == nil {
 		t.Errorf("Expected strconv error, got no error")
-	} else if err.Error() != `strconv.ParseInt: parsing "not a number": invalid syntax` {
+	} else if err.Error() != `strconv.ParseUint: parsing "not a number": invalid syntax` {
 		t.Errorf("Expected strconv error, got: %s", err)
 	}
 }

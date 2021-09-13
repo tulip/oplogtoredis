@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/integration-tests/meteor/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/meteor/harness"
 )
 
 func TestInsert(t *testing.T) {
@@ -22,7 +22,7 @@ func TestInsert(t *testing.T) {
 	require.NoError(t, meteor1.Send(harness.DDPMethod("methodCallId", "tasks.insert", "some text")))
 
 	// On meteor1, we should get added and result, and then updated
-	meteor1.VerifyReceive(t, harness.DDPMsgGroup{
+	received := meteor1.VerifyReceive(t, harness.DDPMsgGroup{
 		harness.DDPResult("methodCallId", harness.DDPData{}),
 
 		// We know this ID because we pass a fixed random seed with DDP method calls
@@ -31,9 +31,11 @@ func TestInsert(t *testing.T) {
 			"owner":    "testuser",
 			"username": "Test User",
 		}),
-	}, harness.DDPMsgGroup{
+
 		harness.DDPUpdated([]string{"methodCallId"}),
 	})
+
+	received.VerifyUpdatedComesAfterAllChanges(t)
 
 	// On meteor2, we should just get added
 	meteor2.VerifyReceive(t, harness.DDPMsgGroup{

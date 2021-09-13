@@ -1,8 +1,8 @@
 # oplogtoredis
 
 [![Build Status](https://travis-ci.org/tulip/oplogtoredis.svg?branch=master)](https://travis-ci.org/tulip/oplogtoredis)
-[![Go Report Card](https://goreportcard.com/badge/github.com/tulip/oplogtoredis)](https://goreportcard.com/report/github.com/tulip/oplogtoredis)
-[![GoDoc](https://godoc.org/github.com/tulip/oplogtoredis?status.svg)](http://godoc.org/github.com/tulip/oplogtoredis)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vlasky/oplogtoredis)](https://goreportcard.com/report/github.com/vlasky/oplogtoredis)
+[![GoDoc](https://godoc.org/github.com/vlasky/oplogtoredis?status.svg)](http://godoc.org/github.com/vlasky/oplogtoredis)
 
 This program tails the oplog of a Mongo server, and publishes changes to Redis.
 It's designed to work with the [redis-oplog Meteor package](https://github.com/cult-of-coders/redis-oplog).
@@ -76,7 +76,7 @@ level of logging:
 
 There are a number of other environment variables you can set to tune
 various performance and reliability settings. See the
-[config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
+[config package docs](https://godoc.org/github.com/vlasky/oplogtoredis/lib/config)
 for more details.
 
 
@@ -104,7 +104,7 @@ oplogtoredis uses Redis to keep track of the last message it processed. When
 it starts up, it checks to see where it left off, and will resume tailing the
 oplog from that timestamp, as long as it's not too far in the past (we don't
 want to replay too much of the oplog, or we could could overload the
-Redis or Meteor servers). The [config package docs](https://godoc.org/github.com/tulip/oplogtoredis/lib/config)
+Redis or Meteor servers). The [config package docs](https://godoc.org/github.com/vlasky/oplogtoredis/lib/config)
 have more detail on how to tune this behavior, but this feature should keep
 your system working propertly even if every copy of oplogtoredis that you're
 running goes down for a brief period.
@@ -156,7 +156,7 @@ The components of the docker-compose environment are:
   will show you everything being published.
 
 You can optionally also spin up 2 meteor app servers with
-`docker-compose -f docker-compose.yml -f docker-compose.meteor.yml`. These
+`docker-compose -f docker-compose.yml -f docker-compose.meteor.yml up`. These
 servers are running a simple todos app, using redis-oplog, and pointing at the
 same Mongo and Redis servers. Note that the first run will take a long time
 (5-10 minutes) while Meteor does initial downloads/builds; caching makes

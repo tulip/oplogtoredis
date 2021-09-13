@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test stops and restart redis during the test.
@@ -23,13 +24,13 @@ func TestRedisStopStart(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, false)
-	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
+	inserter := harness.Run100InsertsInBackground(mongoClient.Database(mongo.DBName))
 
 	time.Sleep(2 * time.Second)
 	redis.Stop()

@@ -1,4 +1,5 @@
-FROM golang:1.12.9
+FROM golang:1.17.0
+
 # This dockerfile doesn't use alpine because race detection doesn't work.
 # https://github.com/golang/go/issues/14481
 
