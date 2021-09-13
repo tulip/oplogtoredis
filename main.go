@@ -32,9 +32,10 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
+	log.Log.Info("STARTING MONGO CONNECT")
 	mongoSession, err := createMongoClient()
 	if err != nil {
-		panic("Error initialize oplog tailer: " + err.Error())
+		panic("Error initializing oplog tailer: " + err.Error())
 	}
 	defer func() {
 		mongoCloseCtx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())

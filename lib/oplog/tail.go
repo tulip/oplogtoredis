@@ -5,9 +5,11 @@ package oplog
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
+	"github.com/vlasky/oplogtoredis/lib/config"
 	"github.com/vlasky/oplogtoredis/lib/log"
 	"github.com/vlasky/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -130,7 +132,11 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		var entry rawOplogEntry
 		findOneOpts := &options.FindOneOptions{}
 		findOneOpts.SetSort(bson.M{"$natural": -1})
-		result := oplogCollection.FindOne(context.Background(), bson.M{}, findOneOpts)
+
+		queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+		defer queryContextCancel()
+
+		result := oplogCollection.FindOne(queryContext, bson.M{}, findOneOpts)
 
 		if result.Err() != nil {
 			return entry.Timestamp, result.Err()
@@ -148,18 +154,14 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		return entry.Timestamp, nil
 	})
 
-	queryOpts := &options.FindOptions{}
-	queryOpts.SetSort(bson.M{"$natural": 1})
-	queryOpts.SetCursorType(options.TailableAwait)
-	query, queryErr := oplogCollection.Find(context.Background(), bson.M{
-		"ts": bson.M{"$gt": startTime},
-	}, queryOpts)
+	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
 		log.Log.Errorw("Error issuing tail query", "error", queryErr)
 		return
 	}
 
+	var lastTimestamp primitive.Timestamp
 	for {
 		select {
 		case <-stop:
@@ -170,36 +172,122 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 		var rawData bson.Raw
 
-		for query.Next(context.Background()) {
-			decodeErr := query.Decode(&rawData)
-			if decodeErr != nil {
-				log.Log.Errorw("Error decoding oplog entry", "error", decodeErr)
+		for {
+			gotResult, didTimeout, didLosePosition, err := readNextFromCursor(query)
 
+			if gotResult {
+				decodeErr := query.Decode(&rawData)
+				if decodeErr != nil {
+					log.Log.Errorw("Error decoding oplog entry", "error", decodeErr)
+
+				}
+
+				ts, pubs := tailer.unmarshalEntry(rawData)
+
+				if ts != nil {
+					lastTimestamp = *ts
+				}
+
+				for _, pub := range pubs {
+					if pub != nil {
+						out <- pub
+					} else {
+						log.Log.Error("Nil Redis publication")
+					}
+				}
+			} else if didTimeout {
+				log.Log.Info("Oplog cursor timed out, will retry")
+
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+
+				if queryErr != nil {
+					log.Log.Errorw("Error issuing tail query", "error", queryErr)
+					return
+				}
+
+				break
+			} else if didLosePosition {
+				// Our cursor expired. Make a new cursor to pick up from where we
+				// left off.
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+
+				if queryErr != nil {
+					log.Log.Errorw("Error issuing tail query", "error", queryErr)
+					return
+				}
+
+				break
+			} else if err != nil {
+				log.Log.Errorw("Error from oplog iterator",
+					"error", query.Err())
+
+				closeCursor(query)
+
+				return
+			} else {
+				log.Log.Errorw("Got no data from cursor, but also no error. This is unexpected; restarting query")
+
+				closeCursor(query)
+
+				return
 			}
+		}
+	}
+}
 
-			_, pubs := tailer.unmarshalEntry(rawData)
+func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, didLosePosition bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer cancel()
 
-			for _, pub := range pubs {
-				if pub != nil {
-					out <- pub
-				} else {
-					log.Log.Error("Nil Redis publication")
+	gotResult = cursor.Next(ctx)
+	err = cursor.Err()
+
+	if err != nil {
+		time.Sleep(requeryDuration)
+		didTimeout = ctx.Err() != nil
+
+		// check if the error is a position-lost error. These errors are best handled
+		// by just re-issueing the query on the same connection; no need to surface
+		// a major error and re-connect to mongo
+		// From: https://github.com/rwynn/gtm/blob/e02a1f9c1b79eb5f14ed26c86a23b920589d84c9/gtm.go#L547
+		var serverErr mongo.ServerError
+		if errors.As(err, &serverErr) {
+			// 136  : cursor capped position lost
+			// 286  : change stream history lost
+			// 280  : change stream fatal error
+			for _, code := range []int{136, 286, 280} {
+				if serverErr.HasErrorCode(code) {
+					didLosePosition = true
 				}
 			}
 		}
 
-		if query.Err() != nil {
-			log.Log.Errorw("Error from oplog iterator",
-				"error", query.Err())
+	}
 
-			closeErr := query.Close(context.Background())
-			if closeErr != nil {
-				log.Log.Errorw("Error from closing oplog iterator",
-					"error", closeErr)
-			}
+	return
+}
 
-			return
-		}
+func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp) (*mongo.Cursor, error) {
+	queryOpts := &options.FindOptions{}
+	queryOpts.SetSort(bson.M{"$natural": 1})
+	queryOpts.SetCursorType(options.TailableAwait)
+
+	queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer queryContextCancel()
+
+	return c.Find(queryContext, bson.M{
+		"ts": bson.M{"$gt": startTime},
+	}, queryOpts)
+}
+
+func closeCursor(cursor *mongo.Cursor) {
+	queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer queryContextCancel()
+
+	closeErr := cursor.Close(queryContext)
+	if closeErr != nil {
+		log.Log.Errorw("Error from closing oplog iterator",
+			"error", closeErr)
 	}
 }
 

@@ -36,6 +36,10 @@ services:
     volumes:
       - ../../scripts/wait-for.sh:/wait-for.sh
     command:
+      - /wait-for.sh
+      - --timeout=60
+      - mongo:27017
+      - --
       - /bin/oplogtoredis
   mongo:
     image: mongo:${MONGO_TAG}
