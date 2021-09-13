@@ -32,7 +32,6 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
-	log.Log.Info("STARTING MONGO CONNECT")
 	mongoSession, err := createMongoClient()
 	if err != nil {
 		panic("Error initializing oplog tailer: " + err.Error())

@@ -17,6 +17,10 @@ services:
       - --timeout=60
       - redis:6379
       - '--'
+      - /wait-for.sh
+      - --timeout=60
+      - oplogtoredis:9000
+      - '--'
       - /integration/acceptance/entry.sh
     environment:
       - MONGO_URL=mongodb://mongo/tests
@@ -40,20 +44,24 @@ services:
       - --timeout=60
       - mongo:27017
       - --
+      - /wait-for.sh
+      - --timeout=60
+      - redis:6379
+      - --
       - /bin/oplogtoredis
   mongo:
     image: mongo:${MONGO_TAG}
     environment:
       MONGO_ARGS: "${MONGO_ARGS}"
     command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0 $MONGO_ARGS"
-    logging:
-      driver: none
+    # logging:
+    #   driver: none
     volumes:
       - mongo_data:/data/db
   redis:
     image: redis:${REDIS_TAG}
-    logging:
-      driver: none
+    # logging:
+    #   driver: none
 
 volumes:
   mongo_data:
