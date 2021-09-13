@@ -10,16 +10,12 @@ services:
       - redis
     command:
       - /wait-for.sh
-      - --timeout=60
+      - --timeout=120
       - mongo:27017
       - '--'
       - /wait-for.sh
-      - --timeout=60
+      - --timeout=120
       - redis:6379
-      - '--'
-      - /wait-for.sh
-      - --timeout=60
-      - oplogtoredis:9000
       - '--'
       - /integration/acceptance/entry.sh
     environment:
@@ -40,14 +36,6 @@ services:
     volumes:
       - ../../scripts/wait-for.sh:/wait-for.sh
     command:
-      - /wait-for.sh
-      - --timeout=60
-      - mongo:27017
-      - --
-      - /wait-for.sh
-      - --timeout=60
-      - redis:6379
-      - --
       - /bin/oplogtoredis
   mongo:
     image: mongo:${MONGO_TAG}

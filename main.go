@@ -159,11 +159,6 @@ func createMongoClient() (*mongo.Client, error) {
 		return nil, errors.Wrap(err, "connecting to Mongo")
 	}
 
-	err = client.Ping(ctx, readpref.Primary())
-	if err != nil {
-		return nil, errors.Wrap(err, "pinging Mongo")
-	}
-
 	return client, nil
 }
 
