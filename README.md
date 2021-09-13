@@ -1,6 +1,6 @@
 # oplogtoredis
 
-[![Build Status](https://travis-ci.org/tulip/oplogtoredis.svg?branch=master)](https://travis-ci.org/tulip/oplogtoredis)
+[![Build Status](https://app.travis-ci.com/vlasky/oplogtoredis.svg?branch=master)](https://app.travis-ci.com/vlasky/oplogtoredis)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vlasky/oplogtoredis)](https://goreportcard.com/report/github.com/vlasky/oplogtoredis)
 [![GoDoc](https://godoc.org/github.com/vlasky/oplogtoredis?status.svg)](http://godoc.org/github.com/vlasky/oplogtoredis)
 
