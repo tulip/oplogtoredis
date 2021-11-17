@@ -209,6 +209,27 @@ func TestProcessOplogEntry(t *testing.T) {
 			},
 			want: nil,
 		},
+		"Config update": {
+			in: &oplogEntry{
+				DocID: bson.M{
+					"id":  bson.M{"Subtype": 4, "Data": "dGVzdA=="},
+					"uid": bson.M{"Subtype": 0, "Data": "MTIz"},
+				},
+				Operation:  "d",
+				Namespace:  "config.transactions",
+				Database:   "config",
+				Collection: "transactions",
+				TxIdx:      0,
+				Data: bson.M{
+					"_id": bson.M{
+						"id":  bson.M{"Subtype": 4, "Data": "dGVzdA=="},
+						"uid": bson.M{"Subtype": 0, "Data": "MTIz"},
+					},
+				},
+				Timestamp: primitive.Timestamp{T: 1636616135},
+			},
+			want: nil,
+		},
 	}
 
 	// helper to convert a redispub.Publication to a decodedPublication
