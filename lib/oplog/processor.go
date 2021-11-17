@@ -33,6 +33,12 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		return nil, nil
 	}
 
+	if op.Database == "config" {
+		// The Config database holds internal MongoDB structures, such as metadata
+		// about transactions and locks
+		return nil, nil
+	}
+
 	var idForChannel string
 	var idForMessage interface{}
 
