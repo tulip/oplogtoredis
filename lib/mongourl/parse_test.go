@@ -98,7 +98,7 @@ func TestParse(t *testing.T) {
 			// Go's URL parser is pretty permissive -- bad %-escaped values are
 			// one of the few ways to get it to error.
 			URL:           "mongodb://foo/bar%",
-			expectedError: errors.New("parse mongodb://foo/bar%: invalid URL escape \"%\""),
+			expectedError: errors.New("parse \"mongodb://foo/bar%\": invalid URL escape \"%\""),
 		},
 		"bad ?maxPoolSize": {
 			URL:           "mongodb://foo?maxPoolSize=notANumber",
