@@ -1,4 +1,4 @@
-FROM golang:1.12.9-alpine3.9
+FROM golang:1.14-alpine
 
 ADD scripts/wait-for.sh /wait-for.sh
 
