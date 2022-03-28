@@ -9,13 +9,12 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deckarep/golang-set v1.7.1
 	github.com/globalsign/mgo v0.0.0-20180424091348-efe0945164a7
-	github.com/go-redis/redis v6.10.0+incompatible
 	github.com/go-redis/redis/v7 v7.2.0
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
-	github.com/gorilla/websocket v1.2.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c // indirect
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68 // indirect
 	github.com/juju/loggo v0.0.0-20180327035014-7f1609ff1f3f // indirect
