@@ -40,8 +40,8 @@ RUN go test -c -o /test
 RUN go build -o /analyze analyzeBench.go
 
 
-FROM alpine:3.14
-RUN apk add --update --no-cache mongodb jq
+FROM mongo:4.4.13
+RUN apt install -qy jq && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /integration/bin
 
 COPY --from=acceptance          /test       /integration/bin/acceptance.test
