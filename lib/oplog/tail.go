@@ -202,7 +202,10 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 					}
 				}
 			} else if status.DidTimeout {
-				log.Log.Info("Oplog cursor timed out, will retry")
+				// Didn't get any messages for a while, keep trying.
+				// This is normal if nothing has been updated in mongo.
+				// Essentially this is a 'long poll'.
+				log.Log.Debug("Oplog cursor timed out, will retry")
 
 				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
 
