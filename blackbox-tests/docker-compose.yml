@@ -28,12 +28,12 @@ services:
     volumes:
       - ./certificates/ca.crt:/usr/local/share/ca-certificates/ca.crt:ro
   mongo:
-    image: mongo:4.0.5
+    image: mongo:4.4.13
     command: "mongod --replSet myapp --port 27017"
     volumes:
       - mongo_data:/data/db
   redis:
-    image: redis:3.2.4
+    image: redis:6.0.8
     logging:
       driver: none
     ports:

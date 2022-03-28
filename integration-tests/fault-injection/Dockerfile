@@ -1,6 +1,6 @@
 # This expects to be run with the root of the repo as the context directory
 
-FROM ubuntu:xenial-20190222
+FROM ubuntu:20.04
 
 # Install add-apt-repository
 # Add mongo, redis, and go repos
@@ -11,12 +11,12 @@ RUN apt-get update && \
     echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.6 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list && \
     apt-get update && \
     apt-get install -y \
-        mongodb-org=3.6.11 \
-        mongodb-org-server=3.6.11 \
-        mongodb-org-shell=3.6.11 \
-        mongodb-org-mongos=3.6.11 \
-        mongodb-org-tools=3.6.11 \
-        redis-server=2:3.0.6-1ubuntu0.4 \
+        mongodb-org=4.4.13 \
+        mongodb-org-server=4.4.13 \
+        mongodb-org-shell=4.4.13 \
+        mongodb-org-mongos=4.4.13 \
+        mongodb-org-tools=4.4.13 \
+        redis-server=5:5.0.7-2ubuntu0.1 \
         musl && \
         # did you know that if you build a binary with one libc and try to run it on a machine with a different one,
         # your shell will tell you `[executable]: No such file or directory.`? pretty fun thing to debug. this is why we

@@ -47,14 +47,14 @@ services:
       - '--'
       - /bin/oplogtoredis
   mongo:
-    image: mongo:3.2.19
+    image: mongo:4.4.13
     command: "mongod --replSet myapp --port 27017"
     logging:
       driver: none
     volumes:
       - mongo_data:/data/db
   redis:
-    image: redis:3.2.4
+    image: redis:6.0.8
     logging:
       driver: none
   testapp1: &meteor

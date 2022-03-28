@@ -34,4 +34,4 @@ services:
     volumes:
       - './.data/mongo-data:/data/db'
   redis:
-    image: redis:3.2.11
+    image: redis:6.0.8

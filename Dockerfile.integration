@@ -40,7 +40,7 @@ RUN go test -c -o /test
 RUN go build -o /analyze analyzeBench.go
 
 
-FROM alpine:3.9.4
+FROM alpine:3.14
 RUN apk add --update --no-cache mongodb jq
 RUN mkdir -p /integration/bin
 
