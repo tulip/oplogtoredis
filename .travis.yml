@@ -10,7 +10,7 @@ addons:
 
 language: go
 go:
-  - "1.12"
+  - "1.14"
 
 before_install:
   - docker --version
