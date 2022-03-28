@@ -75,14 +75,14 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	// We need to publish on both the full-collection channel and the
 	// single-document channel
 	return &redispub.Publication{
-		// The "collection" channel is used by redis-oplog for subscriptions
-		// that target arbitrary selectors
-		CollectionChannel: op.Namespace,
-
-		// The "specific" channel is used by redis-oplog as a performance
-		// optimization for subscriptions that target a specific ID
-		SpecificChannel: op.Namespace + "::" + idForChannel,
-
+		Channels: []string{
+			// The "collection" channel is used by redis-oplog for subscriptions
+			// that target arbitrary selectors
+			op.Namespace,
+			// The "specific" channel is used by redis-oplog as a performance
+			// optimization for subscriptions that target a specific ID
+			op.Namespace + "::" + idForChannel,
+		},
 		Msg:            msgJSON,
 		OplogTimestamp: op.Timestamp,
 

@@ -7,9 +7,8 @@ import (
 // Publication represents a message to be sent to Redis about an
 // oplog entry.
 type Publication struct {
-	// The two channels to send the message to
-	CollectionChannel string
-	SpecificChannel   string
+	// The channels to send the message to
+	Channels []string
 
 	// Msg is the message to send.
 	Msg []byte

@@ -17,8 +17,7 @@ import (
 
 func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 	publication := &Publication{
-		CollectionChannel: "a",
-		SpecificChannel:   "b",
+		Channels:          []string{"a", "b"},
 		Msg:               []byte("asdf"),
 		OplogTimestamp:    bson.MongoTimestamp(0),
 	}
@@ -47,8 +46,7 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 
 func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 	publication := &Publication{
-		CollectionChannel: "a",
-		SpecificChannel:   "b",
+		Channels:          []string{"a", "b"},
 		Msg:               []byte("asdf"),
 		OplogTimestamp:    bson.MongoTimestamp(0),
 	}
@@ -78,8 +76,7 @@ func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 
 func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 	publication := &Publication{
-		CollectionChannel: "a",
-		SpecificChannel:   "b",
+		Channels:          []string{"a", "b"},
 		Msg:               []byte("asdf"),
 		OplogTimestamp:    bson.MongoTimestamp(0),
 	}

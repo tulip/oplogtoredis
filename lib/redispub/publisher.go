@@ -7,6 +7,7 @@ package redispub
 import (
 	"fmt"
 	"time"
+	"strings"
 
 	"github.com/tulip/oplogtoredis/lib/log"
 
@@ -30,8 +31,9 @@ type PublishOpts struct {
 var publishDedupe = redis.NewScript(`
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
-		redis.call("PUBLISH", ARGV[3], ARGV[2])
-		redis.call("PUBLISH", ARGV[4], ARGV[2])
+		for w in string.gmatch(ARGV[3], "([^$]+)") do
+			redis.call("PUBLISH", w, ARGV[2])
+		end
 	end
 
 	return true
@@ -136,10 +138,9 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 			// The TxIdx field is used to ensure that each entry in a transaction has its own unique key.
 			formatKey(p, prefix),
 		},
-		dedupeExpirationSeconds, // ARGV[1], expiration time
-		p.Msg,                   // ARGV[2], message
-		p.CollectionChannel,     // ARGV[3], channel #1
-		p.SpecificChannel,       // ARGV[4], channel #2
+		dedupeExpirationSeconds,       // ARGV[1], expiration time
+		p.Msg,                         // ARGV[2], message
+		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
 	return err
