@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/integration-tests/meteor/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/meteor/harness"
 )
 
 func TestObjectID(t *testing.T) {
@@ -24,15 +24,17 @@ func TestObjectID(t *testing.T) {
 	require.NoError(t, meteor1.Send(harness.DDPMethod("methodCallId", "objectIDTest.increment")))
 
 	// On meteor1, we should get changed and result, and then updated
-	meteor1.VerifyReceive(t, harness.DDPMsgGroup{
+	received := meteor1.VerifyReceive(t, harness.DDPMsgGroup{
 		harness.DDPResult("methodCallId", harness.DDPData{}),
 
 		harness.DDPChanged("objectIDTest", "5ae7d0042b2acc1f1796c0b6", harness.DDPData{
 			"value": 1,
 		}, []string{}),
-	}, harness.DDPMsgGroup{
+
 		harness.DDPUpdated([]string{"methodCallId"}),
 	})
+
+	received.VerifyUpdatedComesAfterAllChanges(t)
 
 	// On meteor2, we should just get changed
 	meteor2.VerifyReceive(t, harness.DDPMsgGroup{

@@ -1,26 +1,32 @@
 package harness
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
 	"time"
 
-	"github.com/globalsign/mgo"
-	"gopkg.in/mgo.v2/bson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // RunInserts performs a series of inserts into a Test collection.
 //
 // It returns an array of the _id for every successful insert
 // (unsuccessful inserts are ignored)
-func RunInserts(client *mgo.Database, numInserts int, frequency time.Duration) []string {
+func RunInserts(client *mongo.Database, numInserts int, frequency time.Duration) []string {
 	result := []string{}
 
 	for i := 0; i < numInserts; i++ {
 		id := fmt.Sprintf("doc%d", i)
 
-		err := client.C("Test").Insert(bson.M{
+		// We set a 500ms timout for the insert: long enough that the insert will
+		// succeed if Mongo is working normally, but too short for it to retry during
+		// a failover
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		_, err := client.Collection("Test").InsertOne(ctx, bson.M{
 			"_id": id,
 		})
 
@@ -46,13 +52,13 @@ type BackgroundInserter struct {
 
 // Run100InsertsInBackground runs RunInserts in a background goroutine
 // It attempts 100 inserts over at least 10 seconds.
-func Run100InsertsInBackground(client *mgo.Database) *BackgroundInserter {
+func Run100InsertsInBackground(client *mongo.Database) *BackgroundInserter {
 	return RunInsertsInBackground(client, 100, 100*time.Millisecond)
 }
 
 // RunInsertsInBackground is a more customizable version of Run100InsertsInBackground
 // allowing you to set the number of inserts and how fast to perform them.
-func RunInsertsInBackground(client *mgo.Database, numInserts int, frequency time.Duration) *BackgroundInserter {
+func RunInsertsInBackground(client *mongo.Database, numInserts int, frequency time.Duration) *BackgroundInserter {
 	inserter := BackgroundInserter{
 		waitGroup: &sync.WaitGroup{},
 	}

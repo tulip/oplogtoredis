@@ -1,10 +1,15 @@
-FROM golang:1.14-alpine
+FROM golang:1.17.0-alpine3.14
 
 ADD scripts/wait-for.sh /wait-for.sh
 
-RUN apk --update --no-cache add git openssh mongodb gcc cyrus-sasl cyrus-sasl-dev musl-dev && \
+RUN apk --update --no-cache add git openssh gcc cyrus-sasl cyrus-sasl-dev musl-dev && \
     mkdir -p /oplogtoredis && \
     go get github.com/pilu/fresh
+
+RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/main' >> /etc/apk/repositories
+RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/community' >> /etc/apk/repositories
+RUN apk update
+RUN apk add mongodb=3.4.4-r0
 
 WORKDIR /oplogtoredis
 

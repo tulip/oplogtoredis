@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/integration-tests/meteor/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/meteor/harness"
 )
 
 func TestUpdate(t *testing.T) {
@@ -24,16 +24,18 @@ func TestUpdate(t *testing.T) {
 	require.NoError(t, meteor1.Send(harness.DDPMethod("methodCallId", "tasks.setChecked", harness.DDPFirstRandomID, true)))
 
 	// On meteor1, we should get changed and result, and then updated
-	meteor1.VerifyReceive(t, harness.DDPMsgGroup{
+	received := meteor1.VerifyReceive(t, harness.DDPMsgGroup{
 		harness.DDPResult("methodCallId", harness.DDPData{}),
 
 		// We know this ID because we pass a fixed random seed with DDP method calls
 		harness.DDPChanged("tasks", harness.DDPFirstRandomID, harness.DDPData{
 			"checked": true,
 		}, []string{}),
-	}, harness.DDPMsgGroup{
+
 		harness.DDPUpdated([]string{"methodCallId"}),
 	})
+
+	received.VerifyUpdatedComesAfterAllChanges(t)
 
 	// On meteor2, we should just get changed
 	meteor2.VerifyReceive(t, harness.DDPMsgGroup{

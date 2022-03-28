@@ -9,9 +9,9 @@ import (
 	"time"
 	"strings"
 
-	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/vlasky/oplogtoredis/lib/log"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis/v7"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -58,7 +58,7 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
-	timestampC := make(chan bson.MongoTimestamp)
+	timestampC := make(chan primitive.Timestamp)
 	go periodicallyUpdateTimestamp(client, timestampC, opts)
 
 	// Redis expiration is in integer seconds, so we have to convert the
@@ -155,9 +155,9 @@ func formatKey(p *Publication, prefix string) string {
 // channel, and this function throttles that to only update occasionally.
 //
 // This blocks forever; it should be run in a goroutine
-func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan bson.MongoTimestamp, opts *PublishOpts) {
+func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts) {
 	var lastFlush time.Time
-	var mostRecentTimestamp bson.MongoTimestamp
+	var mostRecentTimestamp primitive.Timestamp
 	var needFlush bool
 
 	flush := func() {

@@ -1,6 +1,6 @@
 # expects build context of oplogtoredis
 
-FROM golang:1.14-alpine AS integration_base
+FROM golang:1.17.0-alpine3.14 AS integration_base
 
 ENV GO111MODULE on
 

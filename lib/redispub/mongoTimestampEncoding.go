@@ -4,32 +4,29 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Converts a bson.MongoTimestamp into a string (in base-10)
-func encodeMongoTimestamp(ts bson.MongoTimestamp) string {
-	return strconv.FormatInt(int64(ts), 10)
+// Converts a primitive.Timestamp into a string (in base-10). For backwards
+// compatiblity, we use the same encoding that's using in the MongoDB wire
+// protocol (encoding the 2 uint32 components of the timestamp as a single
+// uint64).
+func encodeMongoTimestamp(ts primitive.Timestamp) string {
+	return strconv.FormatUint(uint64(ts.T)<<32|uint64(ts.I), 10)
 }
 
-// Converts a string (in base-10) into a bson.MongoTimestamp
-func decodeMongoTimestamp(ts string) (bson.MongoTimestamp, error) {
-	i, err := strconv.ParseInt(ts, 10, 64)
+// Converts a string (in base-10) into a primitive.Timestamp
+func decodeMongoTimestamp(ts string) (primitive.Timestamp, error) {
+	i, err := strconv.ParseUint(ts, 10, 64)
 
 	if err != nil {
-		return bson.MongoTimestamp(0), err
+		return primitive.Timestamp{}, err
 	}
 
-	return bson.MongoTimestamp(i), nil
+	return primitive.Timestamp{T: uint32(i >> 32), I: uint32(i)}, nil
 }
 
-// Returns a time.Time from a bson.MongoTimestamp
-//
-// Mongo timestamps are 64-bit integers where the first 32 bits are seconds
-// since the unix epoch, and the last 32 bits are a unique, monotonically-
-// increasing value within that second (to guarantee uniqueness), so we read
-// only the first 32 bits to convert to a real time.
-func mongoTimestampToTime(ts bson.MongoTimestamp) time.Time {
-	unixTS := int64(ts) >> 32
-	return time.Unix(unixTS, 0)
+// Returns a time.Time from a primitive.Timestamp
+func mongoTimestampToTime(ts primitive.Timestamp) time.Time {
+	return time.Unix(int64(ts.T), 0)
 }

@@ -5,24 +5,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func TestEncodeMongoTimestamp(t *testing.T) {
 	tests := map[string]struct {
-		in   bson.MongoTimestamp
+		in   primitive.Timestamp
 		want string
 	}{
-		"Simple timestamp": {
-			in:   bson.MongoTimestamp(1234),
+		"Simple timestamp (I only)": {
+			in:   primitive.Timestamp{I: 1234},
 			want: "1234",
+		},
+		"Simple timestamp (T only)": {
+			in:   primitive.Timestamp{T: 1234},
+			want: "5299989643264",
+		},
+		"Simple timestamp (I and T)": {
+			in:   primitive.Timestamp{T: 1234, I: 5678},
+			want: "5299989648942",
 		},
 		"Zero value": {
 			want: "0",
 		},
 		"Max value": {
-			in:   bson.MongoTimestamp(9223372036854775807),
-			want: "9223372036854775807",
+			in:   primitive.Timestamp{T: 4294967295, I: 4294967295},
+			want: "18446744073709551615",
 		},
 	}
 
@@ -31,8 +39,8 @@ func TestEncodeMongoTimestamp(t *testing.T) {
 			got := encodeMongoTimestamp(test.in)
 
 			if got != test.want {
-				t.Errorf("encodeMongoTimestamp(%d) = \"%s\", wanted \"%s\"",
-					test.in, got, test.want)
+				t.Errorf("encodeMongoTimestamp(%d, %d) = \"%s\", wanted \"%s\"",
+					test.in.T, test.in.I, got, test.want)
 			}
 		})
 	}
@@ -41,24 +49,31 @@ func TestEncodeMongoTimestamp(t *testing.T) {
 func TestDecodeMongoTimestamp(t *testing.T) {
 	tests := map[string]struct {
 		in      string
-		want    bson.MongoTimestamp
+		want    primitive.Timestamp
 		wantErr error
 	}{
-		"Simple timestamp": {
+		"Simple timestamp (I only)": {
+			want: primitive.Timestamp{I: 1234},
 			in:   "1234",
-			want: bson.MongoTimestamp(1234),
+		},
+		"Simple timestamp (T only)": {
+			want: primitive.Timestamp{T: 1234},
+			in:   "5299989643264",
+		},
+		"Simple timestamp (I and T)": {
+			want: primitive.Timestamp{T: 1234, I: 5678},
+			in:   "5299989648942",
 		},
 		"Zero value": {
-			in:   "0",
-			want: bson.MongoTimestamp(0),
+			in: "0",
 		},
 		"Max value": {
-			in:   "9223372036854775807",
-			want: bson.MongoTimestamp(9223372036854775807),
+			want: primitive.Timestamp{T: 4294967295, I: 4294967295},
+			in:   "18446744073709551615",
 		},
 		"Error": {
 			in:      "nope",
-			wantErr: errors.New("strconv.ParseInt: parsing \"nope\": invalid syntax"),
+			wantErr: errors.New("strconv.ParseUint: parsing \"nope\": invalid syntax"),
 		},
 	}
 
@@ -81,9 +96,9 @@ func TestDecodeMongoTimestamp(t *testing.T) {
 					test.in, err, test.wantErr)
 			}
 
-			if got != test.want {
-				t.Errorf("decodeMongoTimestamp(%s) = %d, wanted %d",
-					test.in, got, test.want)
+			if !got.Equal(test.want) {
+				t.Errorf("decodeMongoTimestamp(%s) = %d, %d, wanted %d, %d",
+					test.in, got.T, got.I, test.want.T, test.want.I)
 			}
 		})
 	}
@@ -91,18 +106,18 @@ func TestDecodeMongoTimestamp(t *testing.T) {
 
 func TestMongoTimestampToTime(t *testing.T) {
 	tests := map[string]struct {
-		in   bson.MongoTimestamp
+		in   primitive.Timestamp
 		want time.Time
 	}{
 		"Simple timestamp": {
-			in:   bson.MongoTimestamp(6556905427232097490),
+			in:   primitive.Timestamp{T: 1526648511},
 			want: time.Unix(1526648511, 0),
 		},
 		"Zero value": {
 			want: time.Unix(0, 0),
 		},
 		"Max value": {
-			in:   bson.MongoTimestamp(9223372036854775807),
+			in:   primitive.Timestamp{T: 2147483647},
 			want: time.Unix(2147483647, 0),
 		},
 	}

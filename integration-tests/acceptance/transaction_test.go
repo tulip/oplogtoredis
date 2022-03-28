@@ -8,15 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
 
 	"github.com/stretchr/testify/require"
-	. "go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-// we're using the official mongo go driver because mgo was behaving weirdly re: transactions.
 
 func TestTransaction(t *testing.T) {
 	h := startHarness()
@@ -30,8 +28,8 @@ func TestTransaction(t *testing.T) {
 
 	require.NoError(t, client.Connect(ctx))
 
-	var serverStatus M
-	err = client.Database("test").RunCommand(ctx, D{{Key: "serverStatus", Value: 1}}).Decode(&serverStatus)
+	var serverStatus bson.M
+	err = client.Database("test").RunCommand(ctx, bson.D{{Key: "serverStatus", Value: 1}}).Decode(&serverStatus)
 	require.NoError(t, err)
 
 	ver := strings.SplitN(serverStatus["version"].(string), ".", 2)[0]
@@ -46,7 +44,7 @@ func TestTransaction(t *testing.T) {
 	// not easy to explicitly create a collection with this library:
 	// https://jira.mongodb.org/browse/GODRIVER-1147
 	// and you can't create collections (even implicitly) in transactions, so we need to do this ahead of time
-	_, err = client.Database("test").Collection("Tx").InsertOne(ctx, M{"test": "abc", "_id": "dummy"})
+	_, err = client.Database("test").Collection("Tx").InsertOne(ctx, bson.M{"test": "abc", "_id": "dummy"})
 	require.NoError(t, err)
 	h.resetMessages()
 
@@ -56,16 +54,16 @@ func TestTransaction(t *testing.T) {
 	_, err = session.WithTransaction(ctx, func(sc mongo.SessionContext) (interface{}, error) {
 		tx := sc.Client().Database("test").Collection("Tx")
 
-		_, err := tx.InsertOne(sc, M{
+		_, err := tx.InsertOne(sc, bson.M{
 			"_id": "foo",
 			"bar": "baz",
 		})
 		require.NoError(t, err)
 
-		_, err = tx.UpdateOne(sc, M{
+		_, err = tx.UpdateOne(sc, bson.M{
 			"_id": "foo",
-		}, M{
-			"$set": M{"bar": "quux"},
+		}, bson.M{
+			"$set": bson.M{"bar": "quux"},
 		})
 		require.NoError(t, err)
 

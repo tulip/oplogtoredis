@@ -4,23 +4,28 @@
 package oplog
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"time"
 
-	"github.com/tulip/oplogtoredis/lib/log"
-	"github.com/tulip/oplogtoredis/lib/redispub"
+	"github.com/vlasky/oplogtoredis/lib/config"
+	"github.com/vlasky/oplogtoredis/lib/log"
+	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Tailer persistently tails the oplog of a Mongo cluster, handling
 // reconnection and resumption of where it left off.
 type Tailer struct {
-	MongoClient *mgo.Session
+	MongoClient *mongo.Client
 	RedisClient redis.UniversalClient
 	RedisPrefix string
 	MaxCatchUp  time.Duration
@@ -28,7 +33,7 @@ type Tailer struct {
 
 // Raw oplog entry from Mongo
 type rawOplogEntry struct {
-	Timestamp    bson.MongoTimestamp `bson:"ts"`
+	Timestamp    primitive.Timestamp `bson:"ts"`
 	HistoryID    int64               `bson:"h"`
 	MongoVersion int                 `bson:"v"`
 	Operation    string              `bson:"op"`
@@ -113,26 +118,50 @@ func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
 }
 
 func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan bool) {
-	session := tailer.MongoClient.Copy()
-	oplogCollection := session.DB("local").C("oplog.rs")
+	session, err := tailer.MongoClient.StartSession()
+	if err != nil {
+		log.Log.Errorw("Failed to start Mongo session", "error", err)
+		return
+	}
 
-	startTime := tailer.getStartTime(func() (bson.MongoTimestamp, error) {
+	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
+
+	startTime := tailer.getStartTime(func() (primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
-		mongoErr := oplogCollection.Find(bson.M{}).Sort("-$natural").One(&entry)
+		findOneOpts := &options.FindOneOptions{}
+		findOneOpts.SetSort(bson.M{"$natural": -1})
+
+		queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+		defer queryContextCancel()
+
+		result := oplogCollection.FindOne(queryContext, bson.M{}, findOneOpts)
+
+		if result.Err() != nil {
+			return entry.Timestamp, result.Err()
+		}
+
+		decodeErr := result.Decode(&entry)
+
+		if decodeErr != nil {
+			return entry.Timestamp, decodeErr
+		}
 
 		log.Log.Infow("Got latest oplog entry",
-			"entry", entry,
-			"error", mongoErr)
+			"entry", entry)
 
-		return entry.Timestamp, mongoErr
+		return entry.Timestamp, nil
 	})
 
-	query := oplogCollection.Find(bson.M{"ts": bson.M{"$gt": startTime}})
-	iter := query.LogReplay().Sort("$natural").Tail(requeryDuration)
+	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
-	var lastTimestamp bson.MongoTimestamp
+	if queryErr != nil {
+		log.Log.Errorw("Error issuing tail query", "error", queryErr)
+		return
+	}
+
+	lastTimestamp := startTime
 	for {
 		select {
 		case <-stop:
@@ -143,45 +172,126 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 		var rawData bson.Raw
 
-		for iter.Next(&rawData) {
-			ts, pubs := tailer.unmarshalEntry(rawData)
+		for {
+			gotResult, didTimeout, didLosePosition, err := readNextFromCursor(query)
 
-			if ts != nil {
-				lastTimestamp = *ts
+			if gotResult {
+				decodeErr := query.Decode(&rawData)
+				if decodeErr != nil {
+					log.Log.Errorw("Error decoding oplog entry", "error", decodeErr)
+
+				}
+
+				ts, pubs := tailer.unmarshalEntry(rawData)
+
+				if ts != nil {
+					lastTimestamp = *ts
+				}
+
+				for _, pub := range pubs {
+					if pub != nil {
+						out <- pub
+					} else {
+						log.Log.Error("Nil Redis publication")
+					}
+				}
+			} else if didTimeout {
+				log.Log.Info("Oplog cursor timed out, will retry")
+
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+
+				if queryErr != nil {
+					log.Log.Errorw("Error issuing tail query", "error", queryErr)
+					return
+				}
+
+				break
+			} else if didLosePosition {
+				// Our cursor expired. Make a new cursor to pick up from where we
+				// left off.
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+
+				if queryErr != nil {
+					log.Log.Errorw("Error issuing tail query", "error", queryErr)
+					return
+				}
+
+				break
+			} else if err != nil {
+				log.Log.Errorw("Error from oplog iterator",
+					"error", query.Err())
+
+				closeCursor(query)
+
+				return
+			} else {
+				log.Log.Errorw("Got no data from cursor, but also no error. This is unexpected; restarting query")
+
+				closeCursor(query)
+
+				return
 			}
+		}
+	}
+}
 
-			for _, pub := range pubs {
-				if pub != nil {
-					out <- pub
-				} else {
-					log.Log.Error("Nil Redis publication")
+func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, didLosePosition bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer cancel()
+
+	gotResult = cursor.Next(ctx)
+	err = cursor.Err()
+
+	if err != nil {
+		// Wait briefly before determining whether the failure was a timeout: because
+		// the MongoDB go driver passes the context on to lower-level networking
+		// components, it's possible for the query to fail *before* the context
+		// is marked as timed-out
+		time.Sleep(100 * time.Millisecond)
+		didTimeout = ctx.Err() != nil
+
+		// check if the error is a position-lost error. These errors are best handled
+		// by just re-issueing the query on the same connection; no need to surface
+		// a major error and re-connect to mongo
+		// From: https://github.com/rwynn/gtm/blob/e02a1f9c1b79eb5f14ed26c86a23b920589d84c9/gtm.go#L547
+		var serverErr mongo.ServerError
+		if errors.As(err, &serverErr) {
+			// 136  : cursor capped position lost
+			// 286  : change stream history lost
+			// 280  : change stream fatal error
+			for _, code := range []int{136, 286, 280} {
+				if serverErr.HasErrorCode(code) {
+					didLosePosition = true
 				}
 			}
 		}
 
-		if iter.Err() != nil {
-			log.Log.Errorw("Error from oplog iterator",
-				"error", iter.Err())
+	}
 
-			closeErr := iter.Close()
-			if closeErr != nil {
-				log.Log.Errorw("Error from closing oplog iterator",
-					"error", closeErr)
-			}
+	return
+}
 
-			return
-		}
+func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp) (*mongo.Cursor, error) {
+	queryOpts := &options.FindOptions{}
+	queryOpts.SetSort(bson.M{"$natural": 1})
+	queryOpts.SetCursorType(options.TailableAwait)
 
-		if iter.Timeout() {
-			// Didn't get any messages for a while, keep trying
-			log.Log.Info("Oplog cursor timed out, will retry")
-			continue
-		}
+	queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer queryContextCancel()
 
-		// Our cursor expired. Make a new cursor to pick up from where we
-		// left off.
-		query := oplogCollection.Find(bson.M{"ts": bson.M{"$gt": lastTimestamp}})
-		iter = query.LogReplay().Sort("$natural").Tail(requeryDuration)
+	return c.Find(queryContext, bson.M{
+		"ts": bson.M{"$gt": startTime},
+	}, queryOpts)
+}
+
+func closeCursor(cursor *mongo.Cursor) {
+	queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
+	defer queryContextCancel()
+
+	closeErr := cursor.Close(queryContext)
+	if closeErr != nil {
+		log.Log.Errorw("Error from closing oplog iterator",
+			"error", closeErr)
 	}
 }
 
@@ -189,10 +299,10 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTimestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
-	err := rawData.Unmarshal(&result)
+	err := bson.Unmarshal(rawData, &result)
 	if err != nil {
 		log.Log.Errorw("Error unmarshalling oplog entry", "error", err)
 		return
@@ -206,7 +316,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 
 	status := "ignored"
 	database := "(no database)"
-	messageLen := float64(len(rawData.Data))
+	messageLen := float64(len(rawData))
 
 	defer func() {
 		// TODO: remove these in a future version
@@ -236,7 +346,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 				err: err,
 				op:  entry,
 			})
-		} else {
+		} else if pub != nil {
 			pubs = append(pubs, pub)
 		}
 	}
@@ -259,12 +369,12 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *bson.MongoTim
 	return
 }
 
-// Gets the bson.MongoTimestamp from which we should start tailing
+// Gets the primitive.Timestamp from which we should start tailing
 //
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (bson.MongoTimestamp, error)) bson.MongoTimestamp {
+func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (primitive.Timestamp, error)) primitive.Timestamp {
 	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClient, tailer.RedisPrefix)
 
 	if redisErr == nil {
@@ -285,13 +395,13 @@ func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (bson.Mon
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
 	if mongoErr == nil {
-		log.Log.Infof("Starting tailing from end of oplog (timestamp %d)", int64(mongoOplogEndTimestamp))
+		log.Log.Infof("Starting tailing from end of oplog (timestamp %d)", mongoOplogEndTimestamp.T)
 		return mongoOplogEndTimestamp
 	}
 
 	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
 		"error", mongoErr)
-	return bson.MongoTimestamp(time.Now().Unix() << 32)
+	return primitive.Timestamp{T: uint32(time.Now().Unix() << 32)}
 }
 
 // converts a rawOplogEntry to an oplogEntry
@@ -304,7 +414,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 	switch entry.Operation {
 	case operationInsert, operationUpdate, operationRemove:
 		var data map[string]interface{}
-		if err := entry.Doc.Unmarshal(&data); err != nil {
+		if err := bson.Unmarshal(entry.Doc, &data); err != nil {
 			log.Log.Errorf("unmarshalling oplog entry data: %v", err)
 			return nil
 		}
@@ -339,7 +449,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 			ApplyOps []rawOplogEntry `bson:"applyOps"`
 		}
 
-		if err := entry.Doc.Unmarshal(&txData); err != nil {
+		if err := bson.Unmarshal(entry.Doc, &txData); err != nil {
 			log.Log.Errorf("unmarshaling transaction data: %v", err)
 			return nil
 		}

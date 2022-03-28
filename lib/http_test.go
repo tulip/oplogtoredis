@@ -11,7 +11,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/lib/oplog"
+	"github.com/vlasky/oplogtoredis/lib/oplog"
 )
 
 func TestPromHTTP(t *testing.T) {

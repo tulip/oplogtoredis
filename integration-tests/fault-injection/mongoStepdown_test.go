@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test triggers a mongo stepdown during execution. We expect that every
@@ -20,13 +21,13 @@ func TestMongoStepdown(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, true)
-	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
+	inserter := harness.Run100InsertsInBackground(mongoClient.Database(mongo.DBName))
 
 	time.Sleep(time.Second)
 	mongo.StepDown()

@@ -18,6 +18,8 @@ type oplogtoredisConfiguration struct {
 	MaxCatchUp             time.Duration `default:"60s" split_words:"true"`
 	RedisDedupeExpiration  time.Duration `default:"120s" split_words:"true"`
 	RedisMetadataPrefix    string        `default:"oplogtoredis::" split_words:"true"`
+	MongoConnectTimeout    time.Duration `default:"10s" split_words:"true"`
+	MongoQueryTimeout      time.Duration `default:"5s" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -101,6 +103,21 @@ func RedisDedupeExpiration() time.Duration {
 // defaults to "oplogtoredis::".
 func RedisMetadataPrefix() string {
 	return globalConfig.RedisMetadataPrefix
+}
+
+// MongoConnectTimeout controls how long we'll spend connecting to Mongo before
+// timing out at startup.
+func MongoConnectTimeout() time.Duration {
+	return globalConfig.MongoConnectTimeout
+}
+
+// MongoQueryTimeout controls how long we'll spend waiting for the result of
+// a query before timing out. This includes how long we'll wait for an oplog
+// entry before timing out and re-issuing the oplog query if there is no
+// oplog activity, so if you set this to a short duration on a rarely-active
+// cluster, you'll see a lot of (harmless) timeouts.
+func MongoQueryTimeout() time.Duration {
+	return globalConfig.MongoQueryTimeout
 }
 
 // ParseEnv parses the current environment variables and updates the stored

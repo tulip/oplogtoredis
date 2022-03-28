@@ -9,13 +9,15 @@ import (
 	"os/signal"
 	"sync"
 
-	"github.com/tulip/oplogtoredis/lib/config"
-	"github.com/tulip/oplogtoredis/lib/log"
-	"github.com/tulip/oplogtoredis/lib/mongourl"
-	"github.com/tulip/oplogtoredis/lib/oplog"
-	"github.com/tulip/oplogtoredis/lib/redispub"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 
-	"github.com/globalsign/mgo"
+	"github.com/vlasky/oplogtoredis/lib/config"
+	"github.com/vlasky/oplogtoredis/lib/log"
+	"github.com/vlasky/oplogtoredis/lib/oplog"
+	"github.com/vlasky/oplogtoredis/lib/redispub"
+
 	"github.com/go-redis/redis/v7"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -32,9 +34,17 @@ func main() {
 
 	mongoSession, err := createMongoClient()
 	if err != nil {
-		panic("Error initialize oplog tailer: " + err.Error())
+		panic("Error initializing oplog tailer: " + err.Error())
 	}
-	defer mongoSession.Close()
+	defer func() {
+		mongoCloseCtx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+		defer cancel()
+
+		mongoCloseErr := mongoSession.Disconnect(mongoCloseCtx)
+		if mongoCloseErr != nil {
+			log.Log.Errorw("Error closing Mongo client", "error", mongoCloseErr)
+		}
+	}()
 	log.Log.Info("Initialized connection to Mongo")
 
 	redisClient, err := createRedisClient()
@@ -59,7 +69,7 @@ func main() {
 	// The redispub.PublishStream goroutine reads messages from the buffered channel
 	// and sends them to Redis.
 	//
-	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
+	// TODO PERF: Use a leaky buffer (https://github.com/vlasky/oplogtoredis/issues/2)
 	redisPubs := make(chan *redispub.Publication, 10000)
 	waitGroup := sync.WaitGroup{}
 
@@ -132,29 +142,24 @@ func main() {
 }
 
 // Connects to mongo
-func createMongoClient() (*mgo.Session, error) {
-	// configure mgo to use our logger
-	stdLog, err := zap.NewStdLogAt(log.RawLog, zap.InfoLevel)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating std logger")
-	}
+func createMongoClient() (*mongo.Client, error) {
+	clientOptions := options.Client()
+	clientOptions.ApplyURI(config.MongoURL())
 
-	mgo.SetLogger(stdLog)
-
-	// get a mgo session
-	dialInfo, err := mongourl.Parse(config.MongoURL())
+	err := clientOptions.Validate()
 	if err != nil {
 		return nil, errors.Wrap(err, "parsing Mongo URL")
 	}
 
-	session, err := mgo.DialWithInfo(dialInfo)
+	ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+	defer cancel()
+	client, err := mongo.Connect(ctx, clientOptions)
+
 	if err != nil {
-		return nil, errors.Wrap(err, "connecting to mongo")
+		return nil, errors.Wrap(err, "connecting to Mongo")
 	}
 
-	session.SetMode(mgo.Monotonic, true)
-
-	return session, nil
+	return client, nil
 }
 
 // Goroutine that just reads messages and sends them to Redis. We don't do this
@@ -201,7 +206,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	return client, nil
 }
 
-func makeHTTPServer(redis redis.UniversalClient, mongo *mgo.Session) *http.Server {
+func makeHTTPServer(redis redis.UniversalClient, mongo *mongo.Client) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -212,7 +217,10 @@ func makeHTTPServer(redis redis.UniversalClient, mongo *mgo.Session) *http.Serve
 				"error", redisErr)
 		}
 
-		mongoErr := mongo.Ping()
+		ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+		defer cancel()
+
+		mongoErr := mongo.Ping(ctx, readpref.Primary())
 		mongoOK := mongoErr == nil
 
 		if !mongoOK {
