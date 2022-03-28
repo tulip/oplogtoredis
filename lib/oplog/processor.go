@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/vlasky/oplogtoredis/lib/log"
-	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -16,7 +16,7 @@ var ErrUnsupportedDocIDType = errors.New("unsupported document _id type")
 // be published for this oplog entry, or nil if nothing should be published.
 //
 // TODO PERF: Add options for filtering to specific collections or
-// databases (https://github.com/vlasky/oplogtoredis/issues/8)
+// databases (https://github.com/tulip/oplogtoredis/issues/8)
 func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	// Struct that matches the message format redis-oplog expects
 	type outgoingMessageDocument struct {
@@ -65,7 +65,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	// Construct the JSON we're going to send to Redis
 	//
 	// TODO PERF: consider a specialized JSON encoder
-	// https://github.com/vlasky/oplogtoredis/issues/13
+	// https://github.com/tulip/oplogtoredis/issues/13
 	msg := outgoingMessage{
 		Event:  eventNameForOperation(op),
 		Doc:    outgoingMessageDocument{idForMessage},

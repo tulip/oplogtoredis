@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
-	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 

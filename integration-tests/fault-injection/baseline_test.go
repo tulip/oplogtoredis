@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // The baseline test does not inject any faults. It's here to test the

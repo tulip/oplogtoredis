@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )

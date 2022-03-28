@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vlasky/oplogtoredis/integration-tests/fault-injection/harness"
+	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 )
 
 // This test restarts oplogtoredis partway through the test to test the

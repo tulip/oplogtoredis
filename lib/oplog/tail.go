@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vlasky/oplogtoredis/lib/config"
-	"github.com/vlasky/oplogtoredis/lib/log"
-	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"github.com/tulip/oplogtoredis/lib/config"
+	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

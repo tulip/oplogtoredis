@@ -3,7 +3,7 @@ package oplog
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/vlasky/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 

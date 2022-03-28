@@ -13,10 +13,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
-	"github.com/vlasky/oplogtoredis/lib/config"
-	"github.com/vlasky/oplogtoredis/lib/log"
-	"github.com/vlasky/oplogtoredis/lib/oplog"
-	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"github.com/tulip/oplogtoredis/lib/config"
+	"github.com/tulip/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/oplog"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 
 	"github.com/go-redis/redis/v7"
 	"github.com/pkg/errors"
@@ -69,7 +69,7 @@ func main() {
 	// The redispub.PublishStream goroutine reads messages from the buffered channel
 	// and sends them to Redis.
 	//
-	// TODO PERF: Use a leaky buffer (https://github.com/vlasky/oplogtoredis/issues/2)
+	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
 	redisPubs := make(chan *redispub.Publication, 10000)
 	waitGroup := sync.WaitGroup{}
 

@@ -3,7 +3,7 @@ package harness
 import (
 	"os"
 
-	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 )
 
 var server1Conn *DDPConn

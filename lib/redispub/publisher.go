@@ -9,7 +9,7 @@ import (
 	"time"
 	"strings"
 
-	"github.com/vlasky/oplogtoredis/lib/log"
+	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/go-redis/redis/v7"

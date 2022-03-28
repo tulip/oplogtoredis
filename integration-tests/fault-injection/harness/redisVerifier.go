@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v7"
-	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 )
 
 // RedisVerifier subscribes to the publications that a BackgroundInserter should

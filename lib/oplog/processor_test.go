@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/pkg/errors"
-	"github.com/vlasky/oplogtoredis/lib/redispub"
+	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson"
 )
 

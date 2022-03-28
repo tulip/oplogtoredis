@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vlasky/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
