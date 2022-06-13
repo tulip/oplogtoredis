@@ -8,6 +8,7 @@ cd $(dirname $SCRIPT_DIR)
 
 CERTS_DIR="$(pwd)/blackbox-tests/certificates"
 mkdir -p $CERTS_DIR
+rm -f $CERTS_DIR/*
 
 function cleanup() {
   rm -rf blackbox-tests/certificates
@@ -19,6 +20,13 @@ docker build -f blackbox-tests/Dockerfile.cert-generator blackbox-tests -t cert-
 docker run \
   --mount type=bind,source=$CERTS_DIR,target=/shared-volume \
   cert-generator
+
+# Set the perms here, as this is cumbersome in docker
+pushd $CERTS_DIR > /dev/null
+cp server-cert.pem.gen server-cert.pem && chmod 644 server-cert.pem
+cp server-key.pem.gen server-key.pem && chmod 600 server-key.pem
+cp ca.crt.gen ca.crt && chmod 644 ca.crt
+popd > /dev/null
 
 # BRING UP OPLOGTOREDIS
 docker-compose -f blackbox-tests/docker-compose.yml up -d --build
