@@ -1,14 +1,7 @@
-FROM --platform=linux/amd64 golang:1.17.0-alpine3.14
+FROM --platform=linux/amd64 golang:1.17.0-buster
 
-# Install gcc, musl-dev, and sasl, which are needed to build the cgo
-# parts of the Mongo driver
-RUN apk add --no-cache --update \
-	gcc cyrus-sasl cyrus-sasl-dev musl-dev git openssl
-
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/main' >> /etc/apk/repositories
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/community' >> /etc/apk/repositories
-RUN apk update
-RUN apk add mongodb=3.4.4-r0
+COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh
+RUN apt-get update && apt-get install -y openssl git sasl-dev && ./install-debian-mongo.sh
 
 WORKDIR /oplogtoredis
 

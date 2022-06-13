@@ -42,14 +42,14 @@ services:
     environment:
       MONGO_ARGS: "${MONGO_ARGS}"
     command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0 $MONGO_ARGS"
-    # logging:
-    #   driver: none
+    logging:
+      driver: none
     volumes:
       - mongo_data:/data/db
   redis:
     image: redis:${REDIS_TAG}
-    # logging:
-    #   driver: none
+    logging:
+      driver: none
 
 volumes:
   mongo_data:

@@ -1,15 +1,11 @@
-FROM golang:1.17.0-alpine3.14
+FROM golang:1.17.0-buster
 
 ADD scripts/wait-for.sh /wait-for.sh
+ADD scripts/install-debian-mongo.sh /install-debian-mongo.sh
 
-RUN apk --update --no-cache add git openssh gcc cyrus-sasl cyrus-sasl-dev musl-dev && \
-    mkdir -p /oplogtoredis && \
+RUN apt-get update && \
+    mkdir -p /oplogtoredis && /install-debian-mongo.sh && \
     go get github.com/pilu/fresh
-
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/main' >> /etc/apk/repositories
-RUN echo 'http://dl-cdn.alpinelinux.org/alpine/v3.6/community' >> /etc/apk/repositories
-RUN apk update
-RUN apk add mongodb=3.4.4-r0
 
 WORKDIR /oplogtoredis
 
