@@ -41,10 +41,7 @@ func TestTransaction(t *testing.T) {
 		t.SkipNow()
 	}
 
-	// not easy to explicitly create a collection with this library:
-	// https://jira.mongodb.org/browse/GODRIVER-1147
-	// and you can't create collections (even implicitly) in transactions, so we need to do this ahead of time
-	_, err = client.Database("test").Collection("Tx").InsertOne(ctx, bson.M{"test": "abc", "_id": "dummy"})
+	err = client.Database("test").CreateCollection(context.TODO(), "Tx")
 	require.NoError(t, err)
 	h.resetMessages()
 
