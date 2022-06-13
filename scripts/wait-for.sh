@@ -79,4 +79,11 @@ if [ "$HOST" = "" -o "$PORT" = "" ]; then
   usage 2
 fi
 
+which nc > /dev/null
+if [ "$?" != "0" ]; then
+  echoerr "Error finding nc: you need to apt-get install netcat."
+  usage 2
+fi
+
+
 wait_for "$@"
