@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -27,9 +28,10 @@ func TestMongoStepdown(t *testing.T) {
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, true)
-	inserter := harness.Run100InsertsInBackground(mongoClient.Database(mongo.DBName))
-
+	// replset leader election is fast in 4.4, so we need a shorter retry or we won't catch it
+	inserter := harness.RunInsertsInBackground(mongoClient.Database(mongo.DBName), 100, 50*time.Millisecond)
 	time.Sleep(time.Second)
+	log.Print("Stepping down mongo .. ")
 	mongo.StepDown()
 
 	insertedIDs := inserter.Result()

@@ -74,14 +74,17 @@ func (server *MongoServer) Start() {
 		}
 		log.Print("Finished initiating replicaset")
 
-		// Add other members
+		// Add first member - need to add them one at a time in mongo 4.4
 		err = replicaset.Add(client, replicaset.Member{
-			Address: "localhost:27002",
-		}, replicaset.Member{
-			Address: "localhost:27003",
-		})
+			Address: "localhost:27002"})
 		if err != nil {
-			panic("Error adding replica set members: " + err.Error())
+			panic("Error adding replica set member 27002: " + err.Error())
+		}
+		// Add second member - need to add them one at a time in mongo 4.4
+		err = replicaset.Add(client, replicaset.Member{
+			Address: "localhost:27003"})
+		if err != nil {
+			panic("Error adding replica set member 27003: " + err.Error())
 		}
 		log.Print("Finished adding members")
 
@@ -113,6 +116,9 @@ func (server *MongoServer) Client() *mongo.Client {
 	server.DBName = cs.Database
 
 	clientOptions := options.Client()
+	clientOptions.SetRetryWrites(false)
+	// This is true by default in mongo 4.4
+	//- our failover tests require failed writes
 	clientOptions.ApplyURI(server.Addr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
