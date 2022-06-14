@@ -192,7 +192,7 @@ func (conn *DDPConn) recvDDP() (*DDPMsg, error) {
 }
 
 // Ensures that the given message group (which should be the set of messages
-// that are sent in response to a Method) has not modification messages (added/changed/removed)
+// that are sent in response to a Method) has no modification messages (added/changed/removed)
 // coming *after* the "updated" message -- in DDP, the "updated" message indicates
 // that all modifications resulting from the method have been sent
 func (msgGroup DDPMsgGroup) VerifyUpdatedComesAfterAllChanges(t *testing.T) {
@@ -200,6 +200,7 @@ func (msgGroup DDPMsgGroup) VerifyUpdatedComesAfterAllChanges(t *testing.T) {
 	for _, msg := range msgGroup {
 		if msg.DDPType == "updated" {
 			updatedReceived = true
+			continue
 		}
 
 		if updatedReceived && (msg.DDPType == "added" || msg.DDPType == "changed" || msg.DDPType == "removed") {
