@@ -85,12 +85,12 @@ func TestGetStartTime(t *testing.T) {
 				MaxCatchUp:  maxCatchUp,
 			}
 
-			actualResult := tailer.getStartTime(func() (primitive.Timestamp, error) {
+			actualResult := tailer.getStartTime(func() (*primitive.Timestamp, error) {
 				if test.mongoEndOfOplogErr != nil {
-					return primitive.Timestamp{}, test.mongoEndOfOplogErr
+					return nil, test.mongoEndOfOplogErr
 				}
 
-				return test.mongoEndOfOplog, nil
+				return &test.mongoEndOfOplog, nil
 			})
 
 			// We need to do an approximate comparison; the function sometimes

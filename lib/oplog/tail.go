@@ -42,6 +42,13 @@ type rawOplogEntry struct {
 	Update       rawOplogEntryID     `bson:"o2"`
 }
 
+// Parsed Cursor Result
+type cursorResultStatus struct {
+	GotResult       bool
+	DidTimeout      bool
+	DidLosePosition bool
+}
+
 type rawOplogEntryID struct {
 	ID interface{} `bson:"_id"`
 }
@@ -126,7 +133,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(func() (primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -139,19 +146,19 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		result := oplogCollection.FindOne(queryContext, bson.M{}, findOneOpts)
 
 		if result.Err() != nil {
-			return entry.Timestamp, result.Err()
+			return nil, result.Err()
 		}
 
 		decodeErr := result.Decode(&entry)
 
 		if decodeErr != nil {
-			return entry.Timestamp, decodeErr
+			return nil, decodeErr
 		}
 
 		log.Log.Infow("Got latest oplog entry",
 			"entry", entry)
-
-		return entry.Timestamp, nil
+		ts := entry.Timestamp
+		return &ts, nil
 	})
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
@@ -170,16 +177,15 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		default:
 		}
 
-		var rawData bson.Raw
-
 		for {
-			gotResult, didTimeout, didLosePosition, err := readNextFromCursor(query)
+			var rawData bson.Raw
+			status, err := readNextFromCursor(query)
 
-			if gotResult {
+			if status.GotResult {
 				decodeErr := query.Decode(&rawData)
 				if decodeErr != nil {
 					log.Log.Errorw("Error decoding oplog entry", "error", decodeErr)
-
+					continue
 				}
 
 				ts, pubs := tailer.unmarshalEntry(rawData)
@@ -195,7 +201,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 						log.Log.Error("Nil Redis publication")
 					}
 				}
-			} else if didTimeout {
+			} else if status.DidTimeout {
 				log.Log.Info("Oplog cursor timed out, will retry")
 
 				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
@@ -206,7 +212,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 				}
 
 				break
-			} else if didLosePosition {
+			} else if status.DidLosePosition {
 				// Our cursor expired. Make a new cursor to pick up from where we
 				// left off.
 				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
@@ -235,11 +241,20 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 	}
 }
 
-func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, didLosePosition bool, err error) {
+// readNextFromCursor gets the next item from the cursor.
+// err returns the last error seen by the Cursor (or context), or nil if no error has occurred.
+//  -> err // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Err
+// A cursor result status object is also returned with the following attrs:
+//  -> GotResult // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Next
+//  -> DidTimeout // Did the enclosing context we provided timeout?
+//     We handle this by just retrying the query
+//  -> DidLosePostion (See comment below)
+//     We handle this by creating a new cursor
+func readNextFromCursor(cursor *mongo.Cursor) (status cursorResultStatus, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
 	defer cancel()
 
-	gotResult = cursor.Next(ctx)
+	status.GotResult = cursor.Next(ctx)
 	err = cursor.Err()
 
 	if err != nil {
@@ -248,7 +263,7 @@ func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, 
 		// components, it's possible for the query to fail *before* the context
 		// is marked as timed-out
 		time.Sleep(100 * time.Millisecond)
-		didTimeout = ctx.Err() != nil
+		status.DidTimeout = ctx.Err() != nil
 
 		// check if the error is a position-lost error. These errors are best handled
 		// by just re-issueing the query on the same connection; no need to surface
@@ -261,7 +276,7 @@ func readNextFromCursor(cursor *mongo.Cursor) (gotResult bool, didTimeout bool, 
 			// 280  : change stream fatal error
 			for _, code := range []int{136, 286, 280} {
 				if serverErr.HasErrorCode(code) {
-					didLosePosition = true
+					status.DidLosePosition = true
 				}
 			}
 		}
@@ -374,7 +389,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (primitive.Timestamp, error)) primitive.Timestamp {
+func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
 	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClient, tailer.RedisPrefix)
 
 	if redisErr == nil {
@@ -396,7 +411,7 @@ func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (primitiv
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
 	if mongoErr == nil {
 		log.Log.Infof("Starting tailing from end of oplog (timestamp %d)", mongoOplogEndTimestamp.T)
-		return mongoOplogEndTimestamp
+		return *mongoOplogEndTimestamp
 	}
 
 	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
