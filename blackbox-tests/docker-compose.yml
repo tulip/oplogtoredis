@@ -30,6 +30,8 @@ services:
   mongo:
     image: mongo:4.4
     command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0"
+    logging:
+      driver: none
     volumes:
       - mongo_data:/data/db
   redis:
@@ -40,15 +42,12 @@ services:
       - ./certificates/ca.crt:/ca.crt:ro
       - ./certificates/server-cert.pem:/server-cert.pem:ro
       - ./certificates/server-key.pem:/server-key.pem:ro
-    #logging:
-    #  driver: none
+    logging:
+      driver: none
     ports:
       -  6380:6380
     command:
-      - sh
-      - -c
-      - |
-        redis-server /usr/local/etc/redis/redis.conf
-  
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
 volumes:
   mongo_data:
