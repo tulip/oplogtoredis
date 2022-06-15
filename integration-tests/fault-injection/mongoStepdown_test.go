@@ -42,10 +42,11 @@ func TestMongoStepdown(t *testing.T) {
 		t.Errorf("Expected at least 50 inserted IDs, got %d", len(insertedIDs))
 	}
 
-	if len(insertedIDs) >= 100 {
-		// If every insert was successful, then we definitely didn't step down
-		// correctly; fail this test because it wasn't a valid test
-		t.Errorf("Expected no more than 99 successful writes, got %d", len(insertedIDs))
+	if len(insertedIDs) > 100 {
+		// The new failover / leader election logic is very fast,
+		// So it is possible that we got all 100 Inserted IDs. However, make
+		// sure we didn't get any duplicates.
+		t.Errorf("Expected no more than 100 successful writes, got %d", len(insertedIDs))
 	}
 
 	verifier.Verify(t, insertedIDs)

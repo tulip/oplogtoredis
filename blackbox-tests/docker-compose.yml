@@ -47,7 +47,11 @@ services:
     ports:
       -  6380:6380
     command:
-      - redis-server
-      - /usr/local/etc/redis/redis.conf
+      - sh
+      - -c
+      - |
+        chown $USER:$USER /*.pem /ca.crt
+        chmod 600 /server-key.pem
+        redis-server /usr/local/etc/redis/redis.conf
 volumes:
   mongo_data:
