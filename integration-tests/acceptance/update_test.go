@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Basic test of an update
@@ -13,7 +14,7 @@ func TestUpdate(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id":   "someid",
 		"hello": "world",
 	})
@@ -23,7 +24,7 @@ func TestUpdate(t *testing.T) {
 
 	harness.resetMessages()
 
-	err = harness.mongoClient.C("Foo").UpdateId("someid", bson.M{
+	_, err = harness.mongoClient.Collection("Foo").UpdateByID(context.Background(), "someid", bson.M{
 		"$set": bson.M{
 			"hello": "new",
 			"world": "new",
@@ -51,7 +52,7 @@ func TestUpdateReplace(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id":   "someid",
 		"hello": "world",
 	})
@@ -61,7 +62,7 @@ func TestUpdateReplace(t *testing.T) {
 
 	harness.resetMessages()
 
-	err = harness.mongoClient.C("Foo").UpdateId("someid", bson.M{
+	_, err = harness.mongoClient.Collection("Foo").ReplaceOne(context.Background(), bson.M{"_id": "someid"}, bson.M{
 		"world": "new",
 	})
 	if err != nil {
@@ -87,7 +88,7 @@ func TestUpdateArraySet(t *testing.T) {
 	defer harness.stop()
 
 	// Initialize test data
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "someid",
 		"hello": []bson.M{
 			{"value": 10},
@@ -100,7 +101,7 @@ func TestUpdateArraySet(t *testing.T) {
 		panic(err)
 	}
 
-	err = harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "someid2",
 		"hello": []bson.M{
 			{"value": 10},
@@ -116,7 +117,7 @@ func TestUpdateArraySet(t *testing.T) {
 	harness.resetMessages()
 
 	// Run an update that increments the first value more than 15
-	_, err = harness.mongoClient.C("Foo").UpdateAll(bson.M{
+	_, err = harness.mongoClient.Collection("Foo").UpdateMany(context.Background(), bson.M{
 		"hello.value": bson.M{"$gt": 15},
 	}, bson.M{
 		"$inc": bson.M{
@@ -154,7 +155,7 @@ func TestUpdateArrayPush(t *testing.T) {
 	defer harness.stop()
 
 	// Initialize test data
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "someid",
 		"hello": []bson.M{
 			{"value": 10},
@@ -170,7 +171,7 @@ func TestUpdateArrayPush(t *testing.T) {
 	harness.resetMessages()
 
 	// Run an update that increments the first value more than 15
-	_, err = harness.mongoClient.C("Foo").UpdateAll(bson.M{
+	_, err = harness.mongoClient.Collection("Foo").UpdateMany(context.Background(), bson.M{
 		"hello.value": bson.M{"$gt": 15},
 	}, bson.M{
 		"$push": bson.M{

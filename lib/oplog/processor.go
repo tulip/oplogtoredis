@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/globalsign/mgo/bson"
 	"github.com/pkg/errors"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/redispub"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var ErrUnsupportedDocIDType = errors.New("unsupported document _id type")
@@ -33,6 +33,12 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		return nil, nil
 	}
 
+	if op.Database == "config" {
+		// The Config database holds internal MongoDB structures, such as metadata
+		// about transactions and locks
+		return nil, nil
+	}
+
 	var idForChannel string
 	var idForMessage interface{}
 
@@ -41,7 +47,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		idForChannel = id
 		idForMessage = id
 
-	case bson.ObjectId:
+	case primitive.ObjectID:
 		idHex := id.Hex()
 		idForChannel = idHex
 		idForMessage = map[string]string{

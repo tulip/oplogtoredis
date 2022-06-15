@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -23,13 +24,13 @@ func TestRedisStopStart(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
 
 	verifier := harness.NewRedisVerifier(redisClient, false)
-	inserter := harness.Run100InsertsInBackground(mongoClient.DB(""))
+	inserter := harness.Run100InsertsInBackground(mongoClient.Database(mongo.DBName))
 
 	time.Sleep(2 * time.Second)
 	redis.Stop()

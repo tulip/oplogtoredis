@@ -1,10 +1,10 @@
 # expects build context of oplogtoredis
 
-FROM golang:1.14-alpine AS integration_base
+FROM --platform=linux/amd64 golang:1.17.0-buster AS integration_base
 
 ENV GO111MODULE on
 
-RUN apk add --update --no-cache gcc musl-dev git
+RUN apt-get update && apt-get install -y gcc git
 
 WORKDIR /oplogtoredis
 
@@ -40,8 +40,9 @@ RUN go test -c -o /test
 RUN go build -o /analyze analyzeBench.go
 
 
-FROM alpine:3.9.4
-RUN apk add --update --no-cache mongodb jq
+FROM --platform=linux/amd64 debian:buster
+COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh
+RUN apt-get update && apt-get install -y jq netcat && ./install-debian-mongo.sh
 RUN mkdir -p /integration/bin
 
 COPY --from=acceptance          /test       /integration/bin/acceptance.test

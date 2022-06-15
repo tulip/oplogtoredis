@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Basic test of an insert
@@ -13,7 +14,7 @@ func TestInsert(t *testing.T) {
 	harness := startHarness()
 	defer harness.stop()
 
-	err := harness.mongoClient.C("Foo").Insert(bson.M{
+	_, err := harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id":   "someid",
 		"hello": "world",
 	})

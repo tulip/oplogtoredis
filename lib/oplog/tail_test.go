@@ -7,21 +7,22 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/globalsign/mgo/bson"
 	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Converts a time to a mongo timestamp
-func mongoTS(d time.Time) bson.MongoTimestamp {
-	return bson.MongoTimestamp(d.Unix() << 32)
+func mongoTS(d time.Time) primitive.Timestamp {
+	return primitive.Timestamp{T: uint32(d.Unix() << 32)}
 }
 
 // Determines if two dates are within a delta
-func timestampsWithinDelta(d1, d2 bson.MongoTimestamp, delta time.Duration) bool {
-	d1Seconds := int64(d1) >> 32
-	d2Seconds := int64(d2) >> 32
+func timestampsWithinDelta(d1, d2 primitive.Timestamp, delta time.Duration) bool {
+	d1Seconds := int64(d1.T) >> 32
+	d2Seconds := int64(d2.T) >> 32
 
 	diff := d1Seconds - d2Seconds
 	if diff < 0 {
@@ -38,10 +39,10 @@ func TestGetStartTime(t *testing.T) {
 	tooOld := now.Add(-120 * time.Second)
 
 	tests := map[string]struct {
-		redisTimestamp     bson.MongoTimestamp
-		mongoEndOfOplog    bson.MongoTimestamp
+		redisTimestamp     primitive.Timestamp
+		mongoEndOfOplog    primitive.Timestamp
 		mongoEndOfOplogErr error
-		expectedResult     bson.MongoTimestamp
+		expectedResult     primitive.Timestamp
 	}{
 		"Start time is in Redis": {
 			redisTimestamp: mongoTS(notTooOld),
@@ -72,7 +73,7 @@ func TestGetStartTime(t *testing.T) {
 				panic(err)
 			}
 			defer redisServer.Close()
-			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", strconv.FormatInt(int64(test.redisTimestamp), 10)))
+			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", strconv.FormatInt(int64(test.redisTimestamp.T), 10)))
 
 			redisClient := redis.NewUniversalClient(&redis.UniversalOptions{
 				Addrs: []string{redisServer.Addr()},
@@ -84,12 +85,12 @@ func TestGetStartTime(t *testing.T) {
 				MaxCatchUp:  maxCatchUp,
 			}
 
-			actualResult := tailer.getStartTime(func() (bson.MongoTimestamp, error) {
+			actualResult := tailer.getStartTime(func() (*primitive.Timestamp, error) {
 				if test.mongoEndOfOplogErr != nil {
-					return bson.MongoTimestamp(0), test.mongoEndOfOplogErr
+					return nil, test.mongoEndOfOplogErr
 				}
 
-				return test.mongoEndOfOplog, nil
+				return &test.mongoEndOfOplog, nil
 			})
 
 			// We need to do an approximate comparison; the function sometimes
@@ -118,13 +119,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 	}{
 		"Insert": {
 			in: rawOplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "i",
 				Namespace: "foo.Bar",
 				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
 			},
 			want: []oplogEntry{{
-				Timestamp:  bson.MongoTimestamp(1234),
+				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "i",
 				Namespace:  "foo.Bar",
 				Data:       map[string]interface{}{"_id": "someid", "foo": "bar"},
@@ -135,14 +136,14 @@ func TestParseRawOplogEntry(t *testing.T) {
 		},
 		"Update": {
 			in: rawOplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "u",
 				Namespace: "foo.Bar",
 				Doc:       mustRaw(t, map[string]interface{}{"new": "data"}),
 				Update:    rawOplogEntryID{ID: "updateid"},
 			},
 			want: []oplogEntry{{
-				Timestamp:  bson.MongoTimestamp(1234),
+				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "u",
 				Namespace:  "foo.Bar",
 				Data:       map[string]interface{}{"new": "data"},
@@ -153,13 +154,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 		},
 		"Remove": {
 			in: rawOplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "d",
 				Namespace: "foo.Bar",
 				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid"}),
 			},
 			want: []oplogEntry{{
-				Timestamp:  bson.MongoTimestamp(1234),
+				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "d",
 				Namespace:  "foo.Bar",
 				Data:       map[string]interface{}{"_id": "someid"},
@@ -170,7 +171,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 		},
 		"Command": {
 			in: rawOplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "c",
 				Namespace: "foo.$cmd",
 				Doc:       mustRaw(t, map[string]interface{}{"drop": "Foo"}),
@@ -179,13 +180,13 @@ func TestParseRawOplogEntry(t *testing.T) {
 		},
 		"Transaction": {
 			in: rawOplogEntry{
-				Timestamp: bson.MongoTimestamp(1234),
+				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "c",
 				Namespace: "admin.$cmd",
 				Doc: mustRaw(t, map[string]interface{}{
 					"applyOps": []rawOplogEntry{
 						{
-							Timestamp: bson.MongoTimestamp(1234),
+							Timestamp: primitive.Timestamp{T: 1234},
 							Operation: "c",
 							Namespace: "admin.$cmd",
 							Doc: mustRaw(t, map[string]interface{}{
@@ -230,7 +231,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 			want: []oplogEntry{
 				{
 					DocID:      "id1",
-					Timestamp:  1234,
+					Timestamp:  primitive.Timestamp{T: 1234},
 					Operation:  "i",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -243,7 +244,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				},
 				{
 					DocID:      "id1",
-					Timestamp:  1234,
+					Timestamp:  primitive.Timestamp{T: 1234},
 					Operation:  "i",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -256,7 +257,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				},
 				{
 					DocID:      "id2",
-					Timestamp:  1234,
+					Timestamp:  primitive.Timestamp{T: 1234},
 					Operation:  "u",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -268,7 +269,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				},
 				{
 					DocID:      "id3",
-					Timestamp:  1234,
+					Timestamp:  primitive.Timestamp{T: 1234},
 					Operation:  "d",
 					Namespace:  "foo.Bar",
 					Database:   "foo",

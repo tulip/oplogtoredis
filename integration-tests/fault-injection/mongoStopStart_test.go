@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func TestMongoStopStart(t *testing.T) {
 	defer otr.Stop()
 
 	mongoClient := mongo.Client()
-	defer mongoClient.Close()
+	defer func() { _ = mongoClient.Disconnect(context.Background()) }()
 
 	redisClient := redis.Client()
 	defer redisClient.Close()
@@ -35,9 +36,9 @@ func TestMongoStopStart(t *testing.T) {
 	verifier := harness.NewRedisVerifier(redisClient, true)
 
 	// We do this test over 60 seconds instead of 10 because we have to give
-	// mongo some extra time to run an election after the restart, and mgo
+	// mongo some extra time to run an election after the restart, and the mongo client
 	// can take extra time to reconnect to the primary after a reelection
-	inserter := harness.RunInsertsInBackground(mongoClient.DB(""), 100, 600*time.Millisecond)
+	inserter := harness.RunInsertsInBackground(mongoClient.Database(mongo.DBName), 100, 600*time.Millisecond)
 
 	time.Sleep(3 * time.Second)
 	mongo.Stop()

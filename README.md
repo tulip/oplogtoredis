@@ -1,6 +1,6 @@
 # oplogtoredis
 
-[![Build Status](https://travis-ci.org/tulip/oplogtoredis.svg?branch=master)](https://travis-ci.org/tulip/oplogtoredis)
+[![Build Status](https://app.travis-ci.com/tulip/oplogtoredis.svg?branch=master)](https://app.travis-ci.com/tulip/oplogtoredis)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tulip/oplogtoredis)](https://goreportcard.com/report/github.com/tulip/oplogtoredis)
 [![GoDoc](https://godoc.org/github.com/tulip/oplogtoredis?status.svg)](http://godoc.org/github.com/tulip/oplogtoredis)
 
@@ -156,7 +156,7 @@ The components of the docker-compose environment are:
   will show you everything being published.
 
 You can optionally also spin up 2 meteor app servers with
-`docker-compose -f docker-compose.yml -f docker-compose.meteor.yml`. These
+`docker-compose -f docker-compose.yml -f docker-compose.meteor.yml up`. These
 servers are running a simple todos app, using redis-oplog, and pointing at the
 same Mongo and Redis servers. Note that the first run will take a long time
 (5-10 minutes) while Meteor does initial downloads/builds; caching makes

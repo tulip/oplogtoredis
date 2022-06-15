@@ -1,15 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/globalsign/mgo"
 	"github.com/go-redis/redis/v7"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // This file is a simple test harness for acceptance tests
@@ -18,7 +19,7 @@ type harness struct {
 	redisClient   redis.UniversalClient
 	subscription  *redis.PubSub
 	subscriptionC <-chan *redis.Message
-	mongoClient   *mgo.Database
+	mongoClient   *mongo.Database
 }
 
 // Clears the mongo database, connects to redis, and starts a subscription to
@@ -37,7 +38,7 @@ func startHarness() *harness {
 
 // Shuts down all the mongo/redis clients
 func (h *harness) stop() {
-	h.mongoClient.Session.Close()
+	_ = h.mongoClient.Client().Disconnect(context.Background())
 	h.redisClient.Close()
 	h.subscription.Close()
 }

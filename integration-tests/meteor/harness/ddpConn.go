@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/kylelemons/godebug/pretty"
 )
 
 // DDPConn represents a connection to a Meteor server. It allows you to send
@@ -76,12 +77,14 @@ func (conn *DDPConn) Send(msg *DDPMsg) error {
 // For example, if we specify our expected groups as [(a b), (c d), (e)],
 // then (b a d c e) would be OK, but (a c b d e), (a b c d), and (a b c d e f)
 // would not be OK.
-func (conn *DDPConn) VerifyReceive(t *testing.T, expectedMessageGroups ...DDPMsgGroup) {
+func (conn *DDPConn) VerifyReceive(t *testing.T, expectedMessageGroups ...DDPMsgGroup) DDPMsgGroup {
 	actualMessages := conn.receiveAll()
 
 	if diff := compareDDP(actualMessages, expectedMessageGroups); diff != "" {
 		t.Errorf("Got incorrect messages (-got +want)\n%s", diff)
 	}
+
+	return actualMessages
 }
 
 // ClearReceiveBuffer clears the buffer of messages that will be compared on the
@@ -185,5 +188,23 @@ func (conn *DDPConn) recvDDP() (*DDPMsg, error) {
 			DDPType: ddpType,
 			Data:    parsedData,
 		}, nil
+	}
+}
+
+// Ensures that the given message group (which should be the set of messages
+// that are sent in response to a Method) has no modification messages (added/changed/removed)
+// coming *after* the "updated" message -- in DDP, the "updated" message indicates
+// that all modifications resulting from the method have been sent
+func (msgGroup DDPMsgGroup) VerifyUpdatedComesAfterAllChanges(t *testing.T) {
+	updatedReceived := false
+	for _, msg := range msgGroup {
+		if msg.DDPType == "updated" {
+			updatedReceived = true
+			continue
+		}
+
+		if updatedReceived && (msg.DDPType == "added" || msg.DDPType == "changed" || msg.DDPType == "removed") {
+			t.Errorf("Received a \"%s\" message after an \"updated\" message in message group:\n%s", msg.DDPType, pretty.Sprint(msgGroup))
+		}
 	}
 }

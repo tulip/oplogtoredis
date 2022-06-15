@@ -1,9 +1,10 @@
-FROM golang:1.14-alpine
+FROM --platform=linux/amd64 golang:1.17.0-buster
 
 ADD scripts/wait-for.sh /wait-for.sh
+ADD scripts/install-debian-mongo.sh /install-debian-mongo.sh
 
-RUN apk --update --no-cache add git openssh mongodb gcc cyrus-sasl cyrus-sasl-dev musl-dev && \
-    mkdir -p /oplogtoredis && \
+RUN apt-get update && \
+    mkdir -p /oplogtoredis && /install-debian-mongo.sh && \
     go get github.com/pilu/fresh
 
 WORKDIR /oplogtoredis

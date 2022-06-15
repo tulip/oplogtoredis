@@ -35,7 +35,7 @@ wait_for() {
     fi
     sleep 1
   done
-  echo "Operation timed out" >&2
+  echo "Operation to $HOST $PORT timed out" >&2
   exit 1
 }
 
@@ -78,5 +78,12 @@ if [ "$HOST" = "" -o "$PORT" = "" ]; then
   echoerr "Error: you need to provide a host and port to test."
   usage 2
 fi
+
+which nc > /dev/null
+if [ "$?" != "0" ]; then
+  echoerr "Error finding nc: you need to apt-get install netcat."
+  usage 2
+fi
+
 
 wait_for "$@"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -8,18 +9,18 @@ import (
 
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func BenchmarkInsertNoWait(b *testing.B) {
 	time.Sleep(2 * time.Second)
 
 	db := helpers.SeedTestDB(helpers.DBData{})
-	defer db.Session.Close()
+	defer func() { _ = db.Client().Disconnect(context.Background()) }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.C("Foo1").Insert(bson.M{
+		_, err := db.Collection("Foo1").InsertOne(context.Background(), bson.M{
 			"_id":   fmt.Sprintf("testrecord%d", i),
 			"hello": "world",
 		})
@@ -38,7 +39,7 @@ func BenchmarkInsertWaitForRedis(b *testing.B) {
 	defer subscr.Close()
 
 	db := helpers.SeedTestDB(helpers.DBData{})
-	defer db.Session.Close()
+	defer func() { _ = db.Client().Disconnect(context.Background()) }()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -55,7 +56,7 @@ func BenchmarkInsertWaitForRedis(b *testing.B) {
 	time.Sleep(1 * time.Second)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.C("Foo2").Insert(bson.M{
+		_, err := db.Collection("Foo2").InsertOne(context.Background(), bson.M{
 			"_id":   fmt.Sprintf("testrecord%d", i),
 			"hello": "world",
 		})

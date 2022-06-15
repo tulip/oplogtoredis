@@ -13,6 +13,8 @@ func TestArrayModification(t *testing.T) {
 
 	require.NoError(t, meteor1.Send(harness.DDPMethod("insertCall", "arrayTest.initializeFixtures")))
 
+	meteor1.ClearReceiveBuffer()
+
 	// Subscribe to arrayTest from both servers
 	require.NoError(t, meteor1.Send(harness.DDPSub("subId", "arrayTest.pub")))
 	require.NoError(t, meteor2.Send(harness.DDPSub("subId", "arrayTest.pub")))
@@ -41,14 +43,15 @@ func TestArrayModification(t *testing.T) {
 		},
 	}, []string{})
 
-	meteor1.VerifyReceive(t, harness.DDPMsgGroup{
+	received := meteor1.VerifyReceive(t, harness.DDPMsgGroup{
 		harness.DDPResult("methodCallId", harness.DDPData{}),
 
 		expectedChange1,
 		expectedChange2,
-	}, harness.DDPMsgGroup{
+
 		harness.DDPUpdated([]string{"methodCallId"}),
 	})
+	received.VerifyUpdatedComesAfterAllChanges(t)
 
 	// On meteor2, we should just get changed
 	meteor2.VerifyReceive(t, harness.DDPMsgGroup{

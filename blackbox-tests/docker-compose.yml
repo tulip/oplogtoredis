@@ -6,51 +6,52 @@ services:
       dockerfile: blackbox-tests/Dockerfile.oplogtoredis-blackbox
     command:
       - /wait-for.sh
-      - mongo:27017
+      - redis:6380
       - '--'
       - /wait-for.sh
-      - redis_tls:6380
+      - mongo:27017
       - '--'
       - sh
       - -c
       - |
-        mongo "$$OTR_MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
         update-ca-certificates
+        mongo "$$OTR_MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
         oplogtoredis
     environment:
       - OTR_MONGO_URL=mongodb://mongo/dev
-      - OTR_REDIS_URL=rediss://redis_tls:6380
+      - OTR_REDIS_URL=rediss://redis:6380
     ports:
       - 9000:9000
     depends_on:
       - mongo
-      - redis_tls
+      - redis
     volumes:
       - ./certificates/ca.crt:/usr/local/share/ca-certificates/ca.crt:ro
   mongo:
-    image: mongo:4.0.5
-    command: "mongod --replSet myapp --port 27017"
+    image: mongo:4.4
+    command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0"
+    logging:
+      driver: none
     volumes:
       - mongo_data:/data/db
   redis:
-    image: redis:3.2.4
+    image: redis:6.0
+    hostname: redis
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./certificates/ca.crt:/ca.crt:ro
+      - ./certificates/server-cert.pem:/server-cert.pem:ro
+      - ./certificates/server-key.pem:/server-key.pem:ro
     logging:
       driver: none
     ports:
-      -  6379:6379
-  redis_tls:
-  # redis tls opens an stunnel port to the unencrypted redis instance
-  # redis only supports TLS directly for v6 and above.
-    build:
-      context: .
-      dockerfile: ./Dockerfile.redis-tls
-    environment:
-      - REDIS_PORT_6379_TCP_ADDR=redis
-      - REDIS_PORT_6379_TCP_PORT=6379
-    volumes:
-      - ./certificates/rediscert.pem:/stunnel/private.pem:ro
-    ports:
-      - 6380:6380
-
+      -  6380:6380
+    command:
+      - sh
+      - -c
+      - |
+        chown $USER:$USER /*.pem /ca.crt
+        chmod 600 /server-key.pem
+        redis-server /usr/local/etc/redis/redis.conf
 volumes:
   mongo_data:

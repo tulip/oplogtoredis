@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"os/exec"
 
 	promdata "github.com/prometheus/client_model/go"
@@ -51,7 +52,11 @@ func StartOTRProcessWithEnv(mongoURL string, redisURL string, port int, extraEnv
 func (proc *OTRProcess) Start() {
 	log.Printf("Starting up oplogtoredis with HTTP on %d", proc.port)
 
-	proc.cmd = exec.Command("/bin/oplogtoredis") // #nosec
+	otrBin := os.Getenv("OTR_BIN")
+	if otrBin == "" {
+		otrBin = "/bin/oplogtoredis"
+	}
+	proc.cmd = exec.Command(otrBin) // #nosec
 	proc.cmd.Stdout = makeLogStreamer(fmt.Sprintf("otr:%d", proc.port), "stdout")
 	proc.cmd.Stderr = makeLogStreamer(fmt.Sprintf("otr:%d", proc.port), "stderr")
 	proc.cmd.Env = proc.env

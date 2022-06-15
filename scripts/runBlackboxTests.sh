@@ -8,6 +8,7 @@ cd $(dirname $SCRIPT_DIR)
 
 CERTS_DIR="$(pwd)/blackbox-tests/certificates"
 mkdir -p $CERTS_DIR
+rm -f $CERTS_DIR/*
 
 function cleanup() {
   rm -rf blackbox-tests/certificates

@@ -10,11 +10,11 @@ services:
       - redis
     command:
       - /wait-for.sh
-      - --timeout=60
+      - --timeout=120
       - mongo:27017
       - '--'
       - /wait-for.sh
-      - --timeout=60
+      - --timeout=120
       - redis:6379
       - '--'
       - /integration/acceptance/entry.sh

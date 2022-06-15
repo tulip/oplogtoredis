@@ -1,10 +1,10 @@
 package oplog
 
 import (
-	"github.com/globalsign/mgo/bson"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -25,7 +25,7 @@ var metricUnprocessableChangedFields = promauto.NewCounter(prometheus.CounterOpt
 // affected
 type oplogEntry struct {
 	DocID      interface{}
-	Timestamp  bson.MongoTimestamp
+	Timestamp  primitive.Timestamp
 	Data       map[string]interface{}
 	Operation  string
 	Namespace  string

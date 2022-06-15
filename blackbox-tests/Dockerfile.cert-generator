@@ -4,5 +4,6 @@ RUN apt-get install openssl -y
 WORKDIR generate-certificates
 COPY generate-certificates.sh ./generate-certificates.sh
 CMD ./generate-certificates.sh \
-  && cp -f rediscert.pem /shared-volume \
+  && cp -f server-cert.pem /shared-volume/server-cert.pem \
+  && cp -f server-key.pem /shared-volume/server-key.pem \
   && cp -f ca.pem /shared-volume/ca.crt
