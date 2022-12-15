@@ -202,7 +202,11 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 					}
 				}
 			} else if status.DidTimeout {
-				log.Log.Info("Oplog cursor timed out, will retry")
+
+				// Didn't get any messages for a while, keep trying.
+				// This is normal, if there are no new messages, the iterator will
+				// timeout after our timeout duration, and we'll create a new one.
+				log.Log.Debug("Oplog cursor timed out, will retry")
 
 				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
 
