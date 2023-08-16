@@ -1,0 +1,57 @@
+name: Pull Request
+
+on: [ pull_request ]
+
+jobs:
+  lint_and_units:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.17'
+      - name: setup golangci-lint
+        run: |
+          curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.0
+          export PATH=$PATH:$(go env GOPATH)/bin
+          golangci-lint --version
+      - name: run lint
+        run: ./scripts/runLint.sh
+      - name: run unit tests
+        run: ./scripts/runUnitTests.sh
+  acceptance:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - name: run acceptance tests
+        run: ./scripts/runIntegrationAcceptance.sh
+  performance:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - name: run performance tests
+        run: ./scripts/runIntegrationPerformance.sh
+  fault_injection:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - name: run fault injection tests
+        run: ./scripts/runIntegrationFaultInjection.sh
+  meteor:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - name: run meteor tests
+        run: ./scripts/runIntegrationMeteor.sh
+  backbox:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      - name: run blackbox tests
+        run: ./scripts/runBlackboxTests.sh
