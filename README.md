@@ -24,6 +24,18 @@ There are a few things that don't currently work in `redis-oplog` when using the
 - Custom namespaces and channels ([`redis-oplog` issue #279](https://github.com/cult-of-coders/redis-oplog/issues/279))
 - Synthetic mutations ([`redis-oplog` issue #277](https://github.com/cult-of-coders/redis-oplog/issues/277))
 
+### MongoDB v5
+
+MongoDB v5 makes a substantial change to the format of the oplog, which makes it much more difficult to assemble the list of changed fields from an oplog entry. Meteor has handled this with a full [oplog v2 to v1 converter](https://github.com/meteor/meteor/blob/devel/packages/mongo/oplog_v2_converter.js), which entails substantial complexity and a high level of dependence on the (undocumented) oplog format, and requires testing against every new version of Mongo. To reduce this maintenance burden, oplogtoredis implements a simplified version of this algorithm that just extracts changed top-level fields.
+
+Take, for example the command: `db.Foo.update({ _id: 'someId', }, { $set: { "one.two.three": 123, "four": 4 } })`.
+
+With MongoDB v4, `oplogtoredis` would produce the record `{"e":"u","d":{"_id":"someId"},"f":["one.two.three", "four"]}`. However, with MongoDB v5, `oplogtoredis` would instead produce the record `{"e":"u","d":{"_id":"someId"},"f":["one", "four"]}`.
+
+This produces correct behavior when used with the `redis-oplog` Meteor package: we're simply indicating a superset of the actual change. However, it's possible that it produces sub-optimal performance. For example, say you're observing the query `Foo.find({ _id: 'someId' }, { fields: { 'one.two.three': 1 }})`. With MongoDB v4, the command `db.Foo.update({ _id: 'someId', }, { $set: { "one.two.xx": 123 } })` would *not* be considered by `redis-oplog` to be a possible change to the observed query results (because it considers the sub-fields, and detects that a change to `one.two.xx` cannot affect the observed field `one.two.three`). However, with the new MongoDB v5 behavior, `redis-oplog` *would* detect that this could have changed the observed query results, because it just sees a change to the top-level field `one`.
+
+This is a trade-off between optimal performance and maintainability: implementing a full v2-to-v1 conversion layer like Meteor does would provide slightly better performance in these specific cases, but with a much increased risk of incorrect behavior (e.g. not triggering an update when we should) if Mongo changes the oplog format, which they've indicated they reserve the right to do even in a patch release.
+
 ## Configuring redis-oplog
 
 To use this with redis-oplog, configure redis-oplog with:
