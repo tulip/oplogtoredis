@@ -1,7 +1,7 @@
 FROM --platform=linux/amd64 golang:1.17.0-buster
 
 # This netcat installation is needed for the following wait-for.sh invocation
-RUN apt-get update && apt-get install netcat-openbsd
+RUN apt-get update && apt-get install -y netcat-openbsd
 
 ADD scripts/wait-for.sh /wait-for.sh
 ADD scripts/install-debian-mongo.sh /install-debian-mongo.sh
