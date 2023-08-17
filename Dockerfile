@@ -14,7 +14,7 @@ RUN go build -o app
 # We're using a multistage build -- the previous stage has the full go toolchain
 # so it can do the build, and this stage is just a minimal Alpine image that we
 # copy the statically-linked binary into to keep our image small.
-FROM alpine:3.6
+FROM alpine:3.18
 
 RUN apk add --no-cache ca-certificates
 
