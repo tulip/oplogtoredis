@@ -51,7 +51,7 @@ func (op *oplogEntry) IsRemove() bool {
 }
 
 // Returns whether this is an oplog update format v2 update (new in MongoDB 5.0)
-func (op *oplogEntry) UpdateIsV2Formatted() bool {
+func (op *oplogEntry) IsV2Update() bool {
 	dataVersion, ok := op.Data["$v"]
 	if !ok {
 		return false
@@ -104,7 +104,7 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 		return false
 	} else if _, ok := op.Data["$unset"]; ok {
 		return false
-	} else if op.UpdateIsV2Formatted() {
+	} else if op.IsV2Update() {
 		// the v2 update format is only used for modifications
 		return false
 	} else {
@@ -117,7 +117,7 @@ func (op *oplogEntry) ChangedFields() []string {
 	// TODO: Patch this section
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
 		return mapKeys(op.Data)
-	} else if op.IsUpdate() && op.UpdateIsV2Formatted() {
+	} else if op.IsUpdate() && op.IsV2Update() {
 		// New-style update. Looks like:
 		// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
 		return getChangedFieldsFromOplogV2Update(op)
