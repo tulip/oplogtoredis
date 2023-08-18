@@ -15,25 +15,31 @@ services:
       - -c
       - |
         update-ca-certificates
-        mongo "$$OTR_MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
         oplogtoredis
     environment:
       - OTR_MONGO_URL=mongodb://mongo/dev
       - OTR_REDIS_URL=rediss://redis:6380
+      - OTR_OPLOG_V2_EXTRACT_SUBFIELD_CHANGES=true
     ports:
       - 9000:9000
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./certificates/ca.crt:/usr/local/share/ca-certificates/ca.crt:ro
+
   mongo:
-    image: mongo:4.4
+    image: mongo:5.0.19
     command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0"
-    logging:
-      driver: none
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'myapp',members:[{_id:0,host:\"mongo:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
     volumes:
       - mongo_data:/data/db
+
   redis:
     image: redis:6.0
     hostname: redis
@@ -45,7 +51,7 @@ services:
     logging:
       driver: none
     ports:
-      -  6380:6380
+      - 6380:6380
     command:
       - sh
       - -c

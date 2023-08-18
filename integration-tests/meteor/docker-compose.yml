@@ -5,9 +5,12 @@ services:
       context: ../..
       dockerfile: Dockerfile.integration
     depends_on:
-      - oplogtoredis
-      - mongo
-      - redis
+      oplogtoredis:
+        condition: service_started
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
     command:
       - /wait-for.sh
       - --timeout=600
@@ -29,15 +32,19 @@ services:
       - REDIS_URL=redis://redis
       - TESTAPP_1_URL=ws://testapp1:8080/websocket
       - TESTAPP_2_URL=ws://testapp2:8080/websocket
+
   oplogtoredis:
     build: ../..
     environment:
       - OTR_MONGO_URL=mongodb://mongo/tests
       - OTR_REDIS_URL=redis://redis
       # - OTR_LOG_DEBUG=true
+      - OTR_OPLOG_V2_EXTRACT_SUBFIELD_CHANGES=true
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ../../scripts/wait-for.sh:/wait-for.sh
     command:
@@ -46,17 +53,24 @@ services:
       - testapp1:8080
       - '--'
       - /bin/oplogtoredis
+
   mongo:
-    image: mongo:4.4
+    image: mongo:5.0.19
     command: "mongod --replSet myapp --port 27017"
     logging:
       driver: none
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'myapp',members:[{_id:0,host:\"mongo:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 10s
     volumes:
       - mongo_data:/data/db
+
   redis:
     image: redis:6.0
     logging:
       driver: none
+
   testapp1: &meteor
     build: ../../testapp
     environment:

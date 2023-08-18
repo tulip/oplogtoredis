@@ -50,12 +50,62 @@ func (op *oplogEntry) IsRemove() bool {
 	return op.Operation == operationRemove
 }
 
+// Returns whether this is an oplog update format v2 update (new in MongoDB 5.0)
+func (op *oplogEntry) IsV2Update() bool {
+	dataVersion, ok := op.Data["$v"]
+	if !ok {
+		return false
+	}
+
+	// bson unmarshals integers into interface{} differently depending on platform,
+	// so we handle any kind of number
+	var dataVersionInt int
+	switch t := dataVersion.(type) {
+	case int:
+		dataVersionInt = t
+	case int8:
+		dataVersionInt = int(t)
+	case int16:
+		dataVersionInt = int(t)
+	case int32:
+		dataVersionInt = int(t)
+	case int64:
+		dataVersionInt = int(t)
+	case uint:
+		dataVersionInt = int(t)
+	case uint8:
+		dataVersionInt = int(t)
+	case uint16:
+		dataVersionInt = int(t)
+	case uint32:
+		dataVersionInt = int(t)
+	case uint64:
+		dataVersionInt = int(t)
+	case float32:
+		dataVersionInt = int(t)
+	case float64:
+		dataVersionInt = int(t)
+	default:
+		return false
+	}
+
+	if dataVersionInt != 2 {
+		return false
+	}
+
+	_, ok = op.Data["diff"]
+	return ok
+}
+
 // If this oplogEntry is for an insert, returns whether that insert is a
 // replacement (rather than a modification)
 func (op *oplogEntry) UpdateIsReplace() bool {
 	if _, ok := op.Data["$set"]; ok {
 		return false
 	} else if _, ok := op.Data["$unset"]; ok {
+		return false
+	} else if op.IsV2Update() {
+		// the v2 update format is only used for modifications
 		return false
 	} else {
 		return true
@@ -66,20 +116,25 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 func (op *oplogEntry) ChangedFields() []string {
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
 		return mapKeys(op.Data)
+	} else if op.IsUpdate() && op.IsV2Update() {
+		// New-style update. Looks like:
+		// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
+		return getChangedFieldsFromOplogV2Update(op)
 	} else if op.IsUpdate() {
+		// Old-style update. Looks like:
+		// { $v: 1, $set: { "a": 10, "b": 20 }, $unset: { "c": true } }
+
 		fields := []string{}
 		for operationKey, operation := range op.Data {
 			if operationKey == "$v" {
-				// $v indicates the version of the update language and should be
-				// ignored; it will likely be removed in a future version of
-				// Mongo (https://jira.mongodb.org/browse/SERVER-32240)
+				// $v indicates the update document format; it's not a changed key
 				continue
 			}
 
 			operationMap, operationMapOK := operation.(map[string]interface{})
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
-				log.Log.Errorw("Oplog data for non-replacement update contained a key with a non-map value",
+				log.Log.Errorw("Oplog data for non-replacement v1 update contained a key with a non-map value",
 					"op", op)
 				continue
 			}

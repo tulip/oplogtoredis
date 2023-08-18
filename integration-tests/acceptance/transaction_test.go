@@ -20,13 +20,10 @@ func TestTransaction(t *testing.T) {
 	h := startHarness()
 	defer h.stop()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI(os.Getenv("MONGO_URL")))
-	require.NoError(t, err)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	require.NoError(t, client.Connect(ctx))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGO_URL")))
+	require.NoError(t, err)
 
 	var serverStatus bson.M
 	err = client.Database("test").RunCommand(ctx, bson.D{{Key: "serverStatus", Value: 1}}).Decode(&serverStatus)

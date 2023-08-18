@@ -247,13 +247,16 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 // readNextFromCursor gets the next item from the cursor.
 // err returns the last error seen by the Cursor (or context), or nil if no error has occurred.
-//  -> err // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Err
+//
+//	-> err // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Err
+//
 // A cursor result status object is also returned with the following attrs:
-//  -> GotResult // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Next
-//  -> DidTimeout // Did the enclosing context we provided timeout?
-//     We handle this by just retrying the query
-//  -> DidLosePostion (See comment below)
-//     We handle this by creating a new cursor
+//
+//	-> GotResult // https://pkg.go.dev/go.mongodb.org/mongo-driver/mongo#Cursor.Next
+//	-> DidTimeout // Did the enclosing context we provided timeout?
+//	   We handle this by just retrying the query
+//	-> DidLosePostion (See comment below)
+//	   We handle this by creating a new cursor
 func readNextFromCursor(cursor *mongo.Cursor) (status cursorResultStatus, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
 	defer cancel()

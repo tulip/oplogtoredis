@@ -10,16 +10,17 @@ import (
 )
 
 type oplogtoredisConfiguration struct {
-	RedisURL               string        `required:"true" split_words:"true"`
-	MongoURL               string        `required:"true" split_words:"true"`
-	HTTPServerAddr         string        `default:"0.0.0.0:9000" envconfig:"HTTP_SERVER_ADDR"`
-	BufferSize             int           `default:"10000" split_words:"true"`
-	TimestampFlushInterval time.Duration `default:"1s" split_words:"true"`
-	MaxCatchUp             time.Duration `default:"60s" split_words:"true"`
-	RedisDedupeExpiration  time.Duration `default:"120s" split_words:"true"`
-	RedisMetadataPrefix    string        `default:"oplogtoredis::" split_words:"true"`
-	MongoConnectTimeout    time.Duration `default:"10s" split_words:"true"`
-	MongoQueryTimeout      time.Duration `default:"5s" split_words:"true"`
+	RedisURL                      string        `required:"true" split_words:"true"`
+	MongoURL                      string        `required:"true" split_words:"true"`
+	HTTPServerAddr                string        `default:"0.0.0.0:9000" envconfig:"HTTP_SERVER_ADDR"`
+	BufferSize                    int           `default:"10000" split_words:"true"`
+	TimestampFlushInterval        time.Duration `default:"1s" split_words:"true"`
+	MaxCatchUp                    time.Duration `default:"60s" split_words:"true"`
+	RedisDedupeExpiration         time.Duration `default:"120s" split_words:"true"`
+	RedisMetadataPrefix           string        `default:"oplogtoredis::" split_words:"true"`
+	MongoConnectTimeout           time.Duration `default:"10s" split_words:"true"`
+	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
+	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -96,7 +97,7 @@ func RedisDedupeExpiration() time.Duration {
 // should have different RedisMetadataPrefixes for each.
 //
 // This *does not* affect the channel names used to publish oplog entries. The
-// channel names are always `<db-name>.<collection-name>`` and
+// channel names are always `<db-name>.<collection-name>“ and
 // `<db-name>.<collection-name>::<document-id>`.`
 //
 // It is set via the environment variable `OTR_REDIS_METADATA_PREFIX` and
@@ -118,6 +119,17 @@ func MongoConnectTimeout() time.Duration {
 // cluster, you'll see a lot of (harmless) timeouts.
 func MongoQueryTimeout() time.Duration {
 	return globalConfig.MongoQueryTimeout
+}
+
+// OplogV2ExtractSubfieldChanges controls whether we perform an in-depth
+// analysis of v2 oplog entries (from Mongo 5.x+) to extract not just
+// which top-levels fields of documents have changed, but also which sub-fields
+// have changed. This provides the closest compatibility with pre-5.x behavior,
+// and enables some optimizations in redis-oplog, but at the expense of being
+// heavily dependent on the (undocumented) Mongo oplog format that's subject
+// to change without notice.
+func OplogV2ExtractSubfieldChanges() bool {
+	return globalConfig.OplogV2ExtractSubfieldChanges
 }
 
 // ParseEnv parses the current environment variables and updates the stored
