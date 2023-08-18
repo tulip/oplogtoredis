@@ -114,7 +114,6 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 
 // Given an operation, returned the fields affected by that operation
 func (op *oplogEntry) ChangedFields() []string {
-	// TODO: Patch this section
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
 		return mapKeys(op.Data)
 	} else if op.IsUpdate() && op.IsV2Update() {
