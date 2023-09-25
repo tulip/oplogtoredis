@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -17,9 +17,9 @@ import (
 
 func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 	publication := &Publication{
-		Channels:          []string{"a", "b"},
-		Msg:               []byte("asdf"),
-		OplogTimestamp:    primitive.Timestamp{},
+		Channels:       []string{"a", "b"},
+		Msg:            []byte("asdf"),
+		OplogTimestamp: primitive.Timestamp{},
 	}
 
 	callCount := 0
@@ -46,9 +46,9 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 
 func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 	publication := &Publication{
-		Channels:          []string{"a", "b"},
-		Msg:               []byte("asdf"),
-		OplogTimestamp:    primitive.Timestamp{},
+		Channels:       []string{"a", "b"},
+		Msg:            []byte("asdf"),
+		OplogTimestamp: primitive.Timestamp{},
 	}
 
 	callCount := 0
@@ -76,9 +76,9 @@ func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 
 func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 	publication := &Publication{
-		Channels:          []string{"a", "b"},
-		Msg:               []byte("asdf"),
-		OplogTimestamp:    primitive.Timestamp{},
+		Channels:       []string{"a", "b"},
+		Msg:            []byte("asdf"),
+		OplogTimestamp: primitive.Timestamp{},
 	}
 
 	publishFn := func(p *Publication) error {

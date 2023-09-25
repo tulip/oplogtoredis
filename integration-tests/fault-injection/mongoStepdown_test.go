@@ -49,5 +49,5 @@ func TestMongoStepdown(t *testing.T) {
 		t.Errorf("Expected no more than 100 successful writes, got %d", len(insertedIDs))
 	}
 
-	verifier.Verify(t, insertedIDs)
+	verifier.VerifyFlakyInserts(t, mongoClient.Database(mongo.DBName), insertedIDs)
 }

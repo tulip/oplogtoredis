@@ -40,7 +40,7 @@ func StartMongoServer() *MongoServer {
 	}
 
 	server := MongoServer{
-		Addr:       "mongodb://localhost:27001,localhost:27002,localhost:27003/testdb?replicaSet=test",
+		Addr:       "mongodb://127.0.0.1:27001,127.0.0.1:27002,127.0.0.1:27003/testdb?replicaSet=test",
 		dataPrefix: dir,
 	}
 
@@ -68,7 +68,7 @@ func (server *MongoServer) Start() {
 		client := server.clientNoReplLegacyMgo()
 
 		// Initiate
-		err := replicaset.Initiate(client, "localhost:27001", "test", map[string]string{})
+		err := replicaset.Initiate(client, "127.0.0.1:27001", "test", map[string]string{})
 		if err != nil {
 			panic("Error initiating replica set: " + err.Error())
 		}
@@ -76,13 +76,13 @@ func (server *MongoServer) Start() {
 
 		// Add first member - need to add them one at a time in mongo 4.4
 		err = replicaset.Add(client, replicaset.Member{
-			Address: "localhost:27002"})
+			Address: "127.0.0.1:27002"})
 		if err != nil {
 			panic("Error adding replica set member 27002: " + err.Error())
 		}
 		// Add second member - need to add them one at a time in mongo 4.4
 		err = replicaset.Add(client, replicaset.Member{
-			Address: "localhost:27003"})
+			Address: "127.0.0.1:27003"})
 		if err != nil {
 			panic("Error adding replica set member 27003: " + err.Error())
 		}
@@ -116,9 +116,10 @@ func (server *MongoServer) Client() *mongo.Client {
 	server.DBName = cs.Database
 
 	clientOptions := options.Client()
+
+	// This is true by default in mongo 4.4, but our failover tests require failed writes
 	clientOptions.SetRetryWrites(false)
-	// This is true by default in mongo 4.4
-	//- our failover tests require failed writes
+
 	clientOptions.ApplyURI(server.Addr)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -131,7 +132,12 @@ func (server *MongoServer) Client() *mongo.Client {
 
 	err = client.Ping(ctx, readpref.Primary())
 	if err != nil {
-		panic("Error pinging Mongo")
+		panic("Error pinging primary Mongo for read")
+	}
+
+	err = client.Ping(ctx, readpref.Secondary())
+	if err != nil {
+		panic("Error pinging secondary Mongo for read")
 	}
 
 	return client
@@ -186,9 +192,9 @@ func (server *MongoServer) Stop() {
 	}
 
 	// Wait for them to stop
-	waitTCPDown("localhost:27001")
-	waitTCPDown("localhost:27002")
-	waitTCPDown("localhost:27003")
+	waitTCPDown("127.0.0.1:27001")
+	waitTCPDown("127.0.0.1:27002")
+	waitTCPDown("127.0.0.1:27003")
 }
 
 // StepDown triggers a step-down of the primary
@@ -226,7 +232,7 @@ func (server *MongoServer) startNode(name string, port int) *exec.Cmd {
 		panic("Error starting up mongo node: " + err.Error())
 	}
 
-	waitTCP(fmt.Sprintf("localhost:%d", port))
+	waitTCP(fmt.Sprintf("127.0.0.1:%d", port))
 
 	return cmd
 }

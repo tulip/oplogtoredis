@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"

@@ -35,7 +35,7 @@ func BenchmarkInsertWaitForRedis(b *testing.B) {
 	client := helpers.RedisClient()
 	defer client.Close()
 
-	subscr := client.Subscribe("tests.Foo2")
+	subscr := client.Subscribe(context.Background(), "tests.Foo2")
 	defer subscr.Close()
 
 	db := helpers.SeedTestDB(helpers.DBData{})
@@ -45,7 +45,7 @@ func BenchmarkInsertWaitForRedis(b *testing.B) {
 	wg.Add(1)
 	go func() {
 		for i := 0; i < b.N; i++ {
-			_, err := subscr.ReceiveMessage()
+			_, err := subscr.ReceiveMessage(context.Background())
 			if err != nil {
 				panic(err)
 			}

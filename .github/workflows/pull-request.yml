@@ -8,14 +8,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v4
         with:
           go-version: '1.17'
-      - name: setup golangci-lint
-        run: |
-          curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.0
-          export PATH=$PATH:$(go env GOPATH)/bin
-          golangci-lint --version
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.42
       - name: run lint
         run: ./scripts/runLint.sh
       - name: run unit tests

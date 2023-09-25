@@ -1,6 +1,5 @@
 # oplogtoredis
 
-[![Build Status](https://app.travis-ci.com/tulip/oplogtoredis.svg?branch=master)](https://app.travis-ci.com/tulip/oplogtoredis)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tulip/oplogtoredis)](https://goreportcard.com/report/github.com/tulip/oplogtoredis)
 [![GoDoc](https://godoc.org/github.com/tulip/oplogtoredis?status.svg)](http://godoc.org/github.com/tulip/oplogtoredis)
 
@@ -61,9 +60,7 @@ you might use this config:
 
 ## Deploying oplogtoredis
 
-You can build oplogtoredis from source with `go build .`, which produces a
-statically-linked binary you can run. Alternatively, you can use [the public
-docker image](https://hub.docker.com/r/tulip/oplogtoredis/tags/)
+You can build oplogtoredis from source with `go build .`, which produces a statically-linked binary you can run. Alternatively, you can use [the public docker image](https://gallery.ecr.aws/u4f7y3k8/oplogtoredis). Previously we used to host these images in [Docker Hub](https://hub.docker.com/r/tulip/oplogtoredis/tags/). These won't be maintained anymore.
 
 ### Environment Variables
 

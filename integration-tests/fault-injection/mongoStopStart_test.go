@@ -54,5 +54,5 @@ func TestMongoStopStart(t *testing.T) {
 		t.Errorf("Expected at least 50 inserted IDs, got %d", len(insertedIDs))
 	}
 
-	verifier.Verify(t, insertedIDs)
+	verifier.VerifyFlakyInserts(t, mongoClient.Database(mongo.DBName), insertedIDs)
 }

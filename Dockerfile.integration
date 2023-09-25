@@ -15,7 +15,6 @@ RUN go mod download
 
 WORKDIR /oplogtoredis/integration-tests
 
-
 FROM integration_base AS acceptance
 COPY integration-tests/acceptance/*.go ./acceptance/
 WORKDIR ./acceptance

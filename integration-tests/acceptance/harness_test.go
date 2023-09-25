@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -30,7 +30,7 @@ func startHarness() *harness {
 
 	// Connect to redis and start listening for the publication we expect
 	h.redisClient = helpers.RedisClient()
-	h.subscription = h.redisClient.PSubscribe("*")
+	h.subscription = h.redisClient.PSubscribe(context.Background(), "*")
 	h.subscriptionC = h.subscription.Channel()
 
 	return &h

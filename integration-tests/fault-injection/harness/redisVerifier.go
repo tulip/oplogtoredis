@@ -1,13 +1,16 @@
 package harness
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // RedisVerifier subscribes to the publications that a BackgroundInserter should
@@ -21,19 +24,19 @@ type RedisVerifier struct {
 // NewRedisVerifier creates a RedisVerifier and starts reading messages from
 // Redis
 func NewRedisVerifier(client redis.UniversalClient, stopReceivingOnError bool) *RedisVerifier {
-	if pingErr := client.Ping().Err(); pingErr != nil {
+	if pingErr := client.Ping(context.Background()).Err(); pingErr != nil {
 		panic("Ping error to redis: " + pingErr.Error())
 	}
 
 	verifier := RedisVerifier{
 		client:      client,
 		receivedIDs: make(chan string, 100),
-		pubsub:      client.Subscribe("testdb.Test"),
+		pubsub:      client.Subscribe(context.Background(), "testdb.Test"),
 	}
 
 	go func() {
 		for {
-			msg, err := verifier.pubsub.ReceiveMessage()
+			msg, err := verifier.pubsub.ReceiveMessage(context.Background())
 			if err != nil {
 				log.Printf("Error receiving pubsub message: %s", err.Error())
 				if stopReceivingOnError {
@@ -58,7 +61,7 @@ func NewRedisVerifier(client redis.UniversalClient, stopReceivingOnError bool) *
 	return &verifier
 }
 
-// Verify verifies that the given IDs match the messages published to Redis.
+// Verify verifies that the messages received from Redis were destined to be written there
 // It blocks until all expected IDs have been received (timing out if nothing
 // is received for 10 seconds)
 func (verifier *RedisVerifier) Verify(t *testing.T, ids []string) {
@@ -68,6 +71,29 @@ func (verifier *RedisVerifier) Verify(t *testing.T, ids []string) {
 			if receivedID != id {
 				t.Errorf("On message %d, received %s but expected %s",
 					idx, receivedID, id)
+			}
+		case <-time.After(10 * time.Second):
+			t.Errorf("Timed out waiting for redis message %d", idx)
+			return
+		}
+	}
+}
+
+func (verifier *RedisVerifier) VerifyFlakyInserts(t *testing.T, mongoClient *mongo.Database, mongoIDs []string) {
+	for idx, id := range mongoIDs {
+		select {
+		case receivedID := <-verifier.receivedIDs:
+			if receivedID != id {
+				// Sometimes the Insert is detected as a failure, but the insert actually succeeds.
+				// This is a hacky case to check if this document was really written to Mongo
+				findOneResult := mongoClient.Collection("Test").FindOne(context.Background(), bson.M{
+					"_id": receivedID,
+				})
+
+				if findOneResult.Err() != nil {
+					t.Errorf("On message %d, received %s but expected %s",
+						idx, receivedID, id)
+				}
 			}
 		case <-time.After(10 * time.Second):
 			t.Errorf("Timed out waiting for redis message %d", idx)

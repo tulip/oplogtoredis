@@ -5,14 +5,15 @@
 package redispub
 
 import (
+	"context"
 	"fmt"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -126,6 +127,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 
 func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {
 	_, err := publishDedupe.Run(
+		context.Background(),
 		client,
 		[]string{
 			// The key used for deduplication
@@ -162,7 +164,7 @@ func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan
 
 	flush := func() {
 		if needFlush {
-			client.Set(opts.MetadataPrefix+"lastProcessedEntry", encodeMongoTimestamp(mostRecentTimestamp), 0)
+			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry", encodeMongoTimestamp(mostRecentTimestamp), 0)
 			lastFlush = time.Now()
 			needFlush = false
 		}
