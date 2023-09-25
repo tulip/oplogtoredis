@@ -18,7 +18,7 @@ runs:
   using: "composite"
   steps:
     - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v2
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ inputs.role-to-assume }}
         role-session-name: github-action-session
@@ -28,7 +28,7 @@ runs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       with:
-        registry-type: ${{ inputs.registry_type }}
+        registry-type: ${{ inputs.registry-type }}
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@ecf95283f03858871ff00b787d79c419715afc34 # v2.7.0
