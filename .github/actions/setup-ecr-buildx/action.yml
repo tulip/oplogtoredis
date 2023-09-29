@@ -5,8 +5,8 @@ inputs:
   registry-type:
     description: ECR Registry Type
     default: private
-  role-to-assume:
-    description: ECR Role to Assume
+  iam-role-to-assume:
+    description: IAM Role to Assume
     required: true
 
 outputs:
@@ -20,7 +20,7 @@ runs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ inputs.role-to-assume }}
+        role-to-assume: ${{ inputs.iam-role-to-assume }}
         role-session-name: github-action-session
         aws-region: us-east-1
 

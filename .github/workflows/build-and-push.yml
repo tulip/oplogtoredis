@@ -57,7 +57,7 @@ jobs:
         uses: ./.github/actions/setup-ecr-buildx
         id: setup-ecr-buildx
         with:
-          role-to-assume: ${{ secrets.AWS_PUBLIC_ECR_ROLE_ARN }}
+          iam-role-to-assume: ${{ secrets.AWS_PUBLIC_PUBLIC_ECR_ROLE_ARN }}
           registry-type: public
 
       - name: Build and push image
