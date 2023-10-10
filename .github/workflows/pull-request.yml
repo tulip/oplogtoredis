@@ -3,6 +3,19 @@ name: Pull Request
 on: [ pull_request ]
 
 jobs:
+  nix_build:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
+      - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe
+        with:
+          go-version: '1.17'
+      - uses: cachix/install-nix-action@6ed004b9ccb68dbc28e7c85bee15fa93dbd214ac
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: run nix build
+        run: nix build
   lint_and_units:
     runs-on: ubuntu-20.04
     timeout-minutes: 60
