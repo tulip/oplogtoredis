@@ -23,6 +23,19 @@ There are a few things that don't currently work in `redis-oplog` when using the
 - Custom namespaces and channels ([`redis-oplog` issue #279](https://github.com/cult-of-coders/redis-oplog/issues/279))
 - Synthetic mutations ([`redis-oplog` issue #277](https://github.com/cult-of-coders/redis-oplog/issues/277))
 
+## Nix
+
+We are using Nix at Tulip so we're rolling a `default.nix` and a `flake.nix` wrapper around it for Flake support. The `default.nix` file contains a `vendorHash` attribute, which would be the calculated hash of the downloaded modules to be vendored. To update this value after a `go.sum` file change (which means that different modules were downloaded), refer to the following snippet:
+
+```bash
+# TODO: default.nix: Change the `vendorHash` property to an empty string and run `nix build`.
+nix build
+# ...
+# error: hash mismatch in fixed-output derivation '/nix/store/by8bc99ywfw6j1i6zjxcwdmc5b3mmgzv-oplogtoredis-3.0.0-go-modules.drv':
+#         specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+#            got:    sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=
+```
+
 ### MongoDB v5
 
 MongoDB v5 makes a substantial change to the format of the oplog, which makes it much more difficult to assemble the list of changed fields from an oplog entry. Meteor has handled this with a full [oplog v2 to v1 converter](https://github.com/meteor/meteor/blob/devel/packages/mongo/oplog_v2_converter.js), which entails substantial complexity and a high level of dependence on the (undocumented) oplog format, and requires testing against every new version of Mongo. To reduce this maintenance burden, oplogtoredis implements a simplified version of this algorithm that just extracts changed top-level fields.
