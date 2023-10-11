@@ -7,8 +7,8 @@ on:
     branches:
       - master
   # Left this here in-case the workflow needs to be developed further rapidly:
-  # pull_request:
-  #   types: [ opened, synchronize, reopened ]
+  pull_request:
+    types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
 
@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
-  id-token: write # for the creds itself
-  contents: read # for checkout
+  id-token: read
+  contents: read
 
 jobs:
   build-and-push:
