@@ -73,7 +73,7 @@ you might use this config:
 
 ## Deploying oplogtoredis
 
-You can build oplogtoredis from source with `go build .`, which produces a statically-linked binary you can run. Alternatively, you can use [the public docker image](https://gallery.ecr.aws/u4f7y3k8/oplogtoredis). Previously we used to host these images in [Docker Hub](https://hub.docker.com/r/tulip/oplogtoredis/tags/). These won't be maintained anymore.
+You can build oplogtoredis from source with `go build .`, which produces a statically-linked binary you can run. Alternatively, you can use [the public docker image](https://gallery.ecr.aws/tulip/oplogtoredis). Previously we used to host these images in [Docker Hub](https://hub.docker.com/r/tulip/oplogtoredis/tags/). These won't be maintained anymore.
 
 ### Environment Variables
 
