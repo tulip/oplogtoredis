@@ -64,5 +64,5 @@ jobs:
         uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671 # 4.0.0
         with:
           tags: ${{ steps.setup-ecr-buildx.outputs.ecr_registry }}/tulip/oplogtoredis:${{ steps.generate-tag.outputs.TAG }}
-          provenance: false
+          provenance: true
           push: true
