@@ -25,16 +25,17 @@ There are a few things that don't currently work in `redis-oplog` when using the
 
 ## Nix
 
-We are using Nix at Tulip so we're rolling a `default.nix` and a `flake.nix` wrapper around it for Flake support. The `default.nix` file contains a `vendorHash` attribute, which would be the calculated hash of the downloaded modules to be vendored. To update this value after a `go.sum` file change (which means that different modules were downloaded), refer to the following snippet:
+We are using Nix at Tulip so we're rolling a `default.nix` and a `flake.nix` wrapper around it for Flake support. The `default.nix` file contains a `vendorHash` attribute, which would be the calculated hash of the downloaded modules to be vendored. To update this value after a `go.sum` file change (which means that different modules were downloaded), refer to the following instructions:
 
-```bash
-# TODO: default.nix: Change the `vendorHash` property to an empty string and run `nix build`.
-nix build
-# ...
-# error: hash mismatch in fixed-output derivation '/nix/store/by8bc99ywfw6j1i6zjxcwdmc5b3mmgzv-oplogtoredis-3.0.0-go-modules.drv':
-#         specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-#            got:    sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=
-```
+1. Edit `default.nix` and change the `vendorHash` attribute to an empty string then run `nix build`
+1. Run `nix build` and observe the output. You are looking for this section:
+
+  ```text
+  error: hash mismatch in fixed-output derivation '/nix/store/by8bc99ywfw6j1i6zjxcwdmc5b3mmgzv-oplogtoredis-3.0.0-go-modules.drv':
+          specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+             got:    sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=
+  ```
+1. Use the `sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=` for the value of `vendorHash` and verify that `nix build` succeeds.
 
 ### MongoDB v5
 
