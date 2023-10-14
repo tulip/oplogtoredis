@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
-  id-token: read
+  id-token: write
   contents: read
 
 jobs:
