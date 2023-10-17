@@ -3,7 +3,7 @@ package helpers
 import (
 	"os"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 )
 
 // RedisClient returns a redis client to the URL specified in the REDIS_URL

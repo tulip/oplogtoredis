@@ -15,6 +15,9 @@ func TestRestart(t *testing.T) {
 	mongo := harness.StartMongoServer()
 	defer mongo.Stop()
 
+	// Sleeping here for a while as the initial connection seems to be unreliable
+	time.Sleep(time.Second * 1)
+
 	redis := harness.StartRedisServer()
 	defer redis.Stop()
 
@@ -42,7 +45,7 @@ func TestRestart(t *testing.T) {
 		t.Errorf("Expected 100 inserted IDs, got %d", len(insertedIDs))
 	}
 
-	verifier.Verify(t, insertedIDs)
+	verifier.VerifyFlakyInserts(t, mongoClient.Database(mongo.DBName), insertedIDs)
 
 	// We also want to verify that we picked up from where we left off (rather
 	// that starting from the beginning of the oplog or something). The first

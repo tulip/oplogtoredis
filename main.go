@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	stdlog "log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,7 +19,7 @@ import (
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -162,6 +163,14 @@ func createMongoClient() (*mongo.Client, error) {
 	return client, nil
 }
 
+type redisLogger struct {
+	log *stdlog.Logger
+}
+
+func (l redisLogger) Printf(ctx context.Context, format string, v ...interface{}) {
+	l.log.Printf(format, v...)
+}
+
 // Goroutine that just reads messages and sends them to Redis. We don't do this
 // inline above so that messages can queue up in the channel if we lose our
 // redis connection
@@ -172,7 +181,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 		return nil, errors.Wrap(err, "creating std logger")
 	}
 
-	redis.SetLogger(stdLog)
+	redis.SetLogger(redisLogger{log: stdLog})
 
 	// Parse the Redis URL
 	parsedRedisURL, err := redis.ParseURL(config.RedisURL())
@@ -198,7 +207,7 @@ func createRedisClient() (redis.UniversalClient, error) {
 	client := redis.NewUniversalClient(&clientOptions)
 
 	// Check that we have a connection
-	_, err = client.Ping().Result()
+	_, err = client.Ping(context.Background()).Result()
 	if err != nil {
 		return nil, errors.Wrap(err, "pinging redis")
 	}
@@ -210,7 +219,7 @@ func makeHTTPServer(redis redis.UniversalClient, mongo *mongo.Client) *http.Serv
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		redisErr := redis.Ping().Err()
+		redisErr := redis.Ping(r.Context()).Err()
 		redisOK := redisErr == nil
 		if !redisOK {
 			log.Log.Errorw("Error connecting to Redis during healthz check",

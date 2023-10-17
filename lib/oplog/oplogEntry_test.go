@@ -387,7 +387,7 @@ func TestUpdateIsV2Formatted(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&oplogEntry{Data: test.in}).UpdateIsV2Formatted()
+			got := (&oplogEntry{Data: test.in}).IsV2Update()
 
 			if got != test.expectedResult {
 				t.Errorf("UpdateIsV2Formatted(%#v) = %t; want %t",

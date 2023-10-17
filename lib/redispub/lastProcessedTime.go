@@ -1,9 +1,10 @@
 package redispub
 
 import (
+	"context"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -17,7 +18,7 @@ import (
 // If oplogtoredis has not processed any messages, returns redis.Nil as an
 // error.
 func LastProcessedTimestamp(redisClient redis.UniversalClient, metadataPrefix string) (primitive.Timestamp, time.Time, error) {
-	str, err := redisClient.Get(metadataPrefix + "lastProcessedEntry").Result()
+	str, err := redisClient.Get(context.Background(), metadataPrefix+"lastProcessedEntry").Result()
 	if err != nil {
 		return primitive.Timestamp{}, time.Unix(0, 0), err
 	}

@@ -1,6 +1,5 @@
 # oplogtoredis
 
-[![Build Status](https://app.travis-ci.com/tulip/oplogtoredis.svg?branch=master)](https://app.travis-ci.com/tulip/oplogtoredis)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tulip/oplogtoredis)](https://goreportcard.com/report/github.com/tulip/oplogtoredis)
 [![GoDoc](https://godoc.org/github.com/tulip/oplogtoredis?status.svg)](http://godoc.org/github.com/tulip/oplogtoredis)
 
@@ -23,6 +22,20 @@ There are a few things that don't currently work in `redis-oplog` when using the
 
 - Custom namespaces and channels ([`redis-oplog` issue #279](https://github.com/cult-of-coders/redis-oplog/issues/279))
 - Synthetic mutations ([`redis-oplog` issue #277](https://github.com/cult-of-coders/redis-oplog/issues/277))
+
+## Nix
+
+We are using Nix at Tulip so we're rolling a `default.nix` and a `flake.nix` wrapper around it for Flake support. The `default.nix` file contains a `vendorHash` attribute, which would be the calculated hash of the downloaded modules to be vendored. To update this value after a `go.sum` file change (which means that different modules were downloaded), refer to the following instructions:
+
+1. Edit `default.nix` and change the `vendorHash` attribute to an empty string then run `nix build`
+1. Run `nix build` and observe the output. You are looking for this section:
+
+  ```text
+  error: hash mismatch in fixed-output derivation '/nix/store/by8bc99ywfw6j1i6zjxcwdmc5b3mmgzv-oplogtoredis-3.0.0-go-modules.drv':
+          specified: sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+             got:    sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=
+  ```
+1. Use the `sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=` for the value of `vendorHash` and verify that `nix build` succeeds.
 
 ### MongoDB v5
 
@@ -61,9 +74,7 @@ you might use this config:
 
 ## Deploying oplogtoredis
 
-You can build oplogtoredis from source with `go build .`, which produces a
-statically-linked binary you can run. Alternatively, you can use [the public
-docker image](https://hub.docker.com/r/tulip/oplogtoredis/tags/)
+You can build oplogtoredis from source with `go build .`, which produces a statically-linked binary you can run. Alternatively, you can use [the public docker image](https://gallery.ecr.aws/tulip/oplogtoredis). Previously we used to host these images in [Docker Hub](https://hub.docker.com/r/tulip/oplogtoredis/tags/). These won't be maintained anymore.
 
 ### Environment Variables
 

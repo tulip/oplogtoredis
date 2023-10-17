@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 )
@@ -15,6 +16,9 @@ import (
 func TestBaseline(t *testing.T) {
 	mongo := harness.StartMongoServer()
 	defer mongo.Stop()
+
+	// Sleeping here for a while as the initial connection seems to be unreliable
+	time.Sleep(time.Second * 1)
 
 	redis := harness.StartRedisServer()
 	defer redis.Stop()
