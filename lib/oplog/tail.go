@@ -26,7 +26,7 @@ import (
 // reconnection and resumption of where it left off.
 type Tailer struct {
 	MongoClient *mongo.Client
-	RedisClient redis.UniversalClient
+	RedisClients []redis.UniversalClient
 	RedisPrefix string
 	MaxCatchUp  time.Duration
 }
@@ -397,7 +397,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
 func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
-	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClient, tailer.RedisPrefix)
+	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix)
 
 	if redisErr == nil {
 		// we have a last write time, check that it's not too far in the

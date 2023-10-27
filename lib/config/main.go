@@ -5,7 +5,7 @@ package config
 
 import (
 	"time"
-
+	"strings"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -25,12 +25,11 @@ type oplogtoredisConfiguration struct {
 
 var globalConfig *oplogtoredisConfiguration
 
-// RedisURL is the Redis URL configuration. It is required, and is set via the
-// environment variable `OTR_REDIS_URL`.
-// To connect to a instance over TLS be sure to specify the url with protocol
-// `rediss://`, otherwise use `redis://`
-func RedisURL() string {
-	return globalConfig.RedisURL
+// RedisURL is the configuration for connecting to a Redis instance using the 'OTR_REDIS_URL' environment variable.
+// For TLS, use 'rediss://'; for non-TLS, use 'redis://'.
+// Multiple URLs can be configured by separating them with commas.
+func RedisURL() []string {
+	return strings.Split(globalConfig.RedisURL, ",")
 }
 
 // MongoURL is the Mongo URL configuration. Is is required, and is set via the

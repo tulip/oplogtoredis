@@ -11,6 +11,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      redis-sentinel:
+        condition: service_started
+      redis-sentinel-master:
+        condition: service_started
     command:
       - /wait-for.sh
       - --timeout=60
@@ -20,16 +24,20 @@ services:
       - --timeout=60
       - redis:6379
       - '--'
+      - /wait-for.sh
+      - --timeout=120
+      - redis-sentinel:26379
+      - '--'
       - /integration/performance/entry.sh
     environment:
       - MONGO_URL=mongodb://mongo/tests
-      - REDIS_URL=redis://redis
+      - REDIS_URL=redis://redis-sentinel:26379,redis://redis
 
   oplogtoredis:
     build: ../..
     environment:
       - OTR_MONGO_URL=mongodb://mongo/tests
-      - OTR_REDIS_URL=redis://redis
+      - OTR_REDIS_URL=redis://redis-sentinel:26379,redis://redis
     depends_on:
       mongo:
         condition: service_healthy
@@ -64,6 +72,17 @@ services:
     image: redis:6.0
     logging:
       driver: none
+
+  redis-sentinel-master:
+    image: redis:6.0
+    environment:
+      - REDIS_REPLICATION_MODE=master
+
+  redis-sentinel:
+    image: bitnami/redis-sentinel:latest
+    environment:
+      - REDIS_SENTINEL_MASTER=redis-sentinel-master
+
 
 volumes:
   mongo_data:

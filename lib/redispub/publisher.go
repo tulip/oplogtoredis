@@ -56,18 +56,28 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
+func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	go periodicallyUpdateTimestamp(client, timestampC, opts)
+	for _,client := range clients {
+		go periodicallyUpdateTimestamp(client, timestampC, opts)
+	}
 
 	// Redis expiration is in integer seconds, so we have to convert the
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	publishFn := func(p *Publication) error {
-		return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+	type PubFn func(*Publication)error
+
+	var publishFns []PubFn
+
+	for _,client := range clients {
+		client := client
+		publishFn := func(p *Publication) error {
+			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+		}
+		publishFns = append(publishFns, publishFn)
 	}
 
 	metricSendFailed := metricSentMessages.WithLabelValues("failed")
@@ -80,19 +90,23 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 			return
 
 		case p := <-in:
-			err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+			for i,publishFn := range publishFns {
+				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+				log.Log.Debugw("Published to", "idx", i)
+				
 
-			if err != nil {
-				metricSendFailed.Inc()
-				log.Log.Errorw("Permanent error while trying to publish message; giving up",
-					"error", err,
-					"message", p)
-			} else {
-				metricSendSuccess.Inc()
+				if err != nil {
+					metricSendFailed.Inc()
+					log.Log.Errorw("Permanent error while trying to publish message; giving up",
+						"error", err,
+						"message", p)
+				} else {
+					metricSendSuccess.Inc()
 
-				// We want to make sure we do this *after* we've successfully published
-				// the messages
-				timestampC <- p.OplogTimestamp
+					// We want to make sure we do this *after* we've successfully published
+					// the messages
+					timestampC <- p.OplogTimestamp
+				}
 			}
 		}
 	}

@@ -113,7 +113,7 @@ func checkConfigExpectation(t *testing.T, expectedConfig *oplogtoredisConfigurat
 			expectedConfig.MongoURL, MongoURL())
 	}
 
-	if expectedConfig.RedisURL != RedisURL() {
+	if expectedConfig.RedisURL != strings.Join(RedisURL()[:], "") {
 		t.Errorf("Incorrect Redis URL. Got \"%s\", Expected \"%s\"",
 			expectedConfig.RedisURL, RedisURL())
 	}
