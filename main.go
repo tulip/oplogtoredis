@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"strings"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,6 +18,7 @@ import (
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/oplog"
+	"github.com/tulip/oplogtoredis/lib/parse"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 
 	"github.com/go-redis/redis/v8"
@@ -81,10 +82,10 @@ func main() {
 	waitGroup.Add(1)
 	go func() {
 		tailer := oplog.Tailer{
-			MongoClient: mongoSession,
+			MongoClient:  mongoSession,
 			RedisClients: redisClients,
-			RedisPrefix: config.RedisMetadataPrefix(),
-			MaxCatchUp:  config.MaxCatchUp(),
+			RedisPrefix:  config.RedisMetadataPrefix(),
+			MaxCatchUp:   config.MaxCatchUp(),
 		}
 		tailer.Tail(redisPubs, stopOplogTail)
 
@@ -189,29 +190,11 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	var ret []redis.UniversalClient
 
 	for _, url := range config.RedisURL() {
-		parsedRedisURL, err := redis.ParseURL(url)
-		log.Log.Info("Parsed redis url: ", url)
+		clientOptions, err := parse.ParseRedisURL(url, strings.HasPrefix(url, "redis-sentinel://"))
 		if err != nil {
 			return nil, errors.Wrap(err, "parsing redis url")
 		}
-		var clientOptions redis.UniversalOptions
-
-		if !strings.Contains(url, "sentinel") {
-			clientOptions = redis.UniversalOptions{
-				Addrs:     []string{parsedRedisURL.Addr},
-				DB:        parsedRedisURL.DB,
-				Password:  parsedRedisURL.Password,
-				TLSConfig: parsedRedisURL.TLSConfig,
-			}
-		}else{
-			clientOptions = redis.UniversalOptions{
-				Addrs:     []string{parsedRedisURL.Addr},
-				DB:        parsedRedisURL.DB,
-				Password:  parsedRedisURL.Password,
-				TLSConfig: parsedRedisURL.TLSConfig,
-				MasterName: "mymaster",
-			}
-		}
+		log.Log.Info("Parsed redis url: ", clientOptions)
 
 		if clientOptions.TLSConfig != nil {
 			clientOptions.TLSConfig = &tls.Config{
@@ -219,15 +202,13 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 				MinVersion:         tls.VersionTLS12,
 			}
 		}
-		client := redis.NewUniversalClient(&clientOptions)
+		client := redis.NewUniversalClient(clientOptions)
 		_, err = client.Ping(context.Background()).Result()
 		if err != nil {
 			return nil, errors.Wrap(err, "pinging redis")
 		}
 		ret = append(ret, client)
 	}
-
-
 
 	return ret, nil
 }
@@ -237,13 +218,13 @@ func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		redisOK := true
-		for _,redis := range clients {
+		for _, redis := range clients {
 			redisErr := redis.Ping(context.Background()).Err()
-		 	redisOK = (redisOK && (redisErr == nil))
-		 	if !redisOK {
-		 		log.Log.Errorw("Error connecting to Redis during healthz check",
-		 			"error", redisErr)
-		 	}
+			redisOK = (redisOK && (redisErr == nil))
+			if !redisOK {
+				log.Log.Errorw("Error connecting to Redis during healthz check",
+					"error", redisErr)
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
