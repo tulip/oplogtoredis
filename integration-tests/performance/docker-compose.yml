@@ -37,7 +37,7 @@ services:
     build: ../..
     environment:
       - OTR_MONGO_URL=mongodb://mongo/tests
-      - OTR_REDIS_URL=redis://redis-sentinel:26379,redis://redis
+      - OTR_REDIS_URL=redis-sentinel://redis-sentinel:26379?sentinelMasterId=mymaster,redis://redis
     depends_on:
       mongo:
         condition: service_healthy
