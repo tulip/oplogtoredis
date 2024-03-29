@@ -24,6 +24,8 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
@@ -76,7 +78,26 @@ func main() {
 	// and sends them to Redis.
 	//
 	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
+	bufferCapacity := 10000
 	redisPubs := make(chan *redispub.Publication, 10000)
+
+	var metricBufferCapacity = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "main",
+		Name:      "buffer_capacity",
+		Help:      "Gauge indicating the capacity of the buffer that holds messages waiting to be written to redis.",
+	})
+	metricBufferCapacity.Set(float64(bufferCapacity))
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "main",
+		Name:      "buffer_contents",
+		Help:      "Guage indicating the number of messages waiting in the buffer to be written to redis.",
+	}, func () float64 {
+		return float64(len(redisPubs))
+	})
+
 	waitGroup := sync.WaitGroup{}
 
 	stopOplogTail := make(chan bool)
