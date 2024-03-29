@@ -58,7 +58,7 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "last_command_duration",
-	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
+	Help:      "The duration of the previous redis command in seconds.",
 })
 
 // PublishStream reads Publications from the given channel and publishes them
