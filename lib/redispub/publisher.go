@@ -54,6 +54,13 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
 })
 
+var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "last_command_duration",
+	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
+})
+
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
 func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
@@ -93,7 +100,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			for i,publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
-				
+
 
 				if err != nil {
 					metricSendFailed.Inc()
@@ -140,6 +147,8 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 }
 
 func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {
+	start := time.Now()
+
 	_, err := publishDedupe.Run(
 		context.Background(),
 		client,
@@ -159,6 +168,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
+	metricLastCommandDuration.Set(time.Now().Sub(start).Seconds())
 	return err
 }
 
