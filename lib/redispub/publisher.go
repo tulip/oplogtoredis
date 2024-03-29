@@ -168,7 +168,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
-	metricLastCommandDuration.Set(time.Now().Sub(start).Seconds())
+	metricLastCommandDuration.Set(time.Since(start).Seconds())
 	return err
 }
 
