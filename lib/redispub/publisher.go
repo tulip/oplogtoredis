@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -75,16 +76,43 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication)error
+	type PubFn func(*Publication) error
 
-	var publishFns []PubFn
+	var wg sync.WaitGroup
+	defer wg.Wait()
 
-	for _,client := range clients {
-		client := client
-		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+	var inChans []chan *Publication
+	var outChans []chan error
+
+	defer func () {
+		for _, c := range(inChans) {
+			close(c)
 		}
-		publishFns = append(publishFns, publishFn)
+	}()
+
+	for i, client := range clients {
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+
+			inChan := make(chan *Publication)
+			inChans = append(inChans, inChan)
+			outChan := make(chan error)
+			defer close(outChan)
+			outChans = append(outChans, outChan)
+			chanIdx := i
+
+			client := client
+
+			publishFn := func(p *Publication) error {
+				return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+			}
+
+			for p := range inChan {
+				log.Log.Debugw("Attempting to publish to", "idx", chanIdx)
+				outChan <- publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+			}
+		}()
 	}
 
 	metricSendFailed := metricSentMessages.WithLabelValues("failed")
@@ -97,10 +125,12 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			for i,publishFn := range publishFns {
-				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
-				log.Log.Debugw("Published to", "idx", i)
+			for _, inChan := range inChans {
+				inChan <- p
+			}
 
+			for _, outChan := range outChans {
+				err := <-outChan
 
 				if err != nil {
 					metricSendFailed.Inc()
@@ -109,12 +139,12 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 						"message", p)
 				} else {
 					metricSendSuccess.Inc()
-
-					// We want to make sure we do this *after* we've successfully published
-					// the messages
-					timestampC <- p.OplogTimestamp
 				}
 			}
+
+			// We want to make sure we do this *after* we've successfully published
+			// the messages
+			timestampC <- p.OplogTimestamp
 		}
 	}
 }
