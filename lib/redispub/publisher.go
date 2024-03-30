@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -76,11 +75,6 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication) error
-
-	var wg sync.WaitGroup
-	defer wg.Wait()
-
 	var inChans []chan *Publication
 	var outChans []chan error
 
@@ -91,25 +85,22 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	}()
 
 	for i, client := range clients {
-		go func() {
-			wg.Add(1)
-			defer wg.Done()
+		i := i
+		client := client
 
+		go func() {
 			inChan := make(chan *Publication)
 			inChans = append(inChans, inChan)
 			outChan := make(chan error)
 			defer close(outChan)
 			outChans = append(outChans, outChan)
-			chanIdx := i
-
-			client := client
 
 			publishFn := func(p *Publication) error {
 				return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
 			}
 
 			for p := range inChan {
-				log.Log.Debugw("Attempting to publish to", "idx", chanIdx)
+				log.Log.Debugw("Attempting to publish to", "idx", i)
 				outChan <- publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 			}
 		}()
