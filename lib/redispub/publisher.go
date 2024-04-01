@@ -7,6 +7,7 @@ package redispub
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,14 +46,14 @@ var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redispub",
 	Name:      "processed_messages",
 	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them",
-}, []string{"status"})
+}, []string{"status", "clientIdx"})
 
-var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
+var metricTemporaryFailures = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "temporary_send_failures",
 	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
-})
+}, []string{"clientIdx"})
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
@@ -78,7 +79,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	}()
 
 	for i, client := range clients {
-		i := i
+		clientIdx := i
 		client := client
 
 		go func() {
@@ -93,14 +94,11 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			}
 
 			for p := range inChan {
-				log.Log.Debugw("Attempting to publish to", "idx", i)
-				outChan <- publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+				log.Log.Debugw("Attempting to publish to", "clientIdx", clientIdx)
+				outChan <- publishSingleMessageWithRetries(p, 30, clientIdx, time.Second, publishFn)
 			}
 		}()
 	}
-
-	metricSendFailed := metricSentMessages.WithLabelValues("failed")
-	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
 
 	for {
 		select {
@@ -113,16 +111,21 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 				inChan <- p
 			}
 
-			for _, outChan := range outChans {
+			for clientIdx, outChan := range outChans {
 				err := <-outChan
+				clientIdxStr := strconv.FormatInt(int64(clientIdx), 10)
 
 				if err != nil {
-					metricSendFailed.Inc()
-					log.Log.Errorw("Permanent error while trying to publish message; giving up",
+					metricSentMessages.WithLabelValues("failed", clientIdxStr).Inc()
+					log.Log.Errorw(
+						"Permanent error while trying to publish message; giving up",
+						"clientIdx", clientIdx,
 						"error", err,
-						"message", p)
+						"message", p,
+
+					)
 				} else {
-					metricSendSuccess.Inc()
+					metricSentMessages.WithLabelValues("sent", clientIdxStr).Inc()
 				}
 			}
 
@@ -133,7 +136,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	}
 }
 
-func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
+func publishSingleMessageWithRetries(p *Publication, maxRetries int, clientIdx int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
 	if p == nil {
 		return errors.New("Nil Redis publication")
 	}
@@ -148,7 +151,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 				"retryNumber", retries)
 
 			// failure, retry
-			metricTemporaryFailures.Inc()
+			metricTemporaryFailures.WithLabelValues("clientIdx", strconv.FormatInt(int64(clientIdx), 10)).Inc()
 			retries++
 			time.Sleep(sleepTime)
 		} else {
