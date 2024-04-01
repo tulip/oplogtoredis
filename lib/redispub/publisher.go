@@ -158,7 +158,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, clientIdx i
 				"retryNumber", retries)
 
 			// failure, retry
-			metricTemporaryFailures.WithLabelValues("clientIdx", strconv.FormatInt(int64(clientIdx), 10)).Inc()
+			metricTemporaryFailures.WithLabelValues(strconv.FormatInt(int64(clientIdx), 10)).Inc()
 			retries++
 			time.Sleep(sleepTime)
 		} else {
