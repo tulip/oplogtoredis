@@ -61,6 +61,7 @@ func TestRedisStopStart(t *testing.T) {
 
 	nSuccess := harness.FindPromMetricCounter(metrics, "otr_redispub_processed_messages", map[string]string{
 		"status": "sent",
+		"clientIdx": "0",
 	})
 	if nSuccess != 100 {
 		t.Errorf("Metric otr_redispub_processed_messages(status: sent) = %d, expected 100", nSuccess)
