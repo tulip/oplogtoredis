@@ -33,7 +33,7 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 		return nil
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, time.Second, publishFn)
+	err := publishSingleMessageWithRetries(publication, 30, 0, time.Second, publishFn)
 
 	if err != nil {
 		t.Errorf("Got unexpected error: %s", err)
@@ -67,7 +67,7 @@ func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 		return nil
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, 0, publishFn)
+	err := publishSingleMessageWithRetries(publication, 30, 0, 0, publishFn)
 
 	if err != nil {
 		t.Errorf("Got unexpected error: %s", err)
@@ -85,7 +85,7 @@ func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
 		return errors.New("Some error")
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, 0, publishFn)
+	err := publishSingleMessageWithRetries(publication, 30, 0, 0, publishFn)
 
 	if err == nil {
 		t.Errorf("Expected an error, but didn't get one")
@@ -173,7 +173,7 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 }
 
 func TestNilPublicationMessage(t *testing.T) {
-	err := publishSingleMessageWithRetries(nil, 5, 1*time.Second, func(p *Publication) error {
+	err := publishSingleMessageWithRetries(nil, 5, 0, 1*time.Second, func(p *Publication) error {
 		t.Error("Should not have been called")
 		return nil
 	})
