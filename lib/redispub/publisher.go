@@ -81,13 +81,13 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	for i, client := range clients {
 		clientIdx := i
 		client := client
+		inChan := make(chan *Publication)
+		inChans = append(inChans, inChan)
+		outChan := make(chan error)
+		outChans = append(outChans, outChan)
 
 		go func() {
-			inChan := make(chan *Publication)
-			inChans = append(inChans, inChan)
-			outChan := make(chan error)
 			defer close(outChan)
-			outChans = append(outChans, outChan)
 
 			publishFn := func(p *Publication) error {
 				return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)

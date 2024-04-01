@@ -64,7 +64,7 @@ func TestRedisStopStart(t *testing.T) {
 		"clientIdx": "0",
 	})
 	if nSuccess != 100 {
-		t.Errorf("Metric otr_redispub_processed_messages(status: sent) = %d, expected 100", nSuccess)
+		t.Errorf("Metric otr_redispub_processed_messages(status: sent, clientIdx: 0) = %d, expected 100", nSuccess)
 	}
 
 	nPermFail := harness.FindPromMetricCounter(metrics, "otr_redispub_processed_messages", map[string]string{
@@ -72,7 +72,7 @@ func TestRedisStopStart(t *testing.T) {
 		"clientIdx": "0",
 	})
 	if nPermFail != 0 {
-		t.Errorf("Metric otr_redispub_processed_messages(status: failed) = %d, expected 0", nPermFail)
+		t.Errorf("Metric otr_redispub_processed_messages(status: failed, clientIdx: 0) = %d, expected 0", nPermFail)
 	}
 
 	nTempFail := harness.FindPromMetricCounter(metrics, "otr_redispub_temporary_send_failures", map[string]string{})
