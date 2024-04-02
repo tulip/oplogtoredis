@@ -71,6 +71,8 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 	var inChans []chan *Publication
 	var outChans []chan error
+	var sendFailedMetrics []prometheus.Counter
+	var sendSucceededMetrics []prometheus.Counter
 
 	defer func () {
 		for _, c := range(inChans) {
@@ -78,13 +80,16 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		}
 	}()
 
-	for i, client := range clients {
-		clientIdx := i
+	for clientIdx, client := range clients {
+		clientIdx := clientIdx
+		clientIdxStr := strconv.FormatInt(int64(clientIdx), 10)
 		client := client
 		inChan := make(chan *Publication)
 		inChans = append(inChans, inChan)
 		outChan := make(chan error)
 		outChans = append(outChans, outChan)
+		sendSucceededMetrics = append(sendSucceededMetrics, metricSentMessages.WithLabelValues("sent", clientIdxStr))
+		sendFailedMetrics = append(sendFailedMetrics, metricSentMessages.WithLabelValues("failed", clientIdxStr))
 
 		go func() {
 			defer close(outChan)
@@ -113,10 +118,9 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 			for clientIdx, outChan := range outChans {
 				err := <-outChan
-				clientIdxStr := strconv.FormatInt(int64(clientIdx), 10)
 
 				if err != nil {
-					metricSentMessages.WithLabelValues("failed", clientIdxStr).Inc()
+					sendFailedMetrics[clientIdx].Inc()
 					log.Log.Errorw(
 						"Permanent error while trying to publish message; giving up",
 						"clientIdx", clientIdx,
@@ -125,7 +129,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 					)
 				} else {
-					metricSentMessages.WithLabelValues("sent", clientIdxStr).Inc()
+					sendSucceededMetrics[clientIdx].Inc()
 				}
 			}
 
