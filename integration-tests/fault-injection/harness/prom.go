@@ -17,6 +17,8 @@ func FindPromMetric(metrics map[string]*promdata.MetricFamily, name string, labe
 		panic("No such metric: " + name)
 	}
 
+	fmt.Sprintf("METRIC:\n%s", pretty.Sprint(metric))
+
 	for _, metricPartition := range metric.Metric {
 		partitionLabels := map[string]string{}
 

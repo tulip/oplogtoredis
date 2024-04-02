@@ -3,6 +3,8 @@
 set -eu
 cd `dirname "$0"`'/..'
 
+set -x
+
 docker build --platform=linux/amd64 . -f Dockerfile -t local-oplogtoredis
 docker build --platform=linux/amd64 . -f Dockerfile.integration -t oltr-integration
 
