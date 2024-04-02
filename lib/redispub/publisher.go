@@ -73,6 +73,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	var outChans []chan error
 	var sendFailedMetrics []prometheus.Counter
 	var sendSucceededMetrics []prometheus.Counter
+	var temporaryFailuresMetrics []prometheus.Counter
 
 	defer func () {
 		for _, c := range(inChans) {
@@ -90,6 +91,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		outChans = append(outChans, outChan)
 		sendSucceededMetrics = append(sendSucceededMetrics, metricSentMessages.WithLabelValues("sent", clientIdxStr))
 		sendFailedMetrics = append(sendFailedMetrics, metricSentMessages.WithLabelValues("failed", clientIdxStr))
+		temporaryFailuresMetrics = append(temporaryFailuresMetrics, metricTemporaryFailures.WithLabelValues(clientIdxStr))
 
 		go func() {
 			defer close(outChan)
@@ -100,7 +102,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 			for p := range inChan {
 				log.Log.Debugw("Attempting to publish to", "clientIdx", clientIdx)
-				outChan <- publishSingleMessageWithRetries(p, 30, clientIdx, time.Second, publishFn)
+				outChan <- publishSingleMessageWithRetries(p, 30, clientIdx, time.Second, temporaryFailuresMetrics[clientIdx], publishFn)
 			}
 		}()
 	}
@@ -140,7 +142,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	}
 }
 
-func publishSingleMessageWithRetries(p *Publication, maxRetries int, clientIdx int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
+func publishSingleMessageWithRetries(p *Publication, maxRetries int, clientIdx int, sleepTime time.Duration, temporaryFailuresMetric prometheus.Counter, publishFn func(p *Publication) error) error {
 	if p == nil {
 		return errors.New("Nil Redis publication")
 	}
@@ -155,7 +157,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, clientIdx i
 				"retryNumber", retries)
 
 			// failure, retry
-			metricTemporaryFailures.WithLabelValues(strconv.FormatInt(int64(clientIdx), 10)).Inc()
+			temporaryFailuresMetric.Inc()
 			retries++
 			time.Sleep(sleepTime)
 		} else {
