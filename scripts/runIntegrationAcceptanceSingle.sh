@@ -3,7 +3,7 @@
 set -eu
 cd "$(dirname "$0")/../integration-tests/acceptance"
 
-# Use docker-compose to spin up the test environment
+# Use docker compose to spin up the test environment
 mongo_tag="5.0.19"
 redis_tag="6.2.5"
 otr_dockerfile="Dockerfile.racedetector"
@@ -24,9 +24,9 @@ export OTR_DOCKERFILE="$otr_dockerfile"
 
 export MONGO_ARGS=""
 
-docker-compose rm -vf
-docker-compose down -v
-docker-compose up \
+docker compose rm -vf
+docker compose down -v
+docker compose up \
     --build \
     --exit-code-from test \
     --abort-on-container-exit
