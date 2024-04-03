@@ -96,7 +96,7 @@ var (
 	metricLastOplogEntryStaleness = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
-		Name:      "last_entry_staleness",
+		Name:      "last_entry_staleness_seconds",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	})
 )
