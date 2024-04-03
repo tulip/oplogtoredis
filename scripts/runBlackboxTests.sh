@@ -12,7 +12,7 @@ rm -f $CERTS_DIR/*
 
 function cleanup() {
   rm -rf blackbox-tests/certificates
-  docker-compose -f blackbox-tests/docker-compose.yml down --volumes
+  docker compose -f blackbox-tests/docker-compose.yml down --volumes
 }
 
 # # GENERATE CERTS FOR ENABLING TLS
@@ -22,7 +22,7 @@ docker run \
   cert-generator
 
 # BRING UP OPLOGTOREDIS
-docker-compose -f blackbox-tests/docker-compose.yml up -d --build
+docker compose -f blackbox-tests/docker-compose.yml up -d --build
 
 # WAIT FOR OPLOGTOREDIS TO START
 # network=host only works on linux, so if running from a mac/windows
@@ -35,7 +35,7 @@ else
 fi
 
 # INSERT DATA INTO MONGO
-docker-compose -f blackbox-tests/docker-compose.yml exec -T \
+docker compose -f blackbox-tests/docker-compose.yml exec -T \
   mongo sh -c \
   'mongo --eval "db.products.insert( { item: \"card\", qty: 15 } )"'
 
@@ -43,14 +43,14 @@ docker-compose -f blackbox-tests/docker-compose.yml exec -T \
 # xargs is a hack to get rid of whitespace
 # if oplogtoredis transmitted oplog to redis, we should have 2 entries
 RESULT=$(
-  docker-compose -f blackbox-tests/docker-compose.yml exec -T \
+  docker compose -f blackbox-tests/docker-compose.yml exec -T \
     redis sh -c \
     'redis-cli --scan --pattern "*" | wc -l | xargs')
 
 echo "Num keys received: $RESULT"
 if [[  $RESULT != 2 ]] ; then
   echo "Test failed, number of inserted keys does not match expected value"
-  echo "cleaning up: running docker-compose down"
+  echo "cleaning up: running docker compose down"
   cleanup
   exit 3
 else
