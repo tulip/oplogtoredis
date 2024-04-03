@@ -97,7 +97,7 @@ var (
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "last_entry_staleness",
-		Help:      "Guage recording the difference between this server's clock and the timestamp on the last read oplog entry. This measure is confounded by the usual clock skew.",
+		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	})
 )
 

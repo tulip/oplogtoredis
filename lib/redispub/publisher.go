@@ -57,8 +57,8 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
-	Name:      "last_command_duration",
-	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
+	Name:      "last_command_duration_seconds",
+	Help:      "The round trip time in seconds of the most recent write to Redis.",
 })
 
 // PublishStream reads Publications from the given channel and publishes them
