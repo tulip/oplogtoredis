@@ -340,8 +340,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 	timestamp = &result.Timestamp
 
 	entries := tailer.parseRawOplogEntry(result, nil)
-	log.Log.Debugw("Received oplog entry",
-		"entry", result)
+	log.Log.Debugw("Received oplog entry", "entry", result, "processTime", time.Now().UnixMilli())
 
 	status := "ignored"
 	database := "(no database)"
