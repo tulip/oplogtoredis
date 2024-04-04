@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/tulip/oplogtoredis/lib/config"
+	"github.com/tulip/oplogtoredis/lib/denylist"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/parse"
@@ -85,9 +86,11 @@ func main() {
 		Namespace: "otr",
 		Name:      "buffer_available",
 		Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-	}, func () float64 {
+	}, func() float64 {
 		return float64(bufferSize - len(redisPubs))
 	})
+
+	denylist := denylist.NewDenylist()
 
 	waitGroup := sync.WaitGroup{}
 
@@ -99,6 +102,7 @@ func main() {
 			RedisClients: redisClients,
 			RedisPrefix:  config.RedisMetadataPrefix(),
 			MaxCatchUp:   config.MaxCatchUp(),
+			Denylist:     denylist,
 		}
 		tailer.Tail(redisPubs, stopOplogTail)
 
@@ -120,7 +124,7 @@ func main() {
 	log.Log.Info("Started up processing goroutines")
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(redisClients, mongoSession)
+	httpServer := makeHTTPServer(redisClients, mongoSession, denylist)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -226,7 +230,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.Server {
+func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client, denylistObject *denylist.Denylist) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -275,6 +279,9 @@ func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	mux.HandleFunc("/denylist", denylist.CollectionEndpoint(denylistObject))
+	mux.Handle("/denylist/", http.StripPrefix("/denylist/", http.HandlerFunc(denylist.SingleEndpoint(denylistObject))))
 
 	return &http.Server{Addr: config.HTTPServerAddr(), Handler: mux}
 }
