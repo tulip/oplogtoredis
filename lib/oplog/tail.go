@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/config"
+	"github.com/tulip/oplogtoredis/lib/denylist"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -29,6 +30,7 @@ type Tailer struct {
 	RedisClients []redis.UniversalClient
 	RedisPrefix  string
 	MaxCatchUp   time.Duration
+	Denylist     *denylist.Denylist
 }
 
 // Raw oplog entry from Mongo
@@ -197,6 +199,11 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
+				if rule := tailer.shouldSkipEntry(rawData); rule != "" {
+					log.Log.Debugw("Skipping oplog entry", "rule", rule)
+					continue
+				}
+
 				ts, pubs := tailer.unmarshalEntry(rawData)
 
 				if ts != nil {
@@ -325,6 +332,16 @@ func closeCursor(cursor *mongo.Cursor) {
 		log.Log.Errorw("Error from closing oplog iterator",
 			"error", closeErr)
 	}
+}
+
+func (tailer *Tailer) shouldSkipEntry(rawData bson.Raw) string {
+	var obj bson.M
+	err := bson.Unmarshal(rawData, &obj)
+	if err != nil {
+		log.Log.Errorw("Error unmarshalling oplog entry", "error", err)
+		return ""
+	}
+	return tailer.Denylist.Filter(obj)
 }
 
 // unmarshalEntry unmarshals a single entry from the oplog.
