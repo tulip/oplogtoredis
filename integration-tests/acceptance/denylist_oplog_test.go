@@ -62,10 +62,7 @@ func TestDenyOplog(t *testing.T) {
 		panic(err)
 	}
 
-	harness.verify(t, map[string][]helpers.OTRMessage{
-		"tests.Foo":      {},
-		"tests.Foo::id2": {},
-	})
+	harness.verify(t, map[string][]helpers.OTRMessage{})
 
 	doRequest("DELETE", "/denylist/"+ruleID, map[string]interface{}{}, t, 204)
 
