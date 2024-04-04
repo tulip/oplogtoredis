@@ -90,7 +90,8 @@ func TestDenyList(t *testing.T) {
 	}
 	// GET list with both rules
 	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []interface{}{id, id2}) {
+	// check both permutations, in case the server reordered them
+	if !reflect.DeepEqual(data, []interface{}{id, id2}) && !reflect.DeepEqual(data, []interface{}{id2, id}) {
 		t.Fatalf("Expected doubleton from GET, but got %#v", data)
 	}
 	// DELETE first rule
