@@ -9,22 +9,6 @@ import (
 )
 
 func TestDenyOplog(t *testing.T) {
-	// TODO
-
-	// start harness
-	// send message
-	// confirm message arrived
-
-	// create denylist
-	// send message
-	// confirm message did NOT arrive
-
-	// remove denylist
-	// confirm message STILL did not arrive
-
-	// send message
-	// confirm message arrived
-
 	harness := startHarness()
 	defer harness.stop()
 
@@ -62,6 +46,7 @@ func TestDenyOplog(t *testing.T) {
 		panic(err)
 	}
 
+	// second message should not have been received, since it got denied
 	harness.verify(t, map[string][]helpers.OTRMessage{})
 
 	doRequest("DELETE", "/denylist/"+ruleID, map[string]interface{}{}, t, 204)
@@ -82,9 +67,9 @@ func TestDenyOplog(t *testing.T) {
 		Fields: []string{"_id", "h"},
 	}
 
+	// back to normal now that the deny rule is gone
 	harness.verify(t, map[string][]helpers.OTRMessage{
 		"tests.Foo":      {expectedMessage3},
 		"tests.Foo::id3": {expectedMessage3},
 	})
-
 }
