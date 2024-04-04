@@ -49,7 +49,7 @@ func doRequest(method string, path string, body map[string]interface{}, t *testi
 func TestDenyList(t *testing.T) {
 	// GET empty list of rules
 	data := doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []string{}) {
+	if !reflect.DeepEqual(data, []interface{}{}) {
 		t.Fatalf("Expected empty list from blank GET, but got %#v", data)
 	}
 	// PUT new rule
@@ -60,7 +60,7 @@ func TestDenyList(t *testing.T) {
 	}
 	// GET list with new rule in it
 	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []string{id}) {
+	if !reflect.DeepEqual(data, []interface{}{id}) {
 		t.Fatalf("Expected singleton from GET, but got %#v", data)
 	}
 	// GET existing rule
@@ -87,7 +87,7 @@ func TestDenyList(t *testing.T) {
 	}
 	// GET list with both rules
 	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []string{id, id2}) {
+	if !reflect.DeepEqual(data, []interface{}{id, id2}) {
 		t.Fatalf("Expected doubleton from GET, but got %#v", data)
 	}
 	// DELETE first rule
@@ -96,7 +96,7 @@ func TestDenyList(t *testing.T) {
 	doRequest("GET", "/denylist/"+id, map[string]interface{}{}, t, 404)
 	// GET list with only second rule
 	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []string{id2}) {
+	if !reflect.DeepEqual(data, []interface{}{id2}) {
 		t.Fatalf("Expected singleton from GET, but got %#V", data)
 	}
 }
