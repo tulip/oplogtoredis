@@ -36,17 +36,16 @@ func doRequest(method string, path string, body map[string]interface{}, t *testi
 		t.Fatalf("Expected status code %d, but got %d.\nBody was: %s", expectedCode, resp.StatusCode, respBody)
 	}
 
-	if len(respBody) == 0 {
-		return nil
-	}
+	if expectedCode == 200 || expectedCode == 201 {
+		var data interface{}
+		err = json.Unmarshal(respBody, &data)
+		if err != nil {
+			t.Fatalf("Error parsing JSON response: %s", err)
+		}
 
-	var data interface{}
-	err = json.Unmarshal(respBody, &data)
-	if err != nil {
-		t.Fatalf("Error parsing JSON response: %s", err)
+		return data
 	}
-
-	return data
+	return nil
 }
 
 // Test the /denylist HTTP operations
