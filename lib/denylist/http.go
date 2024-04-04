@@ -39,12 +39,12 @@ func listDenylistKeys(response http.ResponseWriter, denylist *Denylist) {
 	keys := denylist.GetKeys()
 
 	response.Header().Set("Content-Type", "application/json")
+	response.WriteHeader(http.StatusOK)
 	err := json.NewEncoder(response).Encode(keys)
 	if err != nil {
 		http.Error(response, "couldn't encode result", http.StatusInternalServerError)
 		return
 	}
-	response.WriteHeader(http.StatusOK)
 }
 
 // PUT /denylist
@@ -75,12 +75,12 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 
 	response.Header().Set("Content-Type", "application/json")
+	response.WriteHeader(http.StatusCreated)
 	err = json.NewEncoder(response).Encode(id)
 	if err != nil {
 		http.Error(response, "couldn't encode result", http.StatusInternalServerError)
 		return
 	}
-	response.WriteHeader(http.StatusCreated)
 }
 
 // GET /denylist/...
@@ -98,12 +98,12 @@ func getDenylistEntry(response http.ResponseWriter, request *http.Request, denyl
 	}
 
 	response.Header().Set("Content-Type", "application/json")
+	response.WriteHeader(http.StatusOK)
 	err := json.NewEncoder(response).Encode(payload)
 	if err != nil {
 		http.Error(response, "couldn't encode result", http.StatusInternalServerError)
 		return
 	}
-	response.WriteHeader(http.StatusOK)
 }
 
 // DELETE /denylist/...
