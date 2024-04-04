@@ -9,7 +9,7 @@ buildGoModule {
   '';
 
   # update: set value to an empty string and run `nix build`. This will download Go, fetch the dependencies and calculates their hash.
-  vendorHash = "sha256-ceToA2DC1bhmg9WIeNSAfoNoU7sk9PrQqgqt5UbpivQ=";
+  vendorHash = "sha256-yRY1yQIRg4g5eoyVKpfq+nxl/S7iXC7ZFFZSLo6vggk=";
 
   nativeBuildInputs = [ installShellFiles ];
   doCheck = false;
