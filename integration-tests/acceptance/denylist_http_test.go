@@ -36,6 +36,10 @@ func doRequest(method string, path string, body map[string]interface{}, t *testi
 		t.Fatalf("Expected status code %d, but got %d.\nBody was: %s", expectedCode, resp.StatusCode, respBody)
 	}
 
+	if len(respBody) == 0 {
+		return nil
+	}
+
 	var data interface{}
 	err = json.Unmarshal(respBody, &data)
 	if err != nil {
