@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/config"
-	"github.com/tulip/oplogtoredis/lib/denylist"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -30,7 +29,7 @@ type Tailer struct {
 	RedisClients []redis.UniversalClient
 	RedisPrefix  string
 	MaxCatchUp   time.Duration
-	Denylist     *denylist.Denylist
+	Denylist     *map[string]bool
 }
 
 // Raw oplog entry from Mongo
@@ -199,12 +198,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
-				if rule := tailer.shouldSkipEntry(rawData); rule != "" {
-					log.Log.Debugw("Skipping oplog entry", "rule", rule)
-					continue
-				}
-
-				ts, pubs := tailer.unmarshalEntry(rawData)
+				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist)
 
 				if ts != nil {
 					lastTimestamp = *ts
@@ -334,21 +328,11 @@ func closeCursor(cursor *mongo.Cursor) {
 	}
 }
 
-func (tailer *Tailer) shouldSkipEntry(rawData bson.Raw) string {
-	var obj bson.M
-	err := bson.Unmarshal(rawData, &obj)
-	if err != nil {
-		log.Log.Errorw("Error unmarshalling oplog entry", "error", err)
-		return ""
-	}
-	return tailer.Denylist.Filter(obj)
-}
-
 // unmarshalEntry unmarshals a single entry from the oplog.
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *map[string]bool) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -378,6 +362,11 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 
 	if len(entries) > 0 {
 		database = entries[0].Database
+	}
+
+	if _, denied := (*denylist)[database]; denied {
+		log.Log.Debugw("Skipping oplog entry", "database", database)
+		return
 	}
 
 	type errEntry struct {
