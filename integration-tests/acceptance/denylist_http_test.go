@@ -66,7 +66,7 @@ func TestDenyList(t *testing.T) {
 	// PUT second rule
 	doRequest("PUT", "/denylist/def", t, 201)
 	// GET second rule
-	data = doRequest("GET", "/denylistdef/", t, 200)
+	data = doRequest("GET", "/denylist/def", t, 200)
 	if !reflect.DeepEqual(data, "def") {
 		t.Fatalf("Expected matched body from GET, but got %#v", data)
 	}
