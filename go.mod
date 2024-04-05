@@ -6,6 +6,7 @@ require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/deckarep/golang-set v1.7.1
 	github.com/go-redis/redis/v7 v7.4.1
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/websocket v1.4.2
 	github.com/juju/mgo/v2 v2.0.0-20210302023703-70d5d206e208
 	github.com/juju/replicaset v0.0.0-20210302050932-0303c8575745
@@ -29,7 +30,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/gomodule/redigo v1.8.5 // indirect
