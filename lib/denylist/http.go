@@ -3,10 +3,11 @@ package denylist
 import (
 	"encoding/json"
 	"net/http"
+	"sync"
 )
 
 // CollectionEndpoint serves the endpoints for the whole Denylist at /denylist
-func CollectionEndpoint(denylist *map[string]bool) func(http.ResponseWriter, *http.Request) {
+func CollectionEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case "GET":
@@ -18,7 +19,7 @@ func CollectionEndpoint(denylist *map[string]bool) func(http.ResponseWriter, *ht
 }
 
 // SingleEndpoint serves the endpoints for particular Denylist entries at /denylist/...
-func SingleEndpoint(denylist *map[string]bool) func(http.ResponseWriter, *http.Request) {
+func SingleEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case "GET":
@@ -34,14 +35,13 @@ func SingleEndpoint(denylist *map[string]bool) func(http.ResponseWriter, *http.R
 }
 
 // GET /denylist
-func listDenylistKeys(response http.ResponseWriter, denylist *map[string]bool) {
-	keys := make([]string, len(*denylist))
+func listDenylistKeys(response http.ResponseWriter, denylist *sync.Map) {
+	keys := []interface{}{}
 
-	i := 0
-	for k := range *denylist {
-		keys[i] = k
-		i++
-	}
+	denylist.Range(func(key interface{}, value interface{}) bool {
+		keys = append(keys, key)
+		return true
+	})
 
 	response.Header().Set("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
@@ -53,9 +53,9 @@ func listDenylistKeys(response http.ResponseWriter, denylist *map[string]bool) {
 }
 
 // GET /denylist/...
-func getDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *map[string]bool) {
+func getDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
-	_, exists := (*denylist)[id]
+	_, exists := denylist.Load(id)
 	if !exists {
 		http.Error(response, "denylist entry not found with that id", http.StatusNotFound)
 		return
@@ -71,27 +71,27 @@ func getDenylistEntry(response http.ResponseWriter, request *http.Request, denyl
 }
 
 // PUT /denylist/...
-func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *map[string]bool) {
+func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
-	_, exists := (*denylist)[id]
+	_, exists := denylist.Load(id)
 	if exists {
 		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	(*denylist)[id] = true
+	denylist.Store(id, true)
 	response.WriteHeader(http.StatusCreated)
 }
 
 // DELETE /denylist/...
-func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *map[string]bool) {
+func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
-	_, exists := (*denylist)[id]
+	_, exists := denylist.Load(id)
 	if !exists {
 		http.Error(response, "denylist entry not found with that id", http.StatusNotFound)
 		return
 	}
 
-	delete(*denylist, id)
+	denylist.Delete(id)
 	response.WriteHeader(http.StatusNoContent)
 }

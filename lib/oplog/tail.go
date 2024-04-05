@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/config"
@@ -29,7 +30,7 @@ type Tailer struct {
 	RedisClients []redis.UniversalClient
 	RedisPrefix  string
 	MaxCatchUp   time.Duration
-	Denylist     *map[string]bool
+	Denylist     *sync.Map
 }
 
 // Raw oplog entry from Mongo

@@ -62,7 +62,7 @@ func main() {
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
-	denylist := map[string]bool{}
+	denylist := sync.Map{}
 
 	for i := 0; i < config.WriteParallelism(); i++ {
 		redisClients, err := createRedisClients()
@@ -249,7 +249,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client, denylistMap *map[string]bool) *http.Server {
+func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client, denylistMap *sync.Map) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
