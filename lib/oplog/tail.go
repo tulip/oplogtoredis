@@ -333,7 +333,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *map[string]bool) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -365,7 +365,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *map[string]bool
 		database = entries[0].Database
 	}
 
-	if _, denied := (*denylist)[database]; denied {
+	if _, denied := denylist.Load(database); denied {
 		log.Log.Debugw("Skipping oplog entry", "database", database)
 		return
 	}
