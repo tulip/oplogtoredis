@@ -10,12 +10,8 @@ import (
 	"testing"
 )
 
-func doRequest(method string, path string, body map[string]interface{}, t *testing.T, expectedCode int) interface{} {
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("Error encoding req body as json: %s", err)
-	}
-	req, err := http.NewRequest(method, os.Getenv("OTR_URL")+path, bytes.NewBuffer(jsonBody))
+func doRequest(method string, path string, t *testing.T, expectedCode int) interface{} {
+	req, err := http.NewRequest(method, os.Getenv("OTR_URL")+path, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("Error creating req: %s", err)
 	}
@@ -36,7 +32,7 @@ func doRequest(method string, path string, body map[string]interface{}, t *testi
 		t.Fatalf("Expected status code %d, but got %d.\nBody was: %s", expectedCode, resp.StatusCode, respBody)
 	}
 
-	if expectedCode == 200 || expectedCode == 201 {
+	if expectedCode == 200 {
 		var data interface{}
 		err = json.Unmarshal(respBody, &data)
 		if err != nil {
@@ -51,56 +47,42 @@ func doRequest(method string, path string, body map[string]interface{}, t *testi
 // Test the /denylist HTTP operations
 func TestDenyList(t *testing.T) {
 	// GET empty list of rules
-	data := doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
+	data := doRequest("GET", "/denylist", t, 200)
 	if !reflect.DeepEqual(data, []interface{}{}) {
 		t.Fatalf("Expected empty list from blank GET, but got %#v", data)
 	}
 	// PUT new rule
-	data = doRequest("PUT", "/denylist", map[string]interface{}{"keys": "a.b.c", "regex": "^abc$"}, t, 201)
-	id, ok := data.(string)
-	if !ok {
-		t.Fatalf("Expected string from PUT, but got %#v", id)
-	}
+	doRequest("PUT", "/denylist/abc", t, 201)
 	// GET list with new rule in it
-	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []interface{}{id}) {
+	data = doRequest("GET", "/denylist", t, 200)
+	if !reflect.DeepEqual(data, []interface{}{"abc"}) {
 		t.Fatalf("Expected singleton from GET, but got %#v", data)
 	}
 	// GET existing rule
-	data = doRequest("GET", "/denylist/"+id, map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, map[string]interface{}{
-		"keys":  "a.b.c",
-		"regex": "^abc$",
-	}) {
+	data = doRequest("GET", "/denylist/abc", t, 200)
+	if !reflect.DeepEqual(data, "abc") {
 		t.Fatalf("Expected matched body from GET, but got %#v", data)
 	}
 	// PUT second rule
-	data = doRequest("PUT", "/denylist", map[string]interface{}{"keys": "d.e.f", "regex": "^def$"}, t, 201)
-	id2, ok := data.(string)
-	if !ok {
-		t.Fatalf("Expected string from PUT, but got %#v", id)
-	}
+	doRequest("PUT", "/denylist/def", t, 201)
 	// GET second rule
-	data = doRequest("GET", "/denylist/"+id2, map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, map[string]interface{}{
-		"keys":  "d.e.f",
-		"regex": "^def$",
-	}) {
+	data = doRequest("GET", "/denylistdef/", t, 200)
+	if !reflect.DeepEqual(data, "def") {
 		t.Fatalf("Expected matched body from GET, but got %#v", data)
 	}
 	// GET list with both rules
-	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
+	data = doRequest("GET", "/denylist", t, 200)
 	// check both permutations, in case the server reordered them
-	if !reflect.DeepEqual(data, []interface{}{id, id2}) && !reflect.DeepEqual(data, []interface{}{id2, id}) {
+	if !reflect.DeepEqual(data, []interface{}{"abc", "def"}) && !reflect.DeepEqual(data, []interface{}{"def", "abc"}) {
 		t.Fatalf("Expected doubleton from GET, but got %#v", data)
 	}
 	// DELETE first rule
-	doRequest("DELETE", "/denylist/"+id, map[string]interface{}{}, t, 204)
+	doRequest("DELETE", "/denylist/abc", t, 204)
 	// GET first rule
-	doRequest("GET", "/denylist/"+id, map[string]interface{}{}, t, 404)
+	doRequest("GET", "/denylist/abc", t, 404)
 	// GET list with only second rule
-	data = doRequest("GET", "/denylist", map[string]interface{}{}, t, 200)
-	if !reflect.DeepEqual(data, []interface{}{id2}) {
+	data = doRequest("GET", "/denylist", t, 200)
+	if !reflect.DeepEqual(data, []interface{}{"def"}) {
 		t.Fatalf("Expected singleton from GET, but got %#V", data)
 	}
 }

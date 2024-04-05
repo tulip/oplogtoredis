@@ -33,10 +33,7 @@ func TestDenyOplog(t *testing.T) {
 		"tests.Foo::id1": {expectedMessage1},
 	})
 
-	ruleID := doRequest("PUT", "/denylist", map[string]interface{}{
-		"keys":  "ns",
-		"regex": "^tests.Foo$",
-	}, t, 201).(string)
+	doRequest("PUT", "/denylist/tests", t, 201)
 
 	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "id2",
@@ -49,7 +46,7 @@ func TestDenyOplog(t *testing.T) {
 	// second message should not have been received, since it got denied
 	harness.verify(t, map[string][]helpers.OTRMessage{})
 
-	doRequest("DELETE", "/denylist/"+ruleID, map[string]interface{}{}, t, 204)
+	doRequest("DELETE", "/denylist/tests", t, 204)
 
 	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "id3",

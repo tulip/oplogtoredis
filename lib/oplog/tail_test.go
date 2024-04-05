@@ -10,7 +10,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
-	"github.com/tulip/oplogtoredis/lib/denylist"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -84,7 +83,7 @@ func TestGetStartTime(t *testing.T) {
 				RedisClients: redisClient,
 				RedisPrefix:  "someprefix.",
 				MaxCatchUp:   maxCatchUp,
-				Denylist:     denylist.NewDenylist(),
+				Denylist:     &map[string]bool{},
 			}
 
 			actualResult := tailer.getStartTime(func() (*primitive.Timestamp, error) {
@@ -287,7 +286,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{Denylist: denylist.NewDenylist()}).parseRawOplogEntry(test.in, nil)
+			got := (&Tailer{Denylist: &map[string]bool{}}).parseRawOplogEntry(test.in, nil)
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)
