@@ -25,10 +25,10 @@ import (
 // Tailer persistently tails the oplog of a Mongo cluster, handling
 // reconnection and resumption of where it left off.
 type Tailer struct {
-	MongoClient *mongo.Client
+	MongoClient  *mongo.Client
 	RedisClients []redis.UniversalClient
-	RedisPrefix string
-	MaxCatchUp  time.Duration
+	RedisPrefix  string
+	MaxCatchUp   time.Duration
 }
 
 // Raw oplog entry from Mongo
@@ -107,7 +107,7 @@ func init() {
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
-func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool, customer string) {
 	childStopC := make(chan bool)
 	wasStopped := false
 
@@ -118,9 +118,9 @@ func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
 	}()
 
 	for {
-		log.Log.Info("Starting oplog tailing")
-		tailer.tailOnce(out, childStopC)
-		log.Log.Info("Oplog tailing ended")
+		log.Log.Info("Starting oplog tailing for " + customer)
+		tailer.tailOnce(out, childStopC, customer)
+		log.Log.Info("Oplog tailing ended for " + customer)
 
 		if wasStopped {
 			return
@@ -131,7 +131,7 @@ func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
 	}
 }
 
-func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan bool, customer string) {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -140,7 +140,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(func() (*primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(customer, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -150,7 +150,14 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
 		defer queryContextCancel()
 
-		result := oplogCollection.FindOne(queryContext, bson.M{}, findOneOpts)
+		timeFilter := bson.M{}
+		if customer != "" {
+			timeFilter["ns"] = bson.M{
+				"$regex": customer + "\\..*",
+			}
+		}
+
+		result := oplogCollection.FindOne(queryContext, timeFilter, findOneOpts)
 
 		if result.Err() != nil {
 			return nil, result.Err()
@@ -168,7 +175,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		return &ts, nil
 	})
 
-	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
+	query, queryErr := issueOplogFindQuery(oplogCollection, startTime, customer)
 
 	if queryErr != nil {
 		log.Log.Errorw("Error issuing tail query", "error", queryErr)
@@ -215,7 +222,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 				// timeout after our timeout duration, and we'll create a new one.
 				log.Log.Debug("Oplog cursor timed out, will retry")
 
-				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp, customer)
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
@@ -226,7 +233,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 			} else if status.DidLosePosition {
 				// Our cursor expired. Make a new cursor to pick up from where we
 				// left off.
-				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp)
+				query, queryErr = issueOplogFindQuery(oplogCollection, lastTimestamp, customer)
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
@@ -300,7 +307,7 @@ func readNextFromCursor(cursor *mongo.Cursor) (status cursorResultStatus, err er
 	return
 }
 
-func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp) (*mongo.Cursor, error) {
+func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, customer string) (*mongo.Cursor, error) {
 	queryOpts := &options.FindOptions{}
 	queryOpts.SetSort(bson.M{"$natural": 1})
 	queryOpts.SetCursorType(options.TailableAwait)
@@ -308,9 +315,19 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp) (*m
 	queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
 	defer queryContextCancel()
 
-	return c.Find(queryContext, bson.M{
-		"ts": bson.M{"$gt": startTime},
-	}, queryOpts)
+	queryFilter := bson.M{
+		"ts": bson.M{
+			"$gt": startTime,
+		},
+	}
+
+	if customer != "" {
+		queryFilter["ns"] = bson.M{
+			"$regex": customer + "\\..*", // match "{customer}.{anything}"
+		}
+	}
+
+	return c.Find(queryContext, queryFilter, queryOpts)
 }
 
 func closeCursor(cursor *mongo.Cursor) {
@@ -403,8 +420,8 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
-	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix)
+func (tailer *Tailer) getStartTime(customer string, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
+	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, customer)
 
 	if redisErr == nil {
 		// we have a last write time, check that it's not too far in the

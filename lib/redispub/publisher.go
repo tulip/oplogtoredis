@@ -63,23 +63,23 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
+func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, customer string) {
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	for _,client := range clients {
-		go periodicallyUpdateTimestamp(client, timestampC, opts)
+	for _, client := range clients {
+		go periodicallyUpdateTimestamp(client, timestampC, opts, customer)
 	}
 
 	// Redis expiration is in integer seconds, so we have to convert the
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication)error
+	type PubFn func(*Publication) error
 
 	var publishFns []PubFn
 
-	for _,client := range clients {
+	for _, client := range clients {
 		client := client
 		publishFn := func(p *Publication) error {
 			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
@@ -97,10 +97,9 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			for i,publishFn := range publishFns {
+			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
-
 
 				if err != nil {
 					metricSendFailed.Inc()
@@ -181,14 +180,14 @@ func formatKey(p *Publication, prefix string) string {
 // channel, and this function throttles that to only update occasionally.
 //
 // This blocks forever; it should be run in a goroutine
-func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts) {
+func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts, customer string) {
 	var lastFlush time.Time
 	var mostRecentTimestamp primitive.Timestamp
 	var needFlush bool
 
 	flush := func() {
 		if needFlush {
-			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry", encodeMongoTimestamp(mostRecentTimestamp), 0)
+			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry."+customer, encodeMongoTimestamp(mostRecentTimestamp), 0)
 			lastFlush = time.Now()
 			needFlush = false
 		}
