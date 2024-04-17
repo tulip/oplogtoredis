@@ -89,7 +89,7 @@ func main() {
 
 		promauto.NewGaugeFunc(prometheus.GaugeOpts{
 			Namespace: "otr",
-			Name:      "buffer_available",
+			Name:      "buffer_available_" + customer,
 			Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
 		}, func() float64 {
 			return float64(bufferSize - len(redisPubs))
