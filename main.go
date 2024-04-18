@@ -39,6 +39,7 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
+	// share single mongo connection (pool) between all coroutines
 	mongoSession, err := createMongoClient()
 	if err != nil {
 		panic("Error initializing oplog tailer: " + err.Error())
@@ -54,27 +55,33 @@ func main() {
 	}()
 	log.Log.Info("Initialized connection to Mongo")
 
-	redisClients, err := createRedisClients()
-	if err != nil {
-		panic("Error initializing Redis client: " + err.Error())
-	}
-	defer func() {
-		for _, redisClient := range redisClients {
-			redisCloseErr := redisClient.Close()
-			if redisCloseErr != nil {
-				log.Log.Errorw("Error closing Redis client",
-					"error", redisCloseErr)
-			}
-		}
-	}()
-	log.Log.Info("Initialized connection to Redis")
-
+	// accumulate from all the coroutines
 	stoppers := []chan bool{}
 	waitgroups := []*sync.WaitGroup{}
+	allRedisClients := []redis.UniversalClient{}
 
+	// TEMPORARY: hardcode list of customers and run all the processors based on that list
+	// TODO: have a singleton coroutine that ingests everything and uses it to detect new customers
 	for _, customer := range customers.AllCustomers() {
 
-		// We crate two goroutines:
+		// each processing coroutine needs its own redis clients, so that they don't get bottlenecked
+		// on one customer's redis write speed
+		redisClients, err := createRedisClients()
+		if err != nil {
+			panic("Error initializing Redis client: " + err.Error())
+		}
+		defer func() {
+			for _, redisClient := range redisClients {
+				redisCloseErr := redisClient.Close()
+				if redisCloseErr != nil {
+					log.Log.Errorw("Error closing Redis client",
+						"error", redisCloseErr)
+				}
+			}
+		}()
+		log.Log.Info("Initialized connection to Redis")
+
+		// For each processor, we crate two goroutines:
 		//
 		// The oplog.Tail goroutine reads messages from the oplog, and generates the
 		// messages that we need to write to redis. It then writes them to a
@@ -127,10 +134,11 @@ func main() {
 
 		stoppers = append(stoppers, stopOplogTail, stopRedisPub)
 		waitgroups = append(waitgroups, &waitGroup)
+		allRedisClients = append(allRedisClients, redisClients...)
 	}
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(redisClients, mongoSession)
+	httpServer := makeHTTPServer(allRedisClients, mongoSession)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {

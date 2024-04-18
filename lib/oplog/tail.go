@@ -150,6 +150,8 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		queryContext, queryContextCancel := context.WithTimeout(context.Background(), config.MongoQueryTimeout())
 		defer queryContextCancel()
 
+		// if we're getting timestamp from the oplog, we need to filter the same way we would filter the actual
+		// tail, so filter out everything except for the specififed namespace, or admin.$cmd
 		timeFilter := bson.M{}
 		if customer != "" {
 			timeFilter["ns"] = bson.M{
@@ -321,6 +323,8 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, cus
 		},
 	}
 
+	// to prevent each processor coroutine from blocking each other, each one should add a query filter
+	// for only that customer's messages. However we also have to get admin.$cmd, for transaction operations.
 	if customer != "" {
 		queryFilter["ns"] = bson.M{
 			"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
