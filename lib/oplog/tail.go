@@ -321,11 +321,11 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, cus
 		},
 	}
 
-	if customer != "" {
-		queryFilter["ns"] = bson.M{
-			"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
-		}
-	}
+	// if customer != "" {
+	// 	queryFilter["ns"] = bson.M{
+	// 		"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
+	// 	}
+	// }
 
 	return c.Find(queryContext, queryFilter, queryOpts)
 }
