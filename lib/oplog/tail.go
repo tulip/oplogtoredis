@@ -202,7 +202,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 					continue
 				}
 
-				ts, pubs := tailer.unmarshalEntry(rawData)
+				ts, pubs := tailer.unmarshalEntry(rawData, customer)
 
 				if ts != nil {
 					lastTimestamp = *ts
@@ -322,8 +322,26 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, cus
 	}
 
 	if customer != "" {
-		queryFilter["ns"] = bson.M{
-			"$regex": customer + "\\..*", // match "{customer}.{anything}"
+		queryFilter = bson.M{
+			"$and": []bson.M{
+				{
+					"ts": bson.M{
+						"$gt": startTime,
+					},
+				},
+				{
+					"$or": []bson.M{
+						{
+							"ns": bson.M{
+								"$regex": customer + "\\..*", // match "{customer}.{anything}"
+							},
+						},
+						{
+							"ns": "admin.$cmd", // match exactly "admin.$cmd"
+						},
+					},
+				},
+			},
 		}
 	}
 
@@ -345,7 +363,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, customer string) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -356,7 +374,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 
 	timestamp = &result.Timestamp
 
-	entries := tailer.parseRawOplogEntry(result, nil)
+	entries := tailer.parseRawOplogEntry(result, nil, customer)
 	log.Log.Debugw("Received oplog entry", "entry", result, "processTime", time.Now().UnixMilli())
 
 	status := "ignored"
@@ -451,7 +469,7 @@ func (tailer *Tailer) getStartTime(customer string, getTimestampOfLastOplogEntry
 }
 
 // converts a rawOplogEntry to an oplogEntry
-func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []oplogEntry {
+func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint, customer string) []oplogEntry {
 	if txIdx == nil {
 		idx := uint(0)
 		txIdx = &idx
@@ -463,6 +481,14 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		if err := bson.Unmarshal(entry.Doc, &data); err != nil {
 			log.Log.Errorf("unmarshalling oplog entry data: %v", err)
 			return nil
+		}
+
+		// only return leaf nodes if they match the namespace prefix (db/customer name)
+		// this should normally be filtered out by the mongo query,
+		// but because of tx documents or other admin commands, we might get them anyway.
+		// so just return an empty array in that case.
+		if !strings.HasPrefix(entry.Namespace, customer) {
+			return []oplogEntry{}
 		}
 
 		out := oplogEntry{
@@ -504,7 +530,9 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 
 		for _, v := range txData.ApplyOps {
 			v.Timestamp = entry.Timestamp
-			ret = append(ret, tailer.parseRawOplogEntry(v, txIdx)...)
+			// in case the nested entries match this customer, recur all of them.
+			// when leaves eventually are parsed, the final array will only contain matched ones.
+			ret = append(ret, tailer.parseRawOplogEntry(v, txIdx, customer)...)
 		}
 
 		return ret
