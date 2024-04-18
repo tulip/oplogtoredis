@@ -151,11 +151,11 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		defer queryContextCancel()
 
 		timeFilter := bson.M{}
-		// if customer != "" {
-		// 	timeFilter["ns"] = bson.M{
-		// 		"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
-		// 	}
-		// }
+		if customer != "" {
+			timeFilter["ns"] = bson.M{
+				"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
+			}
+		}
 
 		result := oplogCollection.FindOne(queryContext, timeFilter, findOneOpts)
 
@@ -321,11 +321,11 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, cus
 		},
 	}
 
-	// if customer != "" {
-	// 	queryFilter["ns"] = bson.M{
-	// 		"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
-	// 	}
-	// }
+	if customer != "" {
+		queryFilter["ns"] = bson.M{
+			"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
+		}
+	}
 
 	return c.Find(queryContext, queryFilter, queryOpts)
 }
