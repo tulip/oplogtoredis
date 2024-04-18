@@ -153,7 +153,7 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 		timeFilter := bson.M{}
 		if customer != "" {
 			timeFilter["ns"] = bson.M{
-				"$regex": customer + "\\..*",
+				"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
 			}
 		}
 
@@ -322,26 +322,8 @@ func issueOplogFindQuery(c *mongo.Collection, startTime primitive.Timestamp, cus
 	}
 
 	if customer != "" {
-		queryFilter = bson.M{
-			"$and": []bson.M{
-				{
-					"ts": bson.M{
-						"$gt": startTime,
-					},
-				},
-				{
-					"$or": []bson.M{
-						{
-							"ns": bson.M{
-								"$regex": customer + "\\..*", // match "{customer}.{anything}"
-							},
-						},
-						{
-							"ns": "admin.$cmd", // match exactly "admin.$cmd"
-						},
-					},
-				},
-			},
+		queryFilter["ns"] = bson.M{
+			"$regex": "(admin\\.\\$cmd)|(" + customer + "\\..*)",
 		}
 	}
 
@@ -487,9 +469,9 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint, custo
 		// this should normally be filtered out by the mongo query,
 		// but because of tx documents or other admin commands, we might get them anyway.
 		// so just return an empty array in that case.
-		// if !strings.HasPrefix(entry.Namespace, customer) {
-		// 	return []oplogEntry{}
-		// }
+		if !strings.HasPrefix(entry.Namespace, customer) {
+			return []oplogEntry{}
+		}
 
 		out := oplogEntry{
 			Operation: entry.Operation,
