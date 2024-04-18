@@ -487,9 +487,9 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint, custo
 		// this should normally be filtered out by the mongo query,
 		// but because of tx documents or other admin commands, we might get them anyway.
 		// so just return an empty array in that case.
-		if !strings.HasPrefix(entry.Namespace, customer) {
-			return []oplogEntry{}
-		}
+		// if !strings.HasPrefix(entry.Namespace, customer) {
+		// 	return []oplogEntry{}
+		// }
 
 		out := oplogEntry{
 			Operation: entry.Operation,
