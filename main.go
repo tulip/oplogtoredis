@@ -99,30 +99,30 @@ func main() {
 
 		stopOplogTail := make(chan bool)
 		waitGroup.Add(1)
-		go func() {
+		go func(c string) {
 			tailer := oplog.Tailer{
 				MongoClient:  mongoSession,
 				RedisClients: redisClients,
 				RedisPrefix:  config.RedisMetadataPrefix(),
 				MaxCatchUp:   config.MaxCatchUp(),
 			}
-			tailer.Tail(redisPubs, stopOplogTail, customer)
+			tailer.Tail(redisPubs, stopOplogTail, c)
 
 			log.Log.Info("Oplog tailer completed")
 			waitGroup.Done()
-		}()
+		}(customer)
 
 		stopRedisPub := make(chan bool)
 		waitGroup.Add(1)
-		go func() {
+		go func(c string) {
 			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
 				FlushInterval:    config.TimestampFlushInterval(),
 				DedupeExpiration: config.RedisDedupeExpiration(),
 				MetadataPrefix:   config.RedisMetadataPrefix(),
-			}, stopRedisPub, customer)
+			}, stopRedisPub, c)
 			log.Log.Info("Redis publisher completed")
 			waitGroup.Done()
-		}()
+		}(customer)
 		log.Log.Info("Started up processing goroutines")
 
 		stoppers = append(stoppers, stopOplogTail, stopRedisPub)
