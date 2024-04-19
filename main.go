@@ -59,7 +59,12 @@ func main() {
 	waitgroups := []*sync.WaitGroup{}
 	allRedisClients := []redis.UniversalClient{}
 
-	allCustomers := strings.Split(os.Getenv("OTR_HARDCODED_CUSTOMERS"), ",")
+	customerString := os.Getenv("OTR_HARDCODED_CUSTOMERS")
+	if customerString == "" {
+		panic("OTR_HARDCODED_CUSTOMERS not specified or blank")
+	}
+
+	allCustomers := strings.Split(customerString, ",")
 
 	// TEMPORARY: hardcode list of customers and run all the processors based on that list
 	// TODO: have a singleton coroutine that ingests everything and uses it to detect new customers
