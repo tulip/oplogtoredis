@@ -73,7 +73,7 @@ func TestGetStartTime(t *testing.T) {
 				panic(err)
 			}
 			defer redisServer.Close()
-			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", strconv.FormatInt(int64(test.redisTimestamp.T), 10)))
+			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry.test", strconv.FormatInt(int64(test.redisTimestamp.T), 10)))
 
 			redisClient := []redis.UniversalClient{redis.NewUniversalClient(&redis.UniversalOptions{
 				Addrs: []string{redisServer.Addr()},
@@ -81,11 +81,11 @@ func TestGetStartTime(t *testing.T) {
 
 			tailer := Tailer{
 				RedisClients: redisClient,
-				RedisPrefix: "someprefix.",
-				MaxCatchUp:  maxCatchUp,
+				RedisPrefix:  "someprefix.",
+				MaxCatchUp:   maxCatchUp,
 			}
 
-			actualResult := tailer.getStartTime(func() (*primitive.Timestamp, error) {
+			actualResult := tailer.getStartTime("test", func() (*primitive.Timestamp, error) {
 				if test.mongoEndOfOplogErr != nil {
 					return nil, test.mongoEndOfOplogErr
 				}
@@ -285,7 +285,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{}).parseRawOplogEntry(test.in, nil)
+			got := (&Tailer{}).parseRawOplogEntry(test.in, nil, "foo")
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)

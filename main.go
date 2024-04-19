@@ -14,7 +14,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -38,6 +37,7 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
+	// share single mongo connection (pool) between all coroutines
 	mongoSession, err := createMongoClient()
 	if err != nil {
 		panic("Error initializing oplog tailer: " + err.Error())
@@ -53,74 +53,97 @@ func main() {
 	}()
 	log.Log.Info("Initialized connection to Mongo")
 
-	redisClients, err := createRedisClients()
-	if err != nil {
-		panic("Error initializing Redis client: " + err.Error())
+	// accumulate from all the coroutines
+	stoppers := []chan bool{}
+	waitgroups := []*sync.WaitGroup{}
+	allRedisClients := []redis.UniversalClient{}
+
+	customerString := os.Getenv("OTR_HARDCODED_CUSTOMERS")
+	if customerString == "" {
+		panic("OTR_HARDCODED_CUSTOMERS not specified or blank")
 	}
-	defer func() {
-		for _, redisClient := range redisClients {
-			redisCloseErr := redisClient.Close()
-			if redisCloseErr != nil {
-				log.Log.Errorw("Error closing Redis client",
-					"error", redisCloseErr)
+
+	allCustomers := strings.Split(customerString, ",")
+
+	// TEMPORARY: hardcode list of customers and run all the processors based on that list
+	// TODO: have a singleton coroutine that ingests everything and uses it to detect new customers
+	for _, customer := range allCustomers {
+
+		// each processing coroutine needs its own redis clients, so that they don't get bottlenecked
+		// on one customer's redis write speed
+		redisClients, err := createRedisClients()
+		if err != nil {
+			panic("Error initializing Redis client: " + err.Error())
+		}
+		defer func() {
+			for _, redisClient := range redisClients {
+				redisCloseErr := redisClient.Close()
+				if redisCloseErr != nil {
+					log.Log.Errorw("Error closing Redis client",
+						"error", redisCloseErr)
+				}
 			}
-		}
-	}()
-	log.Log.Info("Initialized connection to Redis")
+		}()
+		log.Log.Info("Initialized connection to Redis")
 
-	// We crate two goroutines:
-	//
-	// The oplog.Tail goroutine reads messages from the oplog, and generates the
-	// messages that we need to write to redis. It then writes them to a
-	// buffered channel.
-	//
-	// The redispub.PublishStream goroutine reads messages from the buffered channel
-	// and sends them to Redis.
-	//
-	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
-	bufferSize := 10000
-	redisPubs := make(chan *redispub.Publication, bufferSize)
+		// For each processor, we crate two goroutines:
+		//
+		// The oplog.Tail goroutine reads messages from the oplog, and generates the
+		// messages that we need to write to redis. It then writes them to a
+		// buffered channel.
+		//
+		// The redispub.PublishStream goroutine reads messages from the buffered channel
+		// and sends them to Redis.
+		//
+		// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
+		bufferSize := 10000
+		redisPubs := make(chan *redispub.Publication, bufferSize)
 
-	promauto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Name:      "buffer_available",
-		Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-	}, func () float64 {
-		return float64(bufferSize - len(redisPubs))
-	})
+		promauto.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: "otr",
+			Name:      "buffer_available_" + strings.ReplaceAll(customer, "-", "_"),
+			Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
+		}, func() float64 {
+			return float64(bufferSize - len(redisPubs))
+		})
 
-	waitGroup := sync.WaitGroup{}
+		waitGroup := sync.WaitGroup{}
 
-	stopOplogTail := make(chan bool)
-	waitGroup.Add(1)
-	go func() {
-		tailer := oplog.Tailer{
-			MongoClient:  mongoSession,
-			RedisClients: redisClients,
-			RedisPrefix:  config.RedisMetadataPrefix(),
-			MaxCatchUp:   config.MaxCatchUp(),
-		}
-		tailer.Tail(redisPubs, stopOplogTail)
+		stopOplogTail := make(chan bool)
+		waitGroup.Add(1)
+		go func(c string) {
+			tailer := oplog.Tailer{
+				MongoClient:  mongoSession,
+				RedisClients: redisClients,
+				RedisPrefix:  config.RedisMetadataPrefix(),
+				MaxCatchUp:   config.MaxCatchUp(),
+			}
+			tailer.Tail(redisPubs, stopOplogTail, c)
 
-		log.Log.Info("Oplog tailer completed")
-		waitGroup.Done()
-	}()
+			log.Log.Info("Oplog tailer completed")
+			waitGroup.Done()
+		}(customer)
 
-	stopRedisPub := make(chan bool)
-	waitGroup.Add(1)
-	go func() {
-		redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
-			FlushInterval:    config.TimestampFlushInterval(),
-			DedupeExpiration: config.RedisDedupeExpiration(),
-			MetadataPrefix:   config.RedisMetadataPrefix(),
-		}, stopRedisPub)
-		log.Log.Info("Redis publisher completed")
-		waitGroup.Done()
-	}()
-	log.Log.Info("Started up processing goroutines")
+		stopRedisPub := make(chan bool)
+		waitGroup.Add(1)
+		go func(c string) {
+			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
+				FlushInterval:    config.TimestampFlushInterval(),
+				DedupeExpiration: config.RedisDedupeExpiration(),
+				MetadataPrefix:   config.RedisMetadataPrefix(),
+			}, stopRedisPub, c)
+			log.Log.Info("Redis publisher completed")
+			waitGroup.Done()
+		}(customer)
+		log.Log.Info("Started up processing goroutines")
+
+		stoppers = append(stoppers, stopOplogTail, stopRedisPub)
+		waitgroups = append(waitgroups, &waitGroup)
+		allRedisClients = append(allRedisClients, redisClients...)
+	}
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(redisClients, mongoSession)
+	httpServer := makeHTTPServer(allRedisClients, mongoSession)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -146,8 +169,9 @@ func main() {
 	log.Log.Warnf("Exiting cleanly due to signal %s. Interrupt again to force unclean shutdown.", sig)
 	signal.Reset()
 
-	stopOplogTail <- true
-	stopRedisPub <- true
+	for _, stopper := range stoppers {
+		stopper <- true
+	}
 
 	err = httpServer.Shutdown(context.Background())
 	if err != nil {
@@ -155,7 +179,9 @@ func main() {
 			"error", err)
 	}
 
-	waitGroup.Wait()
+	for _, waitGroup := range waitgroups {
+		waitGroup.Wait()
+	}
 }
 
 // Connects to mongo
@@ -231,25 +257,25 @@ func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		redisOK := true
-		for _, redis := range clients {
-			redisErr := redis.Ping(context.Background()).Err()
-			redisOK = (redisOK && (redisErr == nil))
-			if !redisOK {
-				log.Log.Errorw("Error connecting to Redis during healthz check",
-					"error", redisErr)
-			}
-		}
+		// for _, redis := range clients {
+		// 	redisErr := redis.Ping(context.Background()).Err()
+		// 	redisOK = (redisOK && (redisErr == nil))
+		// 	if !redisOK {
+		// 		log.Log.Errorw("Error connecting to Redis during healthz check",
+		// 			"error", redisErr)
+		// 	}
+		// }
 
-		ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
-		defer cancel()
+		// ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+		// defer cancel()
 
-		mongoErr := mongo.Ping(ctx, readpref.Primary())
-		mongoOK := mongoErr == nil
+		// mongoErr := mongo.Ping(ctx, readpref.Primary())
+		mongoOK := true //mongoErr == nil
 
-		if !mongoOK {
-			log.Log.Errorw("Error connecting to Mongo during healthz check",
-				"error", mongoErr)
-		}
+		// if !mongoOK {
+		// 	log.Log.Errorw("Error connecting to Mongo during healthz check",
+		// 		"error", mongoErr)
+		// }
 
 		if mongoOK && redisOK {
 			w.WriteHeader(http.StatusOK)

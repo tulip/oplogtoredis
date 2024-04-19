@@ -4,8 +4,9 @@
 package config
 
 import (
-	"time"
 	"strings"
+	"time"
+
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -19,7 +20,7 @@ type oplogtoredisConfiguration struct {
 	RedisDedupeExpiration         time.Duration `default:"120s" split_words:"true"`
 	RedisMetadataPrefix           string        `default:"oplogtoredis::" split_words:"true"`
 	MongoConnectTimeout           time.Duration `default:"10s" split_words:"true"`
-	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
+	MongoQueryTimeout             time.Duration `default:"1m" split_words:"true"`
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
 }
 

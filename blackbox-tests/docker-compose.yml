@@ -20,6 +20,7 @@ services:
       - OTR_MONGO_URL=mongodb://mongo/dev
       - OTR_REDIS_URL=rediss://redis:6380
       - OTR_OPLOG_V2_EXTRACT_SUBFIELD_CHANGES=true
+      - OTR_HARDCODED_CUSTOMERS=test,tests,testdb,dev
     ports:
       - 9000:9000
     depends_on:

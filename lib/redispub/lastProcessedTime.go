@@ -17,8 +17,8 @@ import (
 //
 // If oplogtoredis has not processed any messages, returns redis.Nil as an
 // error.
-func LastProcessedTimestamp(redisClient redis.UniversalClient, metadataPrefix string) (primitive.Timestamp, time.Time, error) {
-	str, err := redisClient.Get(context.Background(), metadataPrefix+"lastProcessedEntry").Result()
+func LastProcessedTimestamp(redisClient redis.UniversalClient, metadataPrefix string, customer string) (primitive.Timestamp, time.Time, error) {
+	str, err := redisClient.Get(context.Background(), metadataPrefix+"lastProcessedEntry."+customer).Result()
 	if err != nil {
 		return primitive.Timestamp{}, time.Unix(0, 0), err
 	}

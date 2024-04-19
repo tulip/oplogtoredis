@@ -42,6 +42,7 @@ services:
       - OTR_REDIS_URL=redis-sentinel://redis-sentinel:26379?sentinelMasterId=mymaster,redis://redis
       - OTR_LOG_DEBUG=true
       - OTR_OPLOG_V2_EXTRACT_SUBFIELD_CHANGES=true
+      - OTR_HARDCODED_CUSTOMERS=test,tests,testdb,dev
     depends_on:
       mongo:
         condition: service_healthy
