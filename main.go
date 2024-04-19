@@ -252,7 +252,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer( /*clients []redis.UniversalClient, mongo *mongo.Client*/ ) *http.Server {
+func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
