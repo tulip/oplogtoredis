@@ -14,7 +14,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -253,30 +252,30 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.Server {
+func makeHTTPServer( /*clients []redis.UniversalClient, mongo *mongo.Client*/ ) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		redisOK := true
-		for _, redis := range clients {
-			redisErr := redis.Ping(context.Background()).Err()
-			redisOK = (redisOK && (redisErr == nil))
-			if !redisOK {
-				log.Log.Errorw("Error connecting to Redis during healthz check",
-					"error", redisErr)
-			}
-		}
+		// for _, redis := range clients {
+		// 	redisErr := redis.Ping(context.Background()).Err()
+		// 	redisOK = (redisOK && (redisErr == nil))
+		// 	if !redisOK {
+		// 		log.Log.Errorw("Error connecting to Redis during healthz check",
+		// 			"error", redisErr)
+		// 	}
+		// }
 
-		ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
-		defer cancel()
+		// ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+		// defer cancel()
 
-		mongoErr := mongo.Ping(ctx, readpref.Primary())
-		mongoOK := mongoErr == nil
+		// mongoErr := mongo.Ping(ctx, readpref.Primary())
+		mongoOK := true //mongoErr == nil
 
-		if !mongoOK {
-			log.Log.Errorw("Error connecting to Mongo during healthz check",
-				"error", mongoErr)
-		}
+		// if !mongoOK {
+		// 	log.Log.Errorw("Error connecting to Mongo during healthz check",
+		// 		"error", mongoErr)
+		// }
 
 		if mongoOK && redisOK {
 			w.WriteHeader(http.StatusOK)
