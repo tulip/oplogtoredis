@@ -38,6 +38,7 @@ func StartOTRProcessWithEnv(mongoURL string, redisURL string, port int, extraEnv
 			"OTR_LOG_DEBUG=true",
 			"OTR_METADATA_PREFIX=" + randString(16),
 			fmt.Sprintf("OTR_HTTP_SERVER_ADDR=0.0.0.0:%d", port),
+			"OTR_HARDCODED_CUSTOMERS=test,tests,testdb,dev",
 		}, extraEnv...),
 	}
 

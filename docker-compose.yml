@@ -22,6 +22,7 @@ services:
       - OTR_MONGO_URL=mongodb://mongo/dev
       - OTR_REDIS_URL=redis://redis,redis-sentinel://redis-sentinel:26379?sentinelMasterId=mymaster
       - OTR_LOG_DEBUG=true
+      - OTR_HARDCODED_CUSTOMERS=test,tests,testdb,dev
     ports:
       - 9000:9000
     volumes:

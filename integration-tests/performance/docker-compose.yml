@@ -38,6 +38,7 @@ services:
     environment:
       - OTR_MONGO_URL=mongodb://mongo/tests
       - OTR_REDIS_URL=redis-sentinel://redis-sentinel:26379?sentinelMasterId=mymaster,redis://redis
+      - OTR_HARDCODED_CUSTOMERS=test,tests,testdb,dev
     depends_on:
       mongo:
         condition: service_healthy

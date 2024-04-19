@@ -17,7 +17,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/tulip/oplogtoredis/lib/config"
-	"github.com/tulip/oplogtoredis/lib/customers"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/parse"
@@ -60,9 +59,11 @@ func main() {
 	waitgroups := []*sync.WaitGroup{}
 	allRedisClients := []redis.UniversalClient{}
 
+	allCustomers := strings.Split(os.Getenv("OTR_HARDCODED_CUSTOMERS"), ",")
+
 	// TEMPORARY: hardcode list of customers and run all the processors based on that list
 	// TODO: have a singleton coroutine that ingests everything and uses it to detect new customers
-	for _, customer := range customers.AllCustomers() {
+	for _, customer := range allCustomers {
 
 		// each processing coroutine needs its own redis clients, so that they don't get bottlenecked
 		// on one customer's redis write speed
