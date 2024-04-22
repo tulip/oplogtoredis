@@ -54,11 +54,12 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
 })
 
-var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
+var metricLastCommandDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
-	Name:      "last_command_duration_seconds",
-	Help:      "The round trip time in seconds of the most recent write to Redis.",
+	Name:      "command_duration_seconds",
+	Help:      "The round trip time in seconds for writes to Redis.",
+	Buckets: []float64{0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1, 2},
 })
 
 // PublishStream reads Publications from the given channel and publishes them
@@ -168,7 +169,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
-	metricLastCommandDuration.Set(time.Since(start).Seconds())
+	metricLastCommandDuration.Observe(time.Since(start).Seconds())
 	return err
 }
 
