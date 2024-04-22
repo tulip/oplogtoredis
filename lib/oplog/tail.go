@@ -353,7 +353,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
-		metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
+		metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0)).Seconds()))
 	}()
 
 	if len(entries) > 0 {
