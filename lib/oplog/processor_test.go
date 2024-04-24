@@ -14,6 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// hash of the database name "foo" to be expected for ParallelismKey
+const fooHash = -5843589418109203719
+
 // nolint: gocyclo
 func TestProcessOplogEntry(t *testing.T) {
 	// We can't compare raw publications because they contain JSON that can
@@ -25,9 +28,10 @@ func TestProcessOplogEntry(t *testing.T) {
 		Fields []string    `json:"f"`
 	}
 	type decodedPublication struct {
-		Channels          []string
-		Msg               decodedPublicationMessage
-		OplogTimestamp    primitive.Timestamp
+		Channels       []string
+		Msg            decodedPublicationMessage
+		OplogTimestamp primitive.Timestamp
+		ParallelismKey int
 	}
 
 	testObjectId, err := primitive.ObjectIDFromHex("deadbeefdeadbeefdeadbeef")
@@ -67,6 +71,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				ParallelismKey: fooHash,
 			},
 		},
 		"Replacement update": {
@@ -92,6 +97,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some", "new"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				ParallelismKey: fooHash,
 			},
 		},
 		"Non-replacement update": {
@@ -123,6 +129,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"a", "b", "c"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				ParallelismKey: fooHash,
 			},
 		},
 		"Delete": {
@@ -145,6 +152,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				ParallelismKey: fooHash,
 			},
 		},
 		"ObjectID id": {
@@ -172,6 +180,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				ParallelismKey: fooHash,
 			},
 		},
 		"Unsupported id type": {
@@ -242,9 +251,10 @@ func TestProcessOplogEntry(t *testing.T) {
 		sort.Strings(msg.Fields)
 
 		return &decodedPublication{
-			Channels:          pub.Channels,
-			Msg:               msg,
-			OplogTimestamp:    pub.OplogTimestamp,
+			Channels:       pub.Channels,
+			Msg:            msg,
+			OplogTimestamp: pub.OplogTimestamp,
+			ParallelismKey: pub.ParallelismKey,
 		}
 	}
 
