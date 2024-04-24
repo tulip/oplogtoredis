@@ -77,7 +77,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
 	for _, client := range clients {
-		go periodicallyUpdateTimestamp(client, timestampC, opts)
+		go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
 	}
 
 	// Redis expiration is in integer seconds, so we have to convert the
@@ -190,14 +190,14 @@ func formatKey(p *Publication, prefix string) string {
 // channel, and this function throttles that to only update occasionally.
 //
 // This blocks forever; it should be run in a goroutine
-func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts) {
+func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts, ordinal int) {
 	var lastFlush time.Time
 	var mostRecentTimestamp primitive.Timestamp
 	var needFlush bool
 
 	flush := func() {
 		if needFlush {
-			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry", encodeMongoTimestamp(mostRecentTimestamp), 0)
+			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry."+strconv.Itoa(ordinal), encodeMongoTimestamp(mostRecentTimestamp), 0)
 			lastFlush = time.Now()
 			needFlush = false
 		}
