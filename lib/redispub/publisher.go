@@ -7,6 +7,7 @@ package redispub
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,15 +62,16 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 	Help:      "The round trip time in seconds of the most recent write to Redis.",
 })
 
+var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "last_entry_staleness_seconds",
+	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
+}, []string{"ordinal"})
+
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
 func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
-	metricLastOplogEntryStaleness := promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Subsystem: "redispub",
-		Name:      fmt.Sprintf("last_entry_staleness_seconds_%d", ordinal),
-		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
-	})
 
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
@@ -89,7 +91,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	for _, client := range clients {
 		client := client
 		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, metricLastOplogEntryStaleness)
+			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
 		}
 		publishFns = append(publishFns, publishFn)
 	}
@@ -152,9 +154,9 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
-func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, metricLastOplogEntryStaleness prometheus.Gauge) error {
+func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
-	metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0))))
+	metricLastOplogEntryStaleness.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0))))
 
 	_, err := publishDedupe.Run(
 		context.Background(),
