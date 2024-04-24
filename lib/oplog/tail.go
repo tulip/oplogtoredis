@@ -95,13 +95,6 @@ var (
 		},
 	}, []string{"database", "status"})
 
-	metricLastOplogEntryStaleness = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Subsystem: "oplog",
-		Name:      "last_entry_staleness_seconds",
-		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
-	})
-
 	metricOplogEntriesFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
@@ -365,7 +358,6 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
-		metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 	}()
 
 	if len(entries) > 0 {
