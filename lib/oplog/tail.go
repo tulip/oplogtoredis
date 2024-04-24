@@ -137,7 +137,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(func() (*primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(parallelismSize-1, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -405,8 +405,8 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
-	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix)
+func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
+	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
 	if redisErr == nil {
 		// we have a last write time, check that it's not too far in the
