@@ -1,6 +1,9 @@
 package oplog
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"strings"
 
@@ -78,6 +81,16 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		return nil, errors.Wrap(err, "marshalling outgoing message")
 	}
 
+	hash := sha256.Sum256([]byte(op.Database))
+	intSlice := hash[len(hash)-8:]
+
+	var hashInt uint64
+
+	err = binary.Read(bytes.NewReader(intSlice), binary.LittleEndian, &hashInt)
+	if err != nil {
+		panic(errors.Wrap(err, "decoding database hash as uint64"))
+	}
+
 	// We need to publish on both the full-collection channel and the
 	// single-document channel
 	return &redispub.Publication{
@@ -92,7 +105,8 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		Msg:            msgJSON,
 		OplogTimestamp: op.Timestamp,
 
-		TxIdx: op.TxIdx,
+		TxIdx:          op.TxIdx,
+		ParallelismKey: int(hashInt),
 	}, nil
 }
 
