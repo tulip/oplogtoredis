@@ -22,7 +22,7 @@ type oplogtoredisConfiguration struct {
 	MongoConnectTimeout           time.Duration `default:"10s" split_words:"true"`
 	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
-	WriteParallelism              int           `default:"1" spit_words:"true"`
+	WriteParallelism              int           `default:"1" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
