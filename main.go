@@ -98,15 +98,15 @@ func main() {
 
 		stopRedisPub := make(chan bool)
 		waitGroup.Add(1)
-		go func() {
+		go func(ordinal int) {
 			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
 				FlushInterval:    config.TimestampFlushInterval(),
 				DedupeExpiration: config.RedisDedupeExpiration(),
 				MetadataPrefix:   config.RedisMetadataPrefix(),
-			}, stopRedisPub)
+			}, stopRedisPub, ordinal)
 			log.Log.Infow("Redis publisher completed", "i", i)
 			waitGroup.Done()
-		}()
+		}(i)
 		log.Log.Info("Started up processing goroutines")
 		stopRedisPubs[i] = stopRedisPub
 	}

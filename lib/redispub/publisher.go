@@ -63,11 +63,18 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
+func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
+	metricLastOplogEntryStaleness := promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "redispub",
+		Name:      fmt.Sprintf("last_entry_staleness_seconds_%d", ordinal),
+		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
+	})
+
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	for _,client := range clients {
+	for _, client := range clients {
 		go periodicallyUpdateTimestamp(client, timestampC, opts)
 	}
 
@@ -75,14 +82,14 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication)error
+	type PubFn func(*Publication) error
 
 	var publishFns []PubFn
 
-	for _,client := range clients {
+	for _, client := range clients {
 		client := client
 		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, metricLastOplogEntryStaleness)
 		}
 		publishFns = append(publishFns, publishFn)
 	}
@@ -97,10 +104,9 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			for i,publishFn := range publishFns {
+			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
-
 
 				if err != nil {
 					metricSendFailed.Inc()
@@ -146,8 +152,9 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
-func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {
+func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, metricLastOplogEntryStaleness prometheus.Gauge) error {
 	start := time.Now()
+	metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0))))
 
 	_, err := publishDedupe.Run(
 		context.Background(),
