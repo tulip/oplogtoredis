@@ -132,6 +132,8 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool)
 }
 
 func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool) {
+	parallelismSize := len(out)
+
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -203,7 +205,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 				for _, pub := range pubs {
 					if pub != nil {
-						outIdx := pub.ParallelismKey % len(out)
+						outIdx := (pub.ParallelismKey%parallelismSize + parallelismSize) % parallelismSize
 						out[outIdx] <- pub
 					} else {
 						log.Log.Error("Nil Redis publication")
