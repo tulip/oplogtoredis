@@ -41,25 +41,10 @@ func main() {
 		panic("Error parsing environment variables: " + err.Error())
 	}
 
-	mongoSession, err := createMongoClient()
-	if err != nil {
-		panic("Error initializing oplog tailer: " + err.Error())
-	}
-	defer func() {
-		mongoCloseCtx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
-		defer cancel()
-
-		mongoCloseErr := mongoSession.Disconnect(mongoCloseCtx)
-		if mongoCloseErr != nil {
-			log.Log.Errorw("Error closing Mongo client", "error", mongoCloseErr)
-		}
-	}()
-	log.Log.Info("Initialized connection to Mongo")
-
-	parallelism := config.WriteParallelism()
-	aggregatedRedisClients := make([][]redis.UniversalClient, parallelism)
-	aggregatedRedisPubs := make([]chan<- *redispub.Publication, parallelism)
-	stopRedisPubs := make([]chan bool, parallelism)
+	writeParallelism := config.WriteParallelism()
+	aggregatedRedisClients := make([][]redis.UniversalClient, writeParallelism)
+	aggregatedRedisPubs := make([]chan<- *redispub.Publication, writeParallelism)
+	stopRedisPubs := make([]chan bool, writeParallelism)
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
@@ -121,25 +106,50 @@ func main() {
 		})
 	}
 
-	stopOplogTail := make(chan bool)
-	waitGroup.Add(1)
-	go func() {
-		tailer := oplog.Tailer{
-			MongoClient:  mongoSession,
-			RedisClients: aggregatedRedisClients[0], // the tailer coroutine needs a redis client for determining start timestamp
-			// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
-			RedisPrefix: config.RedisMetadataPrefix(),
-			MaxCatchUp:  config.MaxCatchUp(),
-			Denylist:    &denylist,
-		}
-		tailer.Tail(aggregatedRedisPubs, stopOplogTail)
+	// TODO create a separate env var for this
+	readParallelism := config.WriteParallelism()
 
-		log.Log.Info("Oplog tailer completed")
-		waitGroup.Done()
-	}()
+	stopOplogTails := make([]chan bool, readParallelism)
+	aggregatedMongoSessions := make([]*mongo.Client, readParallelism)
+	for i := 0; i < readParallelism; i++ {
+		mongoSession, err := createMongoClient()
+		if err != nil {
+			panic(fmt.Sprintf("[%d] Error initializing oplog tailer: %s", i, err.Error()))
+		}
+		defer func(i int) {
+			mongoCloseCtx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
+			defer cancel()
+
+			mongoCloseErr := mongoSession.Disconnect(mongoCloseCtx)
+			if mongoCloseErr != nil {
+				log.Log.Errorw("Error closing Mongo client", "i", i, "error", mongoCloseErr)
+			}
+		}(i)
+		log.Log.Infow("Initialized connection to Mongo", "i", i)
+		aggregatedMongoSessions[i] = mongoSession
+
+		stopOplogTail := make(chan bool)
+		stopOplogTails[i] = stopOplogTail
+
+		waitGroup.Add(1)
+		go func(i int) {
+			tailer := oplog.Tailer{
+				MongoClient:  mongoSession,
+				RedisClients: aggregatedRedisClients[0], // the tailer coroutine needs a redis client for determining start timestamp
+				// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
+				RedisPrefix: config.RedisMetadataPrefix(),
+				MaxCatchUp:  config.MaxCatchUp(),
+				Denylist:    &denylist,
+			}
+			tailer.Tail(aggregatedRedisPubs, stopOplogTail, i, readParallelism)
+
+			log.Log.Info("Oplog tailer completed")
+			waitGroup.Done()
+		}(i)
+	}
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(aggregatedRedisClients, mongoSession, &denylist)
+	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, &denylist)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -165,7 +175,9 @@ func main() {
 	log.Log.Warnf("Exiting cleanly due to signal %s. Interrupt again to force unclean shutdown.", sig)
 	signal.Reset()
 
-	stopOplogTail <- true
+	for _, stopOplogTail := range stopOplogTails {
+		stopOplogTail <- true
+	}
 	for _, stopRedisPub := range stopRedisPubs {
 		stopRedisPub <- true
 	}
@@ -247,7 +259,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client, denylistMap *sync.Map) *http.Server {
+func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, aggregatedMongos []*mongo.Client, denylistMap *sync.Map) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -266,12 +278,14 @@ func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Cl
 		ctx, cancel := context.WithTimeout(context.Background(), config.MongoConnectTimeout())
 		defer cancel()
 
-		mongoErr := mongo.Ping(ctx, readpref.Primary())
-		mongoOK := mongoErr == nil
-
-		if !mongoOK {
-			log.Log.Errorw("Error connecting to Mongo during healthz check",
-				"error", mongoErr)
+		mongoOK := true
+		for _, mongo := range aggregatedMongos {
+			mongoErr := mongo.Ping(ctx, readpref.Primary())
+			mongoOK := (mongoOK && (mongoErr == nil))
+			if !mongoOK {
+				log.Log.Errorw("Error connecting to Mongo during healthz check",
+					"error", mongoErr)
+			}
 		}
 
 		if mongoOK && redisOK {

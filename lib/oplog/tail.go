@@ -116,7 +116,7 @@ func init() {
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
-func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
 	childStopC := make(chan bool)
 	wasStopped := false
 
@@ -128,7 +128,7 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool)
 
 	for {
 		log.Log.Info("Starting oplog tailing")
-		tailer.tailOnce(out, childStopC)
+		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
 		if wasStopped {
@@ -140,9 +140,7 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool)
 	}
 }
 
-func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool) {
-	parallelismSize := len(out)
-
+func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -214,7 +212,13 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 				for _, pub := range pubs {
 					if pub != nil {
-						outIdx := (pub.ParallelismKey%parallelismSize + parallelismSize) % parallelismSize
+						inIdx := assignToShard(pub.ParallelismKey, readParallelism)
+						if inIdx != readOrdinal {
+							// discard
+							continue
+						}
+						// inIdx and outIdx may be different if there are different #s of read and write routines
+						outIdx := assignToShard(pub.ParallelismKey, len(out))
 						out[outIdx] <- pub
 					} else {
 						log.Log.Error("Nil Redis publication")
@@ -528,4 +532,11 @@ func parseNamespace(namespace string) (string, string) {
 	}
 
 	return database, collection
+}
+
+// assignToShard determines which shard should process a given key.
+// This should just be key % shardCount, but Go modulo is weird with negative numbers,
+// and the parallelism key can be negative.
+func assignToShard(key int, shardCount int) int {
+	return (key%shardCount + shardCount) % shardCount
 }
