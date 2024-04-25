@@ -5,8 +5,17 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
 )
+
+var metricFilterEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "denylist",
+	Name:      "filter_enabled",
+	Help:      "Gauge indicating whether the denylist filter is enabled for a particular DB namespace",
+}, []string{"namespace"})
 
 // CollectionEndpoint serves the endpoints for the whole Denylist at /denylist
 func CollectionEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
@@ -83,6 +92,7 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 
 	denylist.Store(id, true)
 	log.Log.Infow("Created denylist entry", "id", id)
+	metricFilterEnabled.WithLabelValues(id).Set(1)
 
 	response.WriteHeader(http.StatusCreated)
 }
@@ -98,5 +108,7 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 
 	denylist.Delete(id)
 	log.Log.Infow("Deleted denylist entry", "id", id)
+	metricFilterEnabled.WithLabelValues(id).Set(0)
+
 	response.WriteHeader(http.StatusNoContent)
 }
