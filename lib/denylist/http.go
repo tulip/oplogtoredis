@@ -14,8 +14,8 @@ var metricFilterEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "otr",
 	Subsystem: "denylist",
 	Name:      "filter_enabled",
-	Help:      "Gauge indicating whether the denylist filter is enabled for a particular DB namespace",
-}, []string{"namespace"})
+	Help:      "Gauge indicating whether the denylist filter is enabled for a particular DB name",
+}, []string{"db"})
 
 // CollectionEndpoint serves the endpoints for the whole Denylist at /denylist
 func CollectionEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
