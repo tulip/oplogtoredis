@@ -4,8 +4,9 @@
 package config
 
 import (
-	"time"
 	"strings"
+	"time"
+
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -21,6 +22,7 @@ type oplogtoredisConfiguration struct {
 	MongoConnectTimeout           time.Duration `default:"10s" split_words:"true"`
 	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
+	WriteParallelism              int           `default:"1" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -129,6 +131,13 @@ func MongoQueryTimeout() time.Duration {
 // to change without notice.
 func OplogV2ExtractSubfieldChanges() bool {
 	return globalConfig.OplogV2ExtractSubfieldChanges
+}
+
+// WriteParallelism controls how many parallel write loops will be run (sharded based on a hash
+// of the database name.) Each parallel loop has its own redis connection and internal buffer.
+// Healthz endpoint will report fail if anyone of them dies.
+func WriteParallelism() int {
+	return globalConfig.WriteParallelism
 }
 
 // ParseEnv parses the current environment variables and updates the stored

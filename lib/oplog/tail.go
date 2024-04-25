@@ -25,10 +25,10 @@ import (
 // Tailer persistently tails the oplog of a Mongo cluster, handling
 // reconnection and resumption of where it left off.
 type Tailer struct {
-	MongoClient *mongo.Client
+	MongoClient  *mongo.Client
 	RedisClients []redis.UniversalClient
-	RedisPrefix string
-	MaxCatchUp  time.Duration
+	RedisPrefix  string
+	MaxCatchUp   time.Duration
 }
 
 // Raw oplog entry from Mongo
@@ -107,7 +107,7 @@ func init() {
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
-func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool) {
 	childStopC := make(chan bool)
 	wasStopped := false
 
@@ -131,7 +131,9 @@ func (tailer *Tailer) Tail(out chan<- *redispub.Publication, stop <-chan bool) {
 	}
 }
 
-func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool) {
+	parallelismSize := len(out)
+
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -203,7 +205,8 @@ func (tailer *Tailer) tailOnce(out chan<- *redispub.Publication, stop <-chan boo
 
 				for _, pub := range pubs {
 					if pub != nil {
-						out <- pub
+						outIdx := (pub.ParallelismKey%parallelismSize + parallelismSize) % parallelismSize
+						out[outIdx] <- pub
 					} else {
 						log.Log.Error("Nil Redis publication")
 					}

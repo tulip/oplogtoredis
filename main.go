@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	stdlog "log"
 	"net/http"
 	"net/http/pprof"
@@ -53,74 +54,91 @@ func main() {
 	}()
 	log.Log.Info("Initialized connection to Mongo")
 
-	redisClients, err := createRedisClients()
-	if err != nil {
-		panic("Error initializing Redis client: " + err.Error())
-	}
-	defer func() {
-		for _, redisClient := range redisClients {
-			redisCloseErr := redisClient.Close()
-			if redisCloseErr != nil {
-				log.Log.Errorw("Error closing Redis client",
-					"error", redisCloseErr)
-			}
-		}
-	}()
-	log.Log.Info("Initialized connection to Redis")
+	parallelism := config.WriteParallelism()
+	aggregatedRedisClients := make([][]redis.UniversalClient, parallelism)
+	aggregatedRedisPubs := make([]chan<- *redispub.Publication, parallelism)
+	stopRedisPubs := make([]chan bool, parallelism)
 
-	// We crate two goroutines:
-	//
-	// The oplog.Tail goroutine reads messages from the oplog, and generates the
-	// messages that we need to write to redis. It then writes them to a
-	// buffered channel.
-	//
-	// The redispub.PublishStream goroutine reads messages from the buffered channel
-	// and sends them to Redis.
-	//
-	// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
 	bufferSize := 10000
-	redisPubs := make(chan *redispub.Publication, bufferSize)
+	waitGroup := sync.WaitGroup{}
+
+	for i := 0; i < config.WriteParallelism(); i++ {
+		redisClients, err := createRedisClients()
+		if err != nil {
+			panic(fmt.Sprintf("[%d] Error initializing Redis client: %s", i, err.Error()))
+		}
+		defer func() {
+			for _, redisClient := range redisClients {
+				redisCloseErr := redisClient.Close()
+				if redisCloseErr != nil {
+					log.Log.Errorw("Error closing Redis client",
+						"error", redisCloseErr,
+						"i", i)
+				}
+			}
+		}()
+		log.Log.Infow("Initialized connection to Redis", "i", i)
+
+		aggregatedRedisClients[i] = redisClients
+
+		// We crate two goroutines:
+		//
+		// The oplog.Tail goroutine reads messages from the oplog, and generates the
+		// messages that we need to write to redis. It then writes them to a
+		// buffered channel.
+		//
+		// The redispub.PublishStream goroutine reads messages from the buffered channel
+		// and sends them to Redis.
+		//
+		// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
+		redisPubs := make(chan *redispub.Publication, bufferSize)
+		aggregatedRedisPubs[i] = redisPubs
+
+		stopRedisPub := make(chan bool)
+		waitGroup.Add(1)
+		go func() {
+			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
+				FlushInterval:    config.TimestampFlushInterval(),
+				DedupeExpiration: config.RedisDedupeExpiration(),
+				MetadataPrefix:   config.RedisMetadataPrefix(),
+			}, stopRedisPub)
+			log.Log.Infow("Redis publisher completed", "i", i)
+			waitGroup.Done()
+		}()
+		log.Log.Info("Started up processing goroutines")
+		stopRedisPubs[i] = stopRedisPub
+	}
 
 	promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "otr",
 		Name:      "buffer_available",
 		Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-	}, func () float64 {
-		return float64(bufferSize - len(redisPubs))
+	}, func() float64 {
+		total := 0
+		for _, redisPubs := range aggregatedRedisPubs {
+			total += (bufferSize - len(redisPubs))
+		}
+		return float64(total)
 	})
-
-	waitGroup := sync.WaitGroup{}
 
 	stopOplogTail := make(chan bool)
 	waitGroup.Add(1)
 	go func() {
 		tailer := oplog.Tailer{
 			MongoClient:  mongoSession,
-			RedisClients: redisClients,
-			RedisPrefix:  config.RedisMetadataPrefix(),
-			MaxCatchUp:   config.MaxCatchUp(),
+			RedisClients: aggregatedRedisClients[0], // the tailer coroutine needs a redis client for determining start timestamp
+			// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
+			RedisPrefix: config.RedisMetadataPrefix(),
+			MaxCatchUp:  config.MaxCatchUp(),
 		}
-		tailer.Tail(redisPubs, stopOplogTail)
+		tailer.Tail(aggregatedRedisPubs, stopOplogTail)
 
 		log.Log.Info("Oplog tailer completed")
 		waitGroup.Done()
 	}()
 
-	stopRedisPub := make(chan bool)
-	waitGroup.Add(1)
-	go func() {
-		redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
-			FlushInterval:    config.TimestampFlushInterval(),
-			DedupeExpiration: config.RedisDedupeExpiration(),
-			MetadataPrefix:   config.RedisMetadataPrefix(),
-		}, stopRedisPub)
-		log.Log.Info("Redis publisher completed")
-		waitGroup.Done()
-	}()
-	log.Log.Info("Started up processing goroutines")
-
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(redisClients, mongoSession)
+	httpServer := makeHTTPServer(aggregatedRedisClients, mongoSession)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -147,7 +165,9 @@ func main() {
 	signal.Reset()
 
 	stopOplogTail <- true
-	stopRedisPub <- true
+	for _, stopRedisPub := range stopRedisPubs {
+		stopRedisPub <- true
+	}
 
 	err = httpServer.Shutdown(context.Background())
 	if err != nil {
@@ -226,17 +246,19 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(clients []redis.UniversalClient, mongo *mongo.Client) *http.Server {
+func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		redisOK := true
-		for _, redis := range clients {
-			redisErr := redis.Ping(context.Background()).Err()
-			redisOK = (redisOK && (redisErr == nil))
-			if !redisOK {
-				log.Log.Errorw("Error connecting to Redis during healthz check",
-					"error", redisErr)
+		for _, clients := range aggregatedClients {
+			for _, redis := range clients {
+				redisErr := redis.Ping(context.Background()).Err()
+				redisOK = (redisOK && (redisErr == nil))
+				if !redisOK {
+					log.Log.Errorw("Error connecting to Redis during healthz check",
+						"error", redisErr)
+				}
 			}
 		}
 

@@ -20,4 +20,8 @@ type Publication struct {
 
 	// TxIdx is the index of the operation within a transaction. Used to supplement OplogTimestamp in a transaction.
 	TxIdx uint
+
+	// ParallelismKey is a number representing which parallel write loop will process this message.
+	// It is a hash of the database name, assuming that a single database is the unit of ordering guarantee.
+	ParallelismKey int
 }
