@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+
+	"github.com/tulip/oplogtoredis/lib/log"
 )
 
 // CollectionEndpoint serves the endpoints for the whole Denylist at /denylist
@@ -80,6 +82,8 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 
 	denylist.Store(id, true)
+	log.Log.Infow("Created denylist entry", "id", id)
+
 	response.WriteHeader(http.StatusCreated)
 }
 
@@ -93,5 +97,6 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 
 	denylist.Delete(id)
+	log.Log.Infow("Deleted denylist entry", "id", id)
 	response.WriteHeader(http.StatusNoContent)
 }
