@@ -101,6 +101,13 @@ var (
 		Name:      "last_entry_staleness_seconds",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	})
+
+	metricOplogEntriesFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_filtered",
+		Help:      "Oplog entries filtered by denylist",
+	}, []string{"database"})
 )
 
 func init() {
@@ -367,6 +374,8 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 
 	if _, denied := denylist.Load(database); denied {
 		log.Log.Debugw("Skipping oplog entry", "database", database)
+		metricOplogEntriesFiltered.WithLabelValues(database).Add(1)
+
 		return
 	}
 
