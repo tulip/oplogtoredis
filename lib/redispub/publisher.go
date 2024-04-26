@@ -62,6 +62,13 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 	Help:      "The round trip time in seconds of the most recent write to Redis.",
 })
 
+var metricStalenessPreRetries = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "pre_retry_staleness",
+	Help:      "Gauge recording the staleness on receiving a message from the tailing routine.",
+}, []string{"ordinal"})
+
 var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
@@ -106,6 +113,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
+			metricLastOplogEntryStaleness.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
 			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
