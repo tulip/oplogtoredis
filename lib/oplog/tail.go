@@ -94,6 +94,13 @@ var (
 			ReportInterval: 1 * time.Minute,
 		},
 	}, []string{"database", "status"})
+
+	metricLastReceivedStaleness = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "last_received_staleness",
+		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
+	})
 )
 
 func init() {
@@ -343,6 +350,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
+	metricLastReceivedStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 
 	defer func() {
 		// TODO: remove these in a future version
