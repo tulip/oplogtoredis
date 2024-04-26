@@ -69,16 +69,16 @@ func main() {
 		if err != nil {
 			panic(fmt.Sprintf("[%d] Error initializing Redis client: %s", i, err.Error()))
 		}
-		defer func() {
+		defer func(ordinal int) {
 			for _, redisClient := range redisClients {
 				redisCloseErr := redisClient.Close()
 				if redisCloseErr != nil {
 					log.Log.Errorw("Error closing Redis client",
 						"error", redisCloseErr,
-						"i", i)
+						"i", ordinal)
 				}
 			}
-		}()
+		}(i)
 		log.Log.Infow("Initialized connection to Redis", "i", i)
 
 		aggregatedRedisClients[i] = redisClients
@@ -104,7 +104,7 @@ func main() {
 				DedupeExpiration: config.RedisDedupeExpiration(),
 				MetadataPrefix:   config.RedisMetadataPrefix(),
 			}, stopRedisPub, ordinal)
-			log.Log.Infow("Redis publisher completed", "i", i)
+			log.Log.Infow("Redis publisher completed", "i", ordinal)
 			waitGroup.Done()
 		}(i)
 		log.Log.Info("Started up processing goroutines")
