@@ -10,6 +10,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -109,19 +110,16 @@ func main() {
 		}(i)
 		log.Log.Info("Started up processing goroutines")
 		stopRedisPubs[i] = stopRedisPub
-	}
 
-	promauto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Name:      "buffer_available",
-		Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-	}, func() float64 {
-		total := 0
-		for _, redisPubs := range aggregatedRedisPubs {
-			total += (bufferSize - len(redisPubs))
-		}
-		return float64(total)
-	})
+		promauto.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace:   "otr",
+			Name:        "buffer_available",
+			Help:        "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
+			ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(i)},
+		}, func() float64 {
+			return float64(bufferSize - len(redisPubs))
+		})
+	}
 
 	stopOplogTail := make(chan bool)
 	waitGroup.Add(1)
