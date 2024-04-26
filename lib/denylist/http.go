@@ -3,6 +3,7 @@ package denylist
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -66,6 +67,10 @@ func listDenylistKeys(response http.ResponseWriter, denylist *sync.Map) {
 // GET /denylist/...
 func getDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
+	if strings.Contains(id, "/") {
+		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
 	_, exists := denylist.Load(id)
 	if !exists {
 		http.Error(response, "denylist entry not found with that id", http.StatusNotFound)
@@ -84,6 +89,10 @@ func getDenylistEntry(response http.ResponseWriter, request *http.Request, denyl
 // PUT /denylist/...
 func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
+	if strings.Contains(id, "/") {
+		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
 	_, exists := denylist.Load(id)
 	if exists {
 		response.WriteHeader(http.StatusNoContent)
@@ -100,6 +109,10 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 // DELETE /denylist/...
 func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
 	id := request.URL.Path
+	if strings.Contains(id, "/") {
+		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
 	_, exists := denylist.Load(id)
 	if !exists {
 		http.Error(response, "denylist entry not found with that id", http.StatusNotFound)
