@@ -18,6 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 
 	"github.com/tulip/oplogtoredis/lib/config"
+	"github.com/tulip/oplogtoredis/lib/denylist"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"github.com/tulip/oplogtoredis/lib/oplog"
 	"github.com/tulip/oplogtoredis/lib/parse"
@@ -61,6 +62,7 @@ func main() {
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
+	denylist := sync.Map{}
 
 	for i := 0; i < config.WriteParallelism(); i++ {
 		redisClients, err := createRedisClients()
@@ -130,6 +132,7 @@ func main() {
 			// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
 			RedisPrefix: config.RedisMetadataPrefix(),
 			MaxCatchUp:  config.MaxCatchUp(),
+			Denylist:    &denylist,
 		}
 		tailer.Tail(aggregatedRedisPubs, stopOplogTail)
 
@@ -138,7 +141,7 @@ func main() {
 	}()
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(aggregatedRedisClients, mongoSession)
+	httpServer := makeHTTPServer(aggregatedRedisClients, mongoSession, &denylist)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -246,7 +249,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client) *http.Server {
+func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Client, denylistMap *sync.Map) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -297,6 +300,9 @@ func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, mongo *mongo.Cl
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	mux.HandleFunc("/denylist", denylist.CollectionEndpoint(denylistMap))
+	mux.Handle("/denylist/", http.StripPrefix("/denylist/", http.HandlerFunc(denylist.SingleEndpoint(denylistMap))))
 
 	return &http.Server{Addr: config.HTTPServerAddr(), Handler: mux}
 }

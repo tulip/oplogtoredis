@@ -3,6 +3,7 @@ package oplog
 import (
 	"errors"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -81,8 +82,9 @@ func TestGetStartTime(t *testing.T) {
 
 			tailer := Tailer{
 				RedisClients: redisClient,
-				RedisPrefix: "someprefix.",
-				MaxCatchUp:  maxCatchUp,
+				RedisPrefix:  "someprefix.",
+				MaxCatchUp:   maxCatchUp,
+				Denylist:     &sync.Map{},
 			}
 
 			actualResult := tailer.getStartTime(func() (*primitive.Timestamp, error) {
@@ -285,7 +287,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{}).parseRawOplogEntry(test.in, nil)
+			got := (&Tailer{Denylist: &sync.Map{}}).parseRawOplogEntry(test.in, nil)
 
 			if diff := pretty.Compare(got, test.want); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)

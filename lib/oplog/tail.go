@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tulip/oplogtoredis/lib/config"
@@ -29,6 +30,7 @@ type Tailer struct {
 	RedisClients []redis.UniversalClient
 	RedisPrefix  string
 	MaxCatchUp   time.Duration
+	Denylist     *sync.Map
 }
 
 // Raw oplog entry from Mongo
@@ -99,6 +101,13 @@ var (
 		Name:      "last_entry_staleness_seconds",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	})
+
+	metricOplogEntriesFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_filtered",
+		Help:      "Oplog entries filtered by denylist",
+	}, []string{"database"})
 )
 
 func init() {
@@ -197,7 +206,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
-				ts, pubs := tailer.unmarshalEntry(rawData)
+				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist)
 
 				if ts != nil {
 					lastTimestamp = *ts
@@ -331,7 +340,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -361,6 +370,13 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw) (timestamp *primitive.Tim
 
 	if len(entries) > 0 {
 		database = entries[0].Database
+	}
+
+	if _, denied := denylist.Load(database); denied {
+		log.Log.Debugw("Skipping oplog entry", "database", database)
+		metricOplogEntriesFiltered.WithLabelValues(database).Add(1)
+
+		return
 	}
 
 	type errEntry struct {
