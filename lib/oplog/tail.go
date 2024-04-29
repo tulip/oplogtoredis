@@ -149,7 +149,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(parallelismSize-1, func() (*primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(len(out)-1, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
