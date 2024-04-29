@@ -6,6 +6,7 @@ package oplog
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,12 +103,12 @@ var (
 		Help:      "Oplog entries filtered by denylist",
 	}, []string{"database"})
 
-	metricLastReceivedStaleness = promauto.NewGauge(prometheus.GaugeOpts{
+	metricLastReceivedStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "last_received_staleness",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
-	})
+	}, []string{"ordinal"})
 )
 
 func init() {
@@ -204,7 +205,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
-				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist)
+				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist, readOrdinal)
 
 				if ts != nil {
 					lastTimestamp = *ts
@@ -344,7 +345,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -361,7 +362,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
-	metricLastReceivedStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
+	metricLastReceivedStaleness.WithLabelValues(strconv.Itoa(readOrdinal)).Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 
 	defer func() {
 		// TODO: remove these in a future version
