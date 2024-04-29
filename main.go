@@ -50,7 +50,7 @@ func main() {
 	waitGroup := sync.WaitGroup{}
 	denylist := sync.Map{}
 
-	for i := 0; i < config.WriteParallelism(); i++ {
+	for i := 0; i < writeParallelism; i++ {
 		redisClients, err := createRedisClients()
 		if err != nil {
 			panic(fmt.Sprintf("[%d] Error initializing Redis client: %s", i, err.Error()))
@@ -106,8 +106,7 @@ func main() {
 		})
 	}
 
-	// TODO create a separate env var for this
-	readParallelism := config.WriteParallelism()
+	readParallelism := config.ReadParallelism()
 
 	stopOplogTails := make([]chan bool, readParallelism)
 	aggregatedMongoSessions := make([]*mongo.Client, readParallelism)

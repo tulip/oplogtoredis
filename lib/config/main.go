@@ -23,6 +23,7 @@ type oplogtoredisConfiguration struct {
 	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
 	WriteParallelism              int           `default:"1" split_words:"true"`
+	ReadParallelism               int           `default:"1" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -138,6 +139,14 @@ func OplogV2ExtractSubfieldChanges() bool {
 // Healthz endpoint will report fail if anyone of them dies.
 func WriteParallelism() int {
 	return globalConfig.WriteParallelism
+}
+
+// ReadParallelism controls how many parallel read loops will be run. Each read loop has its own mongo
+// connection. Each loop consumes the entire oplog, but will hash the database name and discard any
+// messages that don't match the loop's ordinal (effectively the same shard algorithm the write loops use).
+// Healthz endpoint will report fail if anyone of them dies.
+func ReadParallelism() int {
+	return globalConfig.ReadParallelism
 }
 
 // ParseEnv parses the current environment variables and updates the stored
