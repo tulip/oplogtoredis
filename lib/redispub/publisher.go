@@ -113,7 +113,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			metricLastOplogEntryStaleness.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
+			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
 			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
