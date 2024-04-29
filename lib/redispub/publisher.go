@@ -7,6 +7,7 @@ package redispub
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,28 +62,43 @@ var metricLastCommandDuration = promauto.NewGauge(prometheus.GaugeOpts{
 	Help:      "The round trip time in seconds of the most recent write to Redis.",
 })
 
+var metricStalenessPreRetries = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "pre_retry_staleness",
+	Help:      "Gauge recording the staleness on receiving a message from the tailing routine.",
+}, []string{"ordinal"})
+
+var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "last_entry_staleness_seconds",
+	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
+}, []string{"ordinal"})
+
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool) {
+func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
+
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	for _,client := range clients {
-		go periodicallyUpdateTimestamp(client, timestampC, opts)
+	for _, client := range clients {
+		go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
 	}
 
 	// Redis expiration is in integer seconds, so we have to convert the
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication)error
+	type PubFn func(*Publication) error
 
 	var publishFns []PubFn
 
-	for _,client := range clients {
+	for _, client := range clients {
 		client := client
 		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds)
+			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
 		}
 		publishFns = append(publishFns, publishFn)
 	}
@@ -97,10 +113,10 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			for i,publishFn := range publishFns {
+			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
+			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
-
 
 				if err != nil {
 					metricSendFailed.Inc()
@@ -146,8 +162,9 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
-func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int) error {
+func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
+	metricLastOplogEntryStaleness.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
 
 	_, err := publishDedupe.Run(
 		context.Background(),
@@ -181,14 +198,14 @@ func formatKey(p *Publication, prefix string) string {
 // channel, and this function throttles that to only update occasionally.
 //
 // This blocks forever; it should be run in a goroutine
-func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts) {
+func periodicallyUpdateTimestamp(client redis.UniversalClient, timestamps <-chan primitive.Timestamp, opts *PublishOpts, ordinal int) {
 	var lastFlush time.Time
 	var mostRecentTimestamp primitive.Timestamp
 	var needFlush bool
 
 	flush := func() {
 		if needFlush {
-			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry", encodeMongoTimestamp(mostRecentTimestamp), 0)
+			client.Set(context.Background(), opts.MetadataPrefix+"lastProcessedEntry."+strconv.Itoa(ordinal), encodeMongoTimestamp(mostRecentTimestamp), 0)
 			lastFlush = time.Now()
 			needFlush = false
 		}

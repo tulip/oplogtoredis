@@ -31,9 +31,9 @@ func TestLastProcessedTimestampSuccess(t *testing.T) {
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
 
-	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", encodeMongoTimestamp(nowTS)))
+	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry.0", encodeMongoTimestamp(nowTS)))
 
-	gotTS, gotTime, err := LastProcessedTimestamp(redisClient, "someprefix.")
+	gotTS, gotTime, err := LastProcessedTimestamp(redisClient, "someprefix.", 0)
 
 	if err != nil {
 		t.Errorf("Got unexpected error: %s", err)
@@ -52,7 +52,7 @@ func TestLastProcessedTimestampNoRecord(t *testing.T) {
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
 
-	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.")
+	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.", 0)
 
 	if err == nil {
 		t.Errorf("Expected redis.Nil error, got no error")
@@ -64,9 +64,9 @@ func TestLastProcessedTimestampNoRecord(t *testing.T) {
 func TestLastProcessedTimestampInvalidRecord(t *testing.T) {
 	redisServer, redisClient := startMiniredis()
 	defer redisServer.Close()
-	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry", "not a number"))
+	require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry.0", "not a number"))
 
-	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.")
+	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.", 0)
 
 	if err == nil {
 		t.Errorf("Expected strconv error, got no error")
@@ -80,7 +80,7 @@ func TestLastProcessedTimestampRedisError(t *testing.T) {
 		Addrs: []string{"not a server"},
 	})
 
-	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.")
+	_, _, err := LastProcessedTimestamp(redisClient, "someprefix.", 0)
 
 	if err == nil {
 		t.Errorf("Expected TCP error, got no error")

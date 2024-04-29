@@ -10,6 +10,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -69,16 +70,16 @@ func main() {
 		if err != nil {
 			panic(fmt.Sprintf("[%d] Error initializing Redis client: %s", i, err.Error()))
 		}
-		defer func() {
+		defer func(ordinal int) {
 			for _, redisClient := range redisClients {
 				redisCloseErr := redisClient.Close()
 				if redisCloseErr != nil {
 					log.Log.Errorw("Error closing Redis client",
 						"error", redisCloseErr,
-						"i", i)
+						"i", ordinal)
 				}
 			}
-		}()
+		}(i)
 		log.Log.Infow("Initialized connection to Redis", "i", i)
 
 		aggregatedRedisClients[i] = redisClients
@@ -98,30 +99,27 @@ func main() {
 
 		stopRedisPub := make(chan bool)
 		waitGroup.Add(1)
-		go func() {
+		go func(ordinal int) {
 			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
 				FlushInterval:    config.TimestampFlushInterval(),
 				DedupeExpiration: config.RedisDedupeExpiration(),
 				MetadataPrefix:   config.RedisMetadataPrefix(),
-			}, stopRedisPub)
-			log.Log.Infow("Redis publisher completed", "i", i)
+			}, stopRedisPub, ordinal)
+			log.Log.Infow("Redis publisher completed", "i", ordinal)
 			waitGroup.Done()
-		}()
+		}(i)
 		log.Log.Info("Started up processing goroutines")
 		stopRedisPubs[i] = stopRedisPub
-	}
 
-	promauto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Name:      "buffer_available",
-		Help:      "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-	}, func() float64 {
-		total := 0
-		for _, redisPubs := range aggregatedRedisPubs {
-			total += (bufferSize - len(redisPubs))
-		}
-		return float64(total)
-	})
+		promauto.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace:   "otr",
+			Name:        "buffer_available",
+			Help:        "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
+			ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(i)},
+		}, func() float64 {
+			return float64(bufferSize - len(redisPubs))
+		})
+	}
 
 	stopOplogTail := make(chan bool)
 	waitGroup.Add(1)

@@ -95,19 +95,19 @@ var (
 		},
 	}, []string{"database", "status"})
 
-	metricLastOplogEntryStaleness = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "otr",
-		Subsystem: "oplog",
-		Name:      "last_entry_staleness_seconds",
-		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
-	})
-
 	metricOplogEntriesFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "entries_filtered",
 		Help:      "Oplog entries filtered by denylist",
 	}, []string{"database"})
+
+	metricLastReceivedStaleness = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "last_received_staleness",
+		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
+	})
 )
 
 func init() {
@@ -151,7 +151,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(func() (*primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(parallelismSize-1, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -357,6 +357,7 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
+	metricLastReceivedStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 
 	defer func() {
 		// TODO: remove these in a future version
@@ -365,7 +366,6 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
-		metricLastOplogEntryStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 	}()
 
 	if len(entries) > 0 {
@@ -422,8 +422,9 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
-	ts, tsTime, redisErr := redispub.LastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix)
+func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
+	// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
+	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
 	if redisErr == nil {
 		// we have a last write time, check that it's not too far in the

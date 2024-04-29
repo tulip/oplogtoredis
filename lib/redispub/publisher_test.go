@@ -121,11 +121,11 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 		periodicallyUpdateTimestamp(redisClient, timestampC, &PublishOpts{
 			MetadataPrefix: "someprefix.",
 			FlushInterval:  testSpeed,
-		})
+		}, 0)
 		waitGroup.Done()
 	}()
 
-	key := "someprefix.lastProcessedEntry"
+	key := "someprefix.lastProcessedEntry.0"
 
 	// Key should be unset
 	if redisServer.Exists(key) {
