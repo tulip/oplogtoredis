@@ -43,8 +43,8 @@ func main() {
 
 	writeParallelism := config.WriteParallelism()
 	aggregatedRedisClients := make([][]redis.UniversalClient, writeParallelism)
-	aggregatedRedisPubs := make([]chan<- *redispub.Publication, writeParallelism)
-	stopRedisPubs := make([]chan bool, writeParallelism)
+	aggregatedRedisPubs := make([][]chan<- *redispub.Publication, writeParallelism)
+	stopRedisPubs := make([][]chan bool, writeParallelism)
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
@@ -68,42 +68,56 @@ func main() {
 		log.Log.Infow("Initialized connection to Redis", "i", i)
 
 		aggregatedRedisClients[i] = redisClients
+		clientsSize := len(redisClients)
 
-		// We crate two goroutines:
-		//
-		// The oplog.Tail goroutine reads messages from the oplog, and generates the
-		// messages that we need to write to redis. It then writes them to a
-		// buffered channel.
-		//
-		// The redispub.PublishStream goroutine reads messages from the buffered channel
-		// and sends them to Redis.
-		//
-		// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
-		redisPubs := make(chan *redispub.Publication, bufferSize)
-		aggregatedRedisPubs[i] = redisPubs
+		redisPubsAggregationEntry := make([]chan<- *redispub.Publication, clientsSize)
+		stopRedisPubsEntry := make([]chan bool, clientsSize)
 
-		stopRedisPub := make(chan bool)
-		waitGroup.Add(1)
-		go func(ordinal int) {
-			redispub.PublishStream(redisClients, redisPubs, &redispub.PublishOpts{
-				FlushInterval:    config.TimestampFlushInterval(),
-				DedupeExpiration: config.RedisDedupeExpiration(),
-				MetadataPrefix:   config.RedisMetadataPrefix(),
-			}, stopRedisPub, ordinal)
-			log.Log.Infow("Redis publisher completed", "i", ordinal)
-			waitGroup.Done()
-		}(i)
-		log.Log.Info("Started up processing goroutines")
-		stopRedisPubs[i] = stopRedisPub
+		for j := 0; j < clientsSize; j++ {
+			redisClient := redisClients[i]
 
-		promauto.NewGaugeFunc(prometheus.GaugeOpts{
-			Namespace:   "otr",
-			Name:        "buffer_available",
-			Help:        "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
-			ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(i)},
-		}, func() float64 {
-			return float64(bufferSize - len(redisPubs))
-		})
+			redisPubs := make(chan *redispub.Publication, bufferSize)
+			redisPubsAggregationEntry[j] = redisPubs
+
+			stopRedisPub := make(chan bool)
+			stopRedisPubsEntry[j] = stopRedisPub
+
+			waitGroup.Add(1)
+
+			// We crate two goroutines:
+			//
+			// The oplog.Tail goroutine reads messages from the oplog, and generates the
+			// messages that we need to write to redis. It then writes them to a
+			// buffered channel.
+			//
+			// The redispub.PublishStream goroutine reads messages from the buffered channel
+			// and sends them to Redis.
+			//
+			// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
+			go func(ordinal int, clientIndex int) {
+				redispub.PublishStream([]redis.UniversalClient{redisClient}, redisPubs, &redispub.PublishOpts{
+					FlushInterval:    config.TimestampFlushInterval(),
+					DedupeExpiration: config.RedisDedupeExpiration(),
+					MetadataPrefix:   config.RedisMetadataPrefix(),
+				}, stopRedisPub, ordinal)
+				log.Log.Infow("Redis publisher completed", "ordinal", ordinal, "clientIndex", clientIndex)
+				waitGroup.Done()
+			}(i, j)
+			log.Log.Info("Started up processing goroutines")
+
+			promauto.NewGaugeFunc(prometheus.GaugeOpts{
+				Namespace:   "otr",
+				Name:        "buffer_available",
+				Help:        "Gauge indicating the available space in the buffer of oplog entries waiting to be written to redis.",
+				ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(i), "clientIndex": strconv.Itoa(j)},
+			}, func() float64 {
+				return float64(bufferSize - len(redisPubs))
+			})
+
+		}
+
+		aggregatedRedisPubs[i] = redisPubsAggregationEntry
+		stopRedisPubs[i] = stopRedisPubsEntry
 	}
 
 	readParallelism := config.ReadParallelism()
@@ -177,8 +191,10 @@ func main() {
 	for _, stopOplogTail := range stopOplogTails {
 		stopOplogTail <- true
 	}
-	for _, stopRedisPub := range stopRedisPubs {
-		stopRedisPub <- true
+	for _, stopRedisPubEntry := range stopRedisPubs {
+		for _, stopRedisPub := range stopRedisPubEntry {
+			stopRedisPub <- true
+		}
 	}
 
 	err = httpServer.Shutdown(context.Background())
