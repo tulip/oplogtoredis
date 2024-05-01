@@ -280,7 +280,7 @@ func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, aggregatedMongo
 		mongoOK := true
 		for _, mongo := range aggregatedMongos {
 			mongoErr := mongo.Ping(ctx, readpref.Primary())
-			mongoOK := (mongoOK && (mongoErr == nil))
+			mongoOK = (mongoOK && (mongoErr == nil))
 			if !mongoOK {
 				log.Log.Errorw("Error connecting to Mongo during healthz check",
 					"error", mongoErr)

@@ -546,8 +546,10 @@ func parseNamespace(namespace string) (string, string) {
 }
 
 // assignToShard determines which shard should process a given key.
-// This should just be key % shardCount, but Go modulo is weird with negative numbers,
-// and the parallelism key can be negative.
+// The key is an integer generated from random bytes, which means it can be negative.
+// In Go, A%B when A is negative produces a negative result, which is inadequate as an
+// array index. We fix this by doing (A%B+B)%B, which is identical to A%B for positive A
+// and produces the expected result for negative A.
 func assignToShard(key int, shardCount int) int {
 	return (key%shardCount + shardCount) % shardCount
 }
