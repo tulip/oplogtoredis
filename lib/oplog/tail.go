@@ -205,19 +205,29 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
-				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist, readOrdinal)
+				ts, pubs, sendMetricsData := tailer.unmarshalEntry(rawData, tailer.Denylist, readOrdinal)
 
 				if ts != nil {
 					lastTimestamp = *ts
 				}
 
+				// we only want to send metrics data once for the whole batch
+				metricsDataSent := false
+
 				for _, pub := range pubs {
 					if pub != nil {
 						inIdx := assignToShard(pub.ParallelismKey, readParallelism)
 						if inIdx != readOrdinal {
-							// discard
+							// discard this publication
 							continue
 						}
+
+						// send metrics data only if we didnt discard all the publications due to sharding
+						if !metricsDataSent && sendMetricsData != nil {
+							metricsDataSent = true
+							sendMetricsData()
+						}
+
 						// inIdx and outIdx may be different if there are different #s of read and write routines
 						outIdx := assignToShard(pub.ParallelismKey, len(out))
 						out[outIdx] <- pub
@@ -345,7 +355,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication, sendMetricsData func()) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -362,16 +372,16 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readO
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
-	metricLastReceivedStaleness.WithLabelValues(strconv.Itoa(readOrdinal)).Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 
-	defer func() {
+	sendMetricsData = func() {
 		// TODO: remove these in a future version
 		metricOplogEntriesReceived.WithLabelValues(database, status).Inc()
 		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(messageLen)
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
-	}()
+		metricLastReceivedStaleness.WithLabelValues(strconv.Itoa(readOrdinal)).Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
+	}
 
 	if len(entries) > 0 {
 		database = entries[0].Database
