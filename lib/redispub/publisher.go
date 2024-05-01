@@ -103,6 +103,15 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		publishFns = append(publishFns, publishFn)
 	}
 
+	publishFnsCount := len(publishFns)
+	metricsSendFailed := make([]prometheus.Counter, publishFnsCount)  //metricSentMessages.WithLabelValues("failed")
+	metricsSendSuccess := make([]prometheus.Counter, publishFnsCount) //metricSentMessages.WithLabelValues("sent")
+	for i := 0; i < publishFnsCount; i++ {
+		idx := strconv.Itoa(i)
+		metricsSendFailed[i] = metricSentMessages.WithLabelValues("failed", idx)
+		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
+	}
+
 	for {
 		select {
 		case <-stop:
@@ -116,12 +125,12 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 				log.Log.Debugw("Published to", "idx", i)
 
 				if err != nil {
-					metricSentMessages.WithLabelValues("failed", strconv.Itoa(i)).Inc()
+					metricsSendFailed[i].Inc()
 					log.Log.Errorw("Permanent error while trying to publish message; giving up",
 						"error", err,
 						"message", p)
 				} else {
-					metricSentMessages.WithLabelValues("sent", strconv.Itoa(i)).Inc()
+					metricsSendSuccess[i].Inc()
 
 					// We want to make sure we do this *after* we've successfully published
 					// the messages
