@@ -42,14 +42,19 @@ func main() {
 	}
 
 	writeParallelism := config.WriteParallelism()
+	// each array of redis clients holds one client for each destination (regular redis, sentinel)
+	// the aggregated array holds one such array for every write-parallelism shard
 	aggregatedRedisClients := make([][]redis.UniversalClient, writeParallelism)
-	aggregatedRedisPubs := make([][]chan<- *redispub.Publication, writeParallelism)
+	// make one PublisherChannels for each parallel writer
+	aggregatedRedisPubs := make([]oplog.PublisherChannels, writeParallelism)
+	// one stopper channel corresponds to each writer, so it uses the same 2D array structure.
 	stopRedisPubs := make([][]chan bool, writeParallelism)
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
 	denylist := sync.Map{}
 
+	// this loop starts one writer shard on each pass. Repeat it a number of times equal to the write parallelism level.
 	for i := 0; i < writeParallelism; i++ {
 		redisClients, err := createRedisClients()
 		if err != nil {
@@ -70,7 +75,10 @@ func main() {
 		aggregatedRedisClients[i] = redisClients
 		clientsSize := len(redisClients)
 
-		redisPubsAggregationEntry := make([]chan<- *redispub.Publication, clientsSize)
+		// each writer shard is going to make multiple writer coroutines, one for each redis destination,
+		// so we create one PublisherChannels for this shard and put each coroutine's intake channel in it.
+		// these will all be aggregated in the aggregatedRedisPubs 2D array and passed to the tailer.
+		redisPubsAggregationEntry := make(oplog.PublisherChannels, clientsSize)
 		stopRedisPubsEntry := make([]chan bool, clientsSize)
 
 		for j := 0; j < clientsSize; j++ {
@@ -84,7 +92,7 @@ func main() {
 
 			waitGroup.Add(1)
 
-			// We crate two goroutines:
+			// We create two goroutines:
 			//
 			// The oplog.Tail goroutine reads messages from the oplog, and generates the
 			// messages that we need to write to redis. It then writes them to a
@@ -116,6 +124,7 @@ func main() {
 
 		}
 
+		// aggregate
 		aggregatedRedisPubs[i] = redisPubsAggregationEntry
 		stopRedisPubs[i] = stopRedisPubsEntry
 	}
@@ -154,6 +163,7 @@ func main() {
 				MaxCatchUp:  config.MaxCatchUp(),
 				Denylist:    &denylist,
 			}
+			// pass all intake channels to the tailer, which will route messages accordingly
 			tailer.Tail(aggregatedRedisPubs, stopOplogTail, i, readParallelism)
 
 			log.Log.Info("Oplog tailer completed")
