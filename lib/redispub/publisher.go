@@ -45,8 +45,8 @@ var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "processed_messages",
-	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them",
-}, []string{"status"})
+	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them and publish function index",
+}, []string{"status", "idx"})
 
 var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Namespace: "otr",
@@ -103,8 +103,14 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		publishFns = append(publishFns, publishFn)
 	}
 
-	metricSendFailed := metricSentMessages.WithLabelValues("failed")
-	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
+	publishFnsCount := len(publishFns)
+	metricsSendFailed := make([]prometheus.Counter, publishFnsCount)  //metricSentMessages.WithLabelValues("failed")
+	metricsSendSuccess := make([]prometheus.Counter, publishFnsCount) //metricSentMessages.WithLabelValues("sent")
+	for i := 0; i < publishFnsCount; i++ {
+		idx := strconv.Itoa(i)
+		metricsSendFailed[i] = metricSentMessages.WithLabelValues("failed", idx)
+		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
+	}
 
 	for {
 		select {
@@ -119,12 +125,12 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 				log.Log.Debugw("Published to", "idx", i)
 
 				if err != nil {
-					metricSendFailed.Inc()
+					metricsSendFailed[i].Inc()
 					log.Log.Errorw("Permanent error while trying to publish message; giving up",
 						"error", err,
 						"message", p)
 				} else {
-					metricSendSuccess.Inc()
+					metricsSendSuccess[i].Inc()
 
 					// We want to make sure we do this *after* we've successfully published
 					// the messages

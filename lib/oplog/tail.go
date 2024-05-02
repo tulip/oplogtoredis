@@ -6,6 +6,7 @@ package oplog
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,12 +103,12 @@ var (
 		Help:      "Oplog entries filtered by denylist",
 	}, []string{"database"})
 
-	metricLastReceivedStaleness = promauto.NewGauge(prometheus.GaugeOpts{
+	metricLastReceivedStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "last_received_staleness",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
-	})
+	}, []string{"ordinal"})
 )
 
 func init() {
@@ -116,7 +117,7 @@ func init() {
 
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
-func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool) {
+func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
 	childStopC := make(chan bool)
 	wasStopped := false
 
@@ -128,7 +129,7 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool)
 
 	for {
 		log.Log.Info("Starting oplog tailing")
-		tailer.tailOnce(out, childStopC)
+		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
 		if wasStopped {
@@ -140,9 +141,7 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool)
 	}
 }
 
-func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool) {
-	parallelismSize := len(out)
-
+func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -151,7 +150,7 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(parallelismSize-1, func() (*primitive.Timestamp, error) {
+	startTime := tailer.getStartTime(len(out)-1, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -206,15 +205,31 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 					continue
 				}
 
-				ts, pubs := tailer.unmarshalEntry(rawData, tailer.Denylist)
+				ts, pubs, sendMetricsData := tailer.unmarshalEntry(rawData, tailer.Denylist, readOrdinal)
 
 				if ts != nil {
 					lastTimestamp = *ts
 				}
 
+				// we only want to send metrics data once for the whole batch
+				metricsDataSent := false
+
 				for _, pub := range pubs {
 					if pub != nil {
-						outIdx := (pub.ParallelismKey%parallelismSize + parallelismSize) % parallelismSize
+						inIdx := assignToShard(pub.ParallelismKey, readParallelism)
+						if inIdx != readOrdinal {
+							// discard this publication
+							continue
+						}
+
+						// send metrics data only if we didnt discard all the publications due to sharding
+						if !metricsDataSent && sendMetricsData != nil {
+							metricsDataSent = true
+							sendMetricsData()
+						}
+
+						// inIdx and outIdx may be different if there are different #s of read and write routines
+						outIdx := assignToShard(pub.ParallelismKey, len(out))
 						out[outIdx] <- pub
 					} else {
 						log.Log.Error("Nil Redis publication")
@@ -340,7 +355,7 @@ func closeCursor(cursor *mongo.Cursor) {
 //
 // The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
 // ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (timestamp *primitive.Timestamp, pubs []*redispub.Publication) {
+func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication, sendMetricsData func()) {
 	var result rawOplogEntry
 
 	err := bson.Unmarshal(rawData, &result)
@@ -357,16 +372,16 @@ func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map) (time
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
-	metricLastReceivedStaleness.Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
 
-	defer func() {
+	sendMetricsData = func() {
 		// TODO: remove these in a future version
 		metricOplogEntriesReceived.WithLabelValues(database, status).Inc()
 		metricOplogEntriesReceivedSize.WithLabelValues(database).Add(messageLen)
 
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
-	}()
+		metricLastReceivedStaleness.WithLabelValues(strconv.Itoa(readOrdinal)).Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
+	}
 
 	if len(entries) > 0 {
 		database = entries[0].Database
@@ -528,4 +543,13 @@ func parseNamespace(namespace string) (string, string) {
 	}
 
 	return database, collection
+}
+
+// assignToShard determines which shard should process a given key.
+// The key is an integer generated from random bytes, which means it can be negative.
+// In Go, A%B when A is negative produces a negative result, which is inadequate as an
+// array index. We fix this by doing (A%B+B)%B, which is identical to A%B for positive A
+// and produces the expected result for negative A.
+func assignToShard(key int, shardCount int) int {
+	return (key%shardCount + shardCount) % shardCount
 }
