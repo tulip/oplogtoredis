@@ -90,7 +90,7 @@ func main() {
 		stopRedisPubsEntry := make([]chan bool, clientsSize)
 
 		for j := 0; j < clientsSize; j++ {
-			redisClient := redisClients[i]
+			redisClient := redisClients[j]
 
 			redisPubs := make(chan *redispub.Publication, bufferSize)
 			redisPubsAggregationEntry[j] = redisPubs
