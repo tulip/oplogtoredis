@@ -115,9 +115,15 @@ func init() {
 	prometheus.MustRegister(metricMaxOplogEntryByMinute)
 }
 
+// PublisherChannels represents a collection of intake channels for a set of Redis Publishers.
+// When multiple redis URLs are specified via OTR_REDIS_URL, each one produce a redis client,
+// publisher coroutine, and intake channel. Since we want every message to go to all redis
+// destinations, the tailer should send each message to all channels in the array.
+type PublisherChannels []chan<- *redispub.Publication
+
 // Tail begins tailing the oplog. It doesn't return unless it receives a message
 // on the stop channel, in which case it wraps up its work and then returns.
-func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
+func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) {
 	childStopC := make(chan bool)
 	wasStopped := false
 
@@ -141,7 +147,10 @@ func (tailer *Tailer) Tail(out []chan<- *redispub.Publication, stop <-chan bool,
 	}
 }
 
-func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan bool, readOrdinal, readParallelism int) {
+// this accepts an array of PublisherChannels instances whose size is equal to the degree of write-parallelism.
+// Each incoming message will be routed to one of the PublisherChannels instances based on its parallelism key
+// (hash of the database name), then sent to every channel within that PublisherChannels instance.
+func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -228,9 +237,15 @@ func (tailer *Tailer) tailOnce(out []chan<- *redispub.Publication, stop <-chan b
 							sendMetricsData()
 						}
 
+						// determine which shard this message should route to
 						// inIdx and outIdx may be different if there are different #s of read and write routines
 						outIdx := assignToShard(pub.ParallelismKey, len(out))
-						out[outIdx] <- pub
+						// get the set of publisher channels for that shard
+						pubChans := out[outIdx]
+						// send the message to each channel on that shard
+						for _, pubChan := range pubChans {
+							pubChan <- pub
+						}
 					} else {
 						log.Log.Error("Nil Redis publication")
 					}
