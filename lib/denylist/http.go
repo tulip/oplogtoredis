@@ -115,7 +115,7 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 	_, exists := denylist.Load(id)
 	if !exists {
-		http.Error(response, "denylist entry not found with that id", http.StatusNotFound)
+		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 
