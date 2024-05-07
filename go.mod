@@ -39,6 +39,7 @@ require (
 	github.com/juju/loggo v0.0.0-20200526014432-9ce3a2e09b5e // indirect
 	github.com/juju/utils/v2 v2.0.0-20200923005554-4646bfea2ef1 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

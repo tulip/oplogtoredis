@@ -48,7 +48,15 @@ func main() {
 
 	bufferSize := 10000
 	waitGroup := sync.WaitGroup{}
-	denylist := sync.Map{}
+
+	syncer, err := denylist.NewSyncer(config.PostgresPersistenceURL())
+	if err != nil {
+		panic("Error setting up persistent denylist: " + err.Error())
+	}
+	denylist, err := syncer.LoadDenylist()
+	if err != nil {
+		panic("Error loading persistent denylist: " + err.Error())
+	}
 
 	for i := 0; i < writeParallelism; i++ {
 		redisClients, err := createRedisClients()
@@ -138,7 +146,7 @@ func main() {
 				// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
 				RedisPrefix: config.RedisMetadataPrefix(),
 				MaxCatchUp:  config.MaxCatchUp(),
-				Denylist:    &denylist,
+				Denylist:    denylist,
 			}
 			tailer.Tail(aggregatedRedisPubs, stopOplogTail, i, readParallelism)
 
@@ -148,7 +156,7 @@ func main() {
 	}
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, &denylist)
+	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, denylist, syncer)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if httpErr != nil {
@@ -258,7 +266,7 @@ func createRedisClients() ([]redis.UniversalClient, error) {
 	return ret, nil
 }
 
-func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, aggregatedMongos []*mongo.Client, denylistMap *sync.Map) *http.Server {
+func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, aggregatedMongos []*mongo.Client, denylistMap *sync.Map, syncer *denylist.Syncer) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -312,8 +320,8 @@ func makeHTTPServer(aggregatedClients [][]redis.UniversalClient, aggregatedMongo
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-	mux.HandleFunc("/denylist", denylist.CollectionEndpoint(denylistMap))
-	mux.Handle("/denylist/", http.StripPrefix("/denylist/", http.HandlerFunc(denylist.SingleEndpoint(denylistMap))))
+	mux.HandleFunc("/denylist", denylist.CollectionEndpoint(denylistMap, syncer))
+	mux.Handle("/denylist/", http.StripPrefix("/denylist/", http.HandlerFunc(denylist.SingleEndpoint(denylistMap, syncer))))
 
 	return &http.Server{Addr: config.HTTPServerAddr(), Handler: mux}
 }

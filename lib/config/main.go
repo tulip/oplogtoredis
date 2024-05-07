@@ -24,6 +24,7 @@ type oplogtoredisConfiguration struct {
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
 	WriteParallelism              int           `default:"1" split_words:"true"`
 	ReadParallelism               int           `default:"1" split_words:"true"`
+	PostgresPersistenceURL        string        `envconfig:"PG_PERSISTENCE_URL"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -147,6 +148,12 @@ func WriteParallelism() int {
 // Healthz endpoint will report fail if anyone of them dies.
 func ReadParallelism() int {
 	return globalConfig.ReadParallelism
+}
+
+// PostgresPersistenceURL is the optional configuration for persisting a denylist entry to a postgres database
+// If configured, the denylist will be written to the DB on every change, and loaded on startup
+func PostgresPersistenceURL() string {
+	return globalConfig.PostgresPersistenceURL
 }
 
 // ParseEnv parses the current environment variables and updates the stored

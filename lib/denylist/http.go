@@ -19,7 +19,7 @@ var metricFilterEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
 }, []string{"db"})
 
 // CollectionEndpoint serves the endpoints for the whole Denylist at /denylist
-func CollectionEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
+func CollectionEndpoint(denylist *sync.Map, syncer *Syncer) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case "GET":
@@ -31,15 +31,15 @@ func CollectionEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Requ
 }
 
 // SingleEndpoint serves the endpoints for particular Denylist entries at /denylist/...
-func SingleEndpoint(denylist *sync.Map) func(http.ResponseWriter, *http.Request) {
+func SingleEndpoint(denylist *sync.Map, syncer *Syncer) func(http.ResponseWriter, *http.Request) {
 	return func(response http.ResponseWriter, request *http.Request) {
 		switch request.Method {
 		case "GET":
 			getDenylistEntry(response, request, denylist)
 		case "PUT":
-			createDenylistEntry(response, request, denylist)
+			createDenylistEntry(response, request, denylist, syncer)
 		case "DELETE":
-			deleteDenylistEntry(response, request, denylist)
+			deleteDenylistEntry(response, request, denylist, syncer)
 		default:
 			http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		}
@@ -87,7 +87,7 @@ func getDenylistEntry(response http.ResponseWriter, request *http.Request, denyl
 }
 
 // PUT /denylist/...
-func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
+func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map, syncer *Syncer) {
 	id := request.URL.Path
 	if strings.Contains(id, "/") {
 		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -102,12 +102,13 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	denylist.Store(id, true)
 	log.Log.Infow("Created denylist entry", "id", id)
 	metricFilterEnabled.WithLabelValues(id).Set(1)
+	syncer.StoreDenylistEntry(denylist, id)
 
 	response.WriteHeader(http.StatusCreated)
 }
 
 // DELETE /denylist/...
-func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map) {
+func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map, syncer *Syncer) {
 	id := request.URL.Path
 	if strings.Contains(id, "/") {
 		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -122,6 +123,7 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	denylist.Delete(id)
 	log.Log.Infow("Deleted denylist entry", "id", id)
 	metricFilterEnabled.WithLabelValues(id).Set(0)
+	syncer.DeleteDenylistEntry(denylist, id)
 
 	response.WriteHeader(http.StatusNoContent)
 }
