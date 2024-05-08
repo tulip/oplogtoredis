@@ -26,7 +26,7 @@ func TestDenylistPersistence(t *testing.T) {
 	defer pg.Stop()
 
 	otr := harness.StartOTRProcessWithEnv(mongo.Addr, redis.Addr, 9000, []string{
-		fmt.Sprintf("OTR_PG_PERSISTENCE_URL=\"%s\"", pg.ConnStr),
+		fmt.Sprintf("OTR_PG_PERSISTENCE_URL=%s", pg.ConnStr),
 	})
 	defer otr.Stop()
 

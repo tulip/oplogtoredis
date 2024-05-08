@@ -35,7 +35,7 @@ func StartPostgresServer() *PostgresServer {
 		"--",
 		"psql",
 		"-c",
-		"\"ALTER USER postgres WITH PASSWORD 'postgres';\"",
+		"ALTER USER postgres WITH PASSWORD 'postgres';",
 	)
 
 	return &PostgresServer{
