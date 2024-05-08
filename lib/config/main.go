@@ -24,7 +24,7 @@ type oplogtoredisConfiguration struct {
 	OplogV2ExtractSubfieldChanges bool          `default:"false" envconfig:"OPLOG_V2_EXTRACT_SUBFIELD_CHANGES"`
 	WriteParallelism              int           `default:"1" split_words:"true"`
 	ReadParallelism               int           `default:"1" split_words:"true"`
-	PostgresPersistenceURL        string        `envconfig:"PG_PERSISTENCE_URL"`
+	PostgresPersistenceURL        string        `default:"" envconfig:"PG_PERSISTENCE_URL"`
 }
 
 var globalConfig *oplogtoredisConfiguration
