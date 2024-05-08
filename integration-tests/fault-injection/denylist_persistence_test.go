@@ -25,6 +25,9 @@ func TestDenylistPersistence(t *testing.T) {
 	pg := harness.StartPostgresServer()
 	defer pg.Stop()
 
+	// wait before starting OTR for the auth changes to take effects
+	time.Sleep(3 * time.Second)
+
 	otr := harness.StartOTRProcessWithEnv(mongo.Addr, redis.Addr, 9000, []string{
 		fmt.Sprintf("OTR_PG_PERSISTENCE_URL=%s", pg.ConnStr),
 	})
