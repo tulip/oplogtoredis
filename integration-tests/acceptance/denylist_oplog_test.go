@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
@@ -9,6 +10,8 @@ import (
 )
 
 func TestDenyOplog(t *testing.T) {
+	baseURL := os.Getenv("OTR_URL")
+
 	harness := startHarness()
 	defer harness.stop()
 
@@ -33,7 +36,7 @@ func TestDenyOplog(t *testing.T) {
 		"tests.Foo::id1": {expectedMessage1},
 	})
 
-	doRequest("PUT", "/denylist/tests", t, 201)
+	helpers.DoRequest("PUT", baseURL, "/denylist/tests", t, 201)
 
 	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "id2",
@@ -46,7 +49,7 @@ func TestDenyOplog(t *testing.T) {
 	// second message should not have been received, since it got denied
 	harness.verify(t, map[string][]helpers.OTRMessage{})
 
-	doRequest("DELETE", "/denylist/tests", t, 204)
+	helpers.DoRequest("DELETE", baseURL, "/denylist/tests", t, 204)
 
 	_, err = harness.mongoClient.Collection("Foo").InsertOne(context.Background(), bson.M{
 		"_id": "id3",
