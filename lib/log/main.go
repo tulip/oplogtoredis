@@ -3,10 +3,17 @@
 package log
 
 import (
+	"fmt"
 	golog "log"
 	"os"
+	"time"
+
+	"github.com/tulip/oplogtoredis/lib/config"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"github.com/TheZeroSlave/zapsentry"
+	"github.com/getsentry/sentry-go"
 )
 
 // Log is a zap Sugared logger (a logger with a convenient API). You'll almost
@@ -16,6 +23,10 @@ var Log *zap.SugaredLogger
 // RawLog is a Zap unsugared logger (a logger that is extremely fast and type-
 // safe, but has a clunkier API). See: https://godoc.org/go.uber.org/zap#hdr-Choosing_a_Logger
 var RawLog *zap.Logger
+
+type Client = sentry.Client
+
+var defaultSentryClient *Client
 
 // Initialize Log and RawLog
 func init() {
@@ -54,8 +65,54 @@ func init() {
 		panic("Unable to create a logger")
 	}
 
-	Log = RawLog.Sugar()
+	Log = sentryInit(RawLog).Sugar()
 }
+
+func sentryInit(log *zap.Logger) *zap.Logger {
+	errConfig := config.ParseEnv()
+	if errConfig != nil {
+		panic("Error parsing environment variables: " + errConfig.Error())
+	}
+	if !config.SentryEnabled() {
+		return log
+	}
+	errSentry := sentry.Init(sentry.ClientOptions{
+		Dsn:              config.SentryDSN(),
+		Environment:      config.SentryEnvironment(),
+		Release:          config.SentryRelease(),
+		TracesSampleRate: 1.0,
+		AttachStacktrace: true,
+	})
+	if errSentry != nil {
+		// this is called before log is initialized
+		fmt.Fprintf(os.Stderr, "Failed to initialize Sentry: %s\n", errSentry)
+		return log
+	}
+
+	cfg := zapsentry.Configuration{
+		Level:             zapcore.ErrorLevel,
+		EnableBreadcrumbs: true,
+		BreadcrumbLevel:   zapcore.WarnLevel,
+		Tags: map[string]string{
+			"application": "oplogtoredis",
+		},
+	}
+
+	core, err := zapsentry.NewCore(cfg, zapsentry.NewSentryClientFromClient(defaultSentryClient))
+
+	if err != nil {
+		log.Warn("Failed to initialize zapsentry, not wrapping log", zap.Error(err))
+		sentry.CaptureException(err)
+		return log
+	}
+
+	log = zapsentry.AttachCoreToLogger(core, log).With(zapsentry.NewScope())
+
+	log.Info("Sentry wrapper configured")
+
+	return log
+}
+
 
 // Sync writes the log to its output stream (typically stdout/stderr). This should
 // be called before the program exits to ensure buffered logs are written.
@@ -65,6 +122,10 @@ func init() {
 // the program exits
 func Sync() {
 	err := RawLog.Sync()
+
+	if config.SentryEnabled() {
+		sentry.Flush(2 * time.Second)
+	}
 
 	if err != nil {
 		golog.Printf("Error syncing zap log: %s", err)

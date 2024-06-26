@@ -25,6 +25,10 @@ type oplogtoredisConfiguration struct {
 	WriteParallelism              int           `default:"1" split_words:"true"`
 	ReadParallelism               int           `default:"1" split_words:"true"`
 	PostgresPersistenceURL        string        `default:"" envconfig:"PG_PERSISTENCE_URL"`
+	SentryEnabled                 bool          `default:"false" split_words:"true"`
+	SentryDSN                     string        `default:"" envconfig:"SENTRY_DSN"`
+	SentryEnvironment             string        `default:"unknown" split_words:"true"`
+	SentryRelease                 string        `default:"unknown" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -154,6 +158,30 @@ func ReadParallelism() int {
 // If configured, the denylist will be written to the DB on every change, and loaded on startup
 func PostgresPersistenceURL() string {
 	return globalConfig.PostgresPersistenceURL
+}
+
+// SentryEnabled is the optional configuration to enable sentry for logging
+// If configured, sentry will be initialized on startup.
+func SentryEnabled() bool {
+	return globalConfig.SentryEnabled
+}
+
+// SentryDSN is the DSN for initializing Sentry
+// Required if SentryEnabled is set
+func SentryDSN() string {
+	return globalConfig.SentryDSN
+}
+
+// SentryEnvironment is the environment parameter for sentry (e.g., host)
+// Required if SentryEnabled is set
+func SentryEnvironment() string {
+	return globalConfig.SentryEnvironment
+}
+
+// SentryRelease is the release parameter for sentry (e.g., version or commit)
+// Required if SentryEnabled is set
+func SentryRelease() string {
+	return globalConfig.SentryRelease
 }
 
 // ParseEnv parses the current environment variables and updates the stored
