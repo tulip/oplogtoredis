@@ -1,13 +1,12 @@
 module github.com/tulip/oplogtoredis
 
-go 1.17
+go 1.18
 
 require (
 	github.com/TheZeroSlave/zapsentry v1.23.0
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/deckarep/golang-set v1.7.1
 	github.com/getsentry/sentry-go v0.28.1
-	github.com/go-redis/redis/v7 v7.4.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/mgo/v2 v2.0.0-20210302023703-70d5d206e208
@@ -15,6 +14,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kvz/logstreamer v0.0.0-20201023134116-02d20f4338f5
 	github.com/kylelemons/godebug v1.1.0
+	github.com/lib/pq v1.10.9
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/client_model v0.2.0
@@ -35,13 +35,11 @@ require (
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/gomodule/redigo v1.8.5 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/juju/clock v0.0.0-20190205081909-9c5c9712527c // indirect
 	github.com/juju/errors v0.0.0-20200330140219-3fe23663418f // indirect
 	github.com/juju/loggo v0.0.0-20200526014432-9ce3a2e09b5e // indirect
 	github.com/juju/utils/v2 v2.0.0-20200923005554-4646bfea2ef1 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
