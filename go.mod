@@ -1,6 +1,6 @@
 module github.com/tulip/oplogtoredis
 
-go 1.18
+go 1.20
 
 require (
 	github.com/TheZeroSlave/zapsentry v1.23.0
