@@ -94,7 +94,7 @@ func TestParseEnv(t *testing.T) {
 
 			if !envTest.expectError && err != nil {
 				t.Fatalf(
-					"Recevied unexpected error while parsing env: %#v.\n    Error was: %s",
+					"Received unexpected error while parsing env: %#v.\n    Error was: %s",
 					envTest.env, err,
 				)
 			}
