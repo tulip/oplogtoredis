@@ -3,7 +3,6 @@
 package log
 
 import (
-	"fmt"
 	golog "log"
 	"os"
 	"time"
