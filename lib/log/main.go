@@ -24,9 +24,7 @@ var Log *zap.SugaredLogger
 // safe, but has a clunkier API). See: https://godoc.org/go.uber.org/zap#hdr-Choosing_a_Logger
 var RawLog *zap.Logger
 
-type Client = sentry.Client
-
-var defaultSentryClient *Client
+var defaultSentryClient *sentry.Client
 
 // Initialize Log and RawLog
 func init() {
@@ -85,8 +83,7 @@ func sentryInit(log *zap.Logger) *zap.Logger {
 	})
 	if errSentry != nil {
 		// this is called before log is initialized
-		fmt.Fprintf(os.Stderr, "Failed to initialize Sentry: %s\n", errSentry)
-		return log
+		panic("Failed to initialize Sentry: " + errSentry.Error())
 	}
 
 	cfg := zapsentry.Configuration{
@@ -112,7 +109,6 @@ func sentryInit(log *zap.Logger) *zap.Logger {
 
 	return log
 }
-
 
 // Sync writes the log to its output stream (typically stdout/stderr). This should
 // be called before the program exits to ensure buffered logs are written.
