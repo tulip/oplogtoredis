@@ -237,9 +237,6 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 							sendMetricsData()
 						}
 
-						// Increment saturation metric for each publication
-						redispub.MetricSaturationInc()
-
 						// determine which shard this message should route to
 						// inIdx and outIdx may be different if there are different #s of read and write routines
 						outIdx := assignToShard(pub.ParallelismKey, len(out))
@@ -247,6 +244,8 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 						pubChans := out[outIdx]
 						// send the message to each channel on that shard
 						for _, pubChan := range pubChans {
+							// Increment saturation metric for each publication/channel
+							redispub.MetricSaturationInc()
 							pubChan <- pub
 						}
 					} else {
