@@ -76,6 +76,12 @@ var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
 }, []string{"ordinal"})
 
+var metricSaturation = promauto.NewGauge(prometheus.GaugeOpts{
+	Namespace: "otr",
+	Name:      "saturation_delta",
+	Help:      "Delta between incoming and outgoing",
+})
+
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
 func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
@@ -141,6 +147,10 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	}
 }
 
+func MetricSaturationInc() {
+	metricSaturation.Inc()
+}
+
 func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
 	if p == nil {
 		return errors.New("Nil Redis publication")
@@ -160,7 +170,8 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 			retries++
 			time.Sleep(sleepTime)
 		} else {
-			// success, return
+			// success, decrement outstanding publication count and return
+			metricSaturation.Dec()
 			return nil
 		}
 	}

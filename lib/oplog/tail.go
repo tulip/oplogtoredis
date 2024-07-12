@@ -244,6 +244,8 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 						pubChans := out[outIdx]
 						// send the message to each channel on that shard
 						for _, pubChan := range pubChans {
+							// Increment saturation metric for each publication/channel
+							redispub.MetricSaturationInc()
 							pubChan <- pub
 						}
 					} else {
