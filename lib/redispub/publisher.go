@@ -59,7 +59,7 @@ var redisCommandDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "redis_command_duration_seconds",
-	Help:      "The round trip time in seconds of the most recent write to Redis.",
+	Help:      "A histogram recording the duration in seconds of round trips to redis.",
 	Buckets:   []float64{0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5},
 }, []string{"ordinal"})
 
