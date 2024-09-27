@@ -58,8 +58,6 @@ func (op *oplogEntry) IsV2Update() bool {
 		return false	
 	}
 
-	// bson unmarshals integers into interface{} differently depending on platform,
-	// so we handle any kind of number
 	dataVersionInt, ok := dataVersionRaw.AsInt64OK()
 	if !ok {
 		return false
