@@ -1,7 +1,6 @@
 version: "3"
 services:
   meteor1:
-    platform: linux/amd64
     build:
       context: ./testapp
       dockerfile: Dockerfile.dev
@@ -16,7 +15,6 @@ services:
     ports:
       - 9091:3000
   meteor2:
-    platform: linux/amd64
     build:
       context: ./testapp
       dockerfile: Dockerfile.dev
