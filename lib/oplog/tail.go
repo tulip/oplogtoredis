@@ -508,7 +508,13 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		if out.Operation == operationUpdate {
 			out.DocID = entry.Update.ID
 		} else {
-			out.DocID = entry.Doc.Lookup("_id").StringValue()
+			oid, ok := entry.Doc.Lookup("_id").ObjectIDOK()
+			if ok {
+				out.DocID = oid.String()
+			} else {
+				log.Log.Errorf("failed to unmarshal objectId")
+				return nil
+			}
 		}
 
 		return []oplogEntry{out}
