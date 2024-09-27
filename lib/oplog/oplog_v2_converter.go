@@ -171,17 +171,17 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffMap map[string]interface{}) []
 func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 	// New-style update. Looks like:
 	// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
-	diffRawElement, err := op.Data.LookupErr("diff")
-	if err != nil {
+	diffRawElement := op.Data.Lookup("diff")
+	if diffRawElement.IsZero() {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update did not have a diff field",
-			"op", op, "error", err)
+			"op", op)
 		return []string{}
 	}
 
 	diffRaw, ok := diffRawElement.DocumentOK()
 	var diffMap map[string]interface{}
-	err = bson.Unmarshal(diffRaw, &diffMap);
+	err := bson.Unmarshal(diffRaw, &diffMap);
 	if !ok || err != nil {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",

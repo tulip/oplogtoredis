@@ -53,9 +53,9 @@ func (op *oplogEntry) IsRemove() bool {
 
 // Returns whether this is an oplog update format v2 update (new in MongoDB 5.0)
 func (op *oplogEntry) IsV2Update() bool {
-	dataVersionRaw, err := op.Data.LookupErr("$v")
-	if err != nil {
-		return false
+	dataVersionRaw := op.Data.Lookup("$v")
+	if dataVersionRaw.IsZero() {
+		return false	
 	}
 
 	// bson unmarshals integers into interface{} differently depending on platform,
@@ -69,8 +69,8 @@ func (op *oplogEntry) IsV2Update() bool {
 		return false
 	}
 
-	_, err = op.Data.LookupErr("diff")
-	return err != nil
+	diff := op.Data.Lookup("diff")
+	return !diff.IsZero()
 }
 
 // If this oplogEntry is for an insert, returns whether that insert is a
@@ -90,7 +90,7 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 
 // Given an operation, returned the fields affected by that operation
 func (op *oplogEntry) ChangedFields() []string {
-	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
+	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {		
 		return mapKeysRaw(op.Data)
 	} else if op.IsUpdate() && op.IsV2Update() {
 		// New-style update. Looks like:
@@ -119,7 +119,7 @@ func (op *oplogEntry) ChangedFields() []string {
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v1 update contained a key with a non-map value",
-					"op", op)
+					"op", op, "operationKey", operationKey, "operationMap", operationMap)
 				continue
 			}
 
@@ -144,7 +144,6 @@ func mapKeysRaw(rawData bson.Raw) []string {
 
 	for i := 0; i < len(fields); i++ {
 		fields[i] = elements[i].Key()
-		i++
 	}
 
 	return fields
