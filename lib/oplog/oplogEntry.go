@@ -5,6 +5,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
@@ -26,7 +27,7 @@ var metricUnprocessableChangedFields = promauto.NewCounter(prometheus.CounterOpt
 type oplogEntry struct {
 	DocID      interface{}
 	Timestamp  primitive.Timestamp
-	Data       map[string]interface{}
+	Data       bson.Raw
 	Operation  string
 	Namespace  string
 	Database   string
@@ -52,40 +53,15 @@ func (op *oplogEntry) IsRemove() bool {
 
 // Returns whether this is an oplog update format v2 update (new in MongoDB 5.0)
 func (op *oplogEntry) IsV2Update() bool {
-	dataVersion, ok := op.Data["$v"]
-	if !ok {
+	dataVersionRaw, err := op.Data.LookupErr("$v")
+	if err != nil {
 		return false
 	}
 
 	// bson unmarshals integers into interface{} differently depending on platform,
 	// so we handle any kind of number
-	var dataVersionInt int
-	switch t := dataVersion.(type) {
-	case int:
-		dataVersionInt = t
-	case int8:
-		dataVersionInt = int(t)
-	case int16:
-		dataVersionInt = int(t)
-	case int32:
-		dataVersionInt = int(t)
-	case int64:
-		dataVersionInt = int(t)
-	case uint:
-		dataVersionInt = int(t)
-	case uint8:
-		dataVersionInt = int(t)
-	case uint16:
-		dataVersionInt = int(t)
-	case uint32:
-		dataVersionInt = int(t)
-	case uint64:
-		dataVersionInt = int(t)
-	case float32:
-		dataVersionInt = int(t)
-	case float64:
-		dataVersionInt = int(t)
-	default:
+	dataVersionInt, ok := dataVersionRaw.AsInt64OK()
+	if !ok {
 		return false
 	}
 
@@ -93,16 +69,16 @@ func (op *oplogEntry) IsV2Update() bool {
 		return false
 	}
 
-	_, ok = op.Data["diff"]
-	return ok
+	_, err = op.Data.LookupErr("diff")
+	return err != nil
 }
 
 // If this oplogEntry is for an insert, returns whether that insert is a
 // replacement (rather than a modification)
 func (op *oplogEntry) UpdateIsReplace() bool {
-	if _, ok := op.Data["$set"]; ok {
+	if data := op.Data.Lookup("$set"); !data.IsZero() {
 		return false
-	} else if _, ok := op.Data["$unset"]; ok {
+	} else if data := op.Data.Lookup("$unset"); !data.IsZero() {
 		return false
 	} else if op.IsV2Update() {
 		// the v2 update format is only used for modifications
@@ -115,7 +91,7 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 // Given an operation, returned the fields affected by that operation
 func (op *oplogEntry) ChangedFields() []string {
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
-		return mapKeys(op.Data)
+		return mapKeysRaw(op.Data)
 	} else if op.IsUpdate() && op.IsV2Update() {
 		// New-style update. Looks like:
 		// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
@@ -125,13 +101,21 @@ func (op *oplogEntry) ChangedFields() []string {
 		// { $v: 1, $set: { "a": 10, "b": 20 }, $unset: { "c": true } }
 
 		fields := []string{}
-		for operationKey, operation := range op.Data {
+		elements, err := op.Data.Elements()
+		if err != nil {
+			metricUnprocessableChangedFields.Inc()
+			log.Log.Errorw("Oplog data for non-replacement v1 update failed to unmarshal",
+				"op", op, "error", err)
+			return []string{}
+		}
+		for _, element := range elements {
+			operationKey := element.Key()
 			if operationKey == "$v" {
 				// $v indicates the update document format; it's not a changed key
 				continue
 			}
 
-			operationMap, operationMapOK := operation.(map[string]interface{})
+			operationMap, operationMapOK := element.Value().DocumentOK()
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v1 update contained a key with a non-map value",
@@ -139,13 +123,31 @@ func (op *oplogEntry) ChangedFields() []string {
 				continue
 			}
 
-			fields = append(fields, mapKeys(operationMap)...)
+			fields = append(fields, mapKeysRaw(operationMap)...)
 		}
 
 		return fields
 	}
 
 	return []string{}
+}
+
+// Given a bson.Raw object, returns the top level keys of the document it represents
+func mapKeysRaw(rawData bson.Raw) []string {
+	elements, err := rawData.Elements()
+	if err != nil {
+		log.Log.Errorw("Failed to unmarshal oplog data",
+			"error", err)
+		return []string{}
+	}
+	fields := make([]string, len(elements))
+
+	for i := 0; i < len(fields); i++ {
+		fields[i] = elements[i].Key()
+		i++
+	}
+
+	return fields
 }
 
 // Given a map, returns the keys of that map

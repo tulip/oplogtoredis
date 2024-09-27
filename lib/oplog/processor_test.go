@@ -56,9 +56,9 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"some": "field",
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
@@ -81,10 +81,10 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"some": "field",
 					"new":  "field",
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
@@ -107,7 +107,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"$v": "1.2.3",
 					"$set": map[string]interface{}{
 						"a": "foo",
@@ -116,7 +116,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"$unset": map[string]interface{}{
 						"c": "foo",
 					},
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
@@ -139,7 +139,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data:       bson.M{},
+				Data:       rawBson(t, bson.M{}),
 				Timestamp:  primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
@@ -162,9 +162,9 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"some": "field",
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: &decodedPublication{
@@ -190,9 +190,9 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.bar",
 				Database:   "foo",
 				Collection: "bar",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"some": "field",
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			wantError: ErrUnsupportedDocIDType,
@@ -205,9 +205,9 @@ func TestProcessOplogEntry(t *testing.T) {
 				Namespace:  "foo.system.indexes",
 				Database:   "foo",
 				Collection: "system.indexes",
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"some": "field",
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1234},
 			},
 			want: nil,
@@ -223,12 +223,12 @@ func TestProcessOplogEntry(t *testing.T) {
 				Database:   "config",
 				Collection: "transactions",
 				TxIdx:      0,
-				Data: bson.M{
+				Data: rawBson(t, bson.M{
 					"_id": bson.M{
 						"id":  bson.M{"Subtype": 4, "Data": "dGVzdA=="},
 						"uid": bson.M{"Subtype": 0, "Data": "MTIz"},
 					},
-				},
+				}),
 				Timestamp: primitive.Timestamp{T: 1636616135},
 			},
 			want: nil,

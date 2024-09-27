@@ -492,17 +492,11 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 
 	switch entry.Operation {
 	case operationInsert, operationUpdate, operationRemove:
-		var data map[string]interface{}
-		if err := bson.Unmarshal(entry.Doc, &data); err != nil {
-			log.Log.Errorf("unmarshalling oplog entry data: %v", err)
-			return nil
-		}
-
 		out := oplogEntry{
 			Operation: entry.Operation,
 			Timestamp: entry.Timestamp,
 			Namespace: entry.Namespace,
-			Data:      data,
+			Data:      entry.Doc,
 
 			TxIdx: *txIdx,
 		}
@@ -514,7 +508,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		if out.Operation == operationUpdate {
 			out.DocID = entry.Update.ID
 		} else {
-			out.DocID = data["_id"]
+			out.DocID = entry.Doc.Lookup("_id").StringValue()
 		}
 
 		return []oplogEntry{out}

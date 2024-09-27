@@ -6,6 +6,8 @@ import (
 
 	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Translated from https://github.com/meteor/meteor/blob/devel/packages/mongo/oplog_v2_converter.js
@@ -169,16 +171,18 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffMap map[string]interface{}) []
 func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 	// New-style update. Looks like:
 	// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
-	diff, ok := op.Data["diff"]
-	if !ok {
+	diffRawElement, err := op.Data.LookupErr("diff")
+	if err != nil {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update did not have a diff field",
-			"op", op)
+			"op", op, "error", err)
 		return []string{}
 	}
 
-	diffMap, ok := diff.(map[string]interface{})
-	if !ok {
+	diffRaw, ok := diffRawElement.DocumentOK()
+	var diffMap map[string]interface{}
+	err = bson.Unmarshal(diffRaw, &diffMap);
+	if !ok || err != nil {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
 			"op", op)
