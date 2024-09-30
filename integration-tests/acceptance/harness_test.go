@@ -18,13 +18,13 @@ import (
 // This file is a simple test harness for acceptance tests
 
 type harness struct {
-	redisClient   redis.UniversalClient
+	redisClient         redis.UniversalClient
 	legacyRedisClient   redis.UniversalClient
-	subscription  *redis.PubSub
-	subscriptionC <-chan *redis.Message
+	subscription        *redis.PubSub
+	subscriptionC       <-chan *redis.Message
 	legacySubscription  *redis.PubSub
 	legacySubscriptionC <-chan *redis.Message
-	mongoClient   *mongo.Database
+	mongoClient         *mongo.Database
 }
 
 // Clears the mongo database, connects to redis, and starts a subscription to
@@ -110,7 +110,7 @@ func (h *harness) verifyPub(t *testing.T, pub map[string][]helpers.OTRMessage, e
 		helpers.SortOTRMessagesByID(pubs)
 	}
 	for key := range pub {
-		if strings.Contains(key, "sentinel"){
+		if strings.Contains(key, "sentinel") {
 			delete(pub, key)
 		}
 	}
@@ -141,7 +141,7 @@ func (h *harness) verify(t *testing.T, expectedPubs map[string][]helpers.OTRMess
 	}
 	h.verifyPub(t, actualPubs, expectedPubs)
 	h.verifyPub(t, actualLegacyPubs, expectedPubs)
-	// pop the __sentinel__ entry 
+	// pop the __sentinel__ entry
 
 	// Verify the correct messages were received on each channel
 }

@@ -9,10 +9,10 @@ import (
 
 	"github.com/tulip/oplogtoredis/lib/config"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"github.com/TheZeroSlave/zapsentry"
 	"github.com/getsentry/sentry-go"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Log is a zap Sugared logger (a logger with a convenient API). You'll almost

@@ -1,4 +1,4 @@
-	package oplog
+package oplog
 
 import (
 	"os"

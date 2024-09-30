@@ -308,7 +308,7 @@ type oplogEntryConverted struct {
 	TxIdx uint
 }
 
-func parseEntry(t *testing.T, op []oplogEntry) ([]oplogEntryConverted) {
+func parseEntry(t *testing.T, op []oplogEntry) []oplogEntryConverted {
 	opc := make([]oplogEntryConverted, len(op))
 
 	for i := 0; i < len(op); i++ {

@@ -4,8 +4,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -55,7 +55,7 @@ func (op *oplogEntry) IsRemove() bool {
 func (op *oplogEntry) IsV2Update() bool {
 	dataVersionRaw := op.Data.Lookup("$v")
 	if dataVersionRaw.IsZero() {
-		return false	
+		return false
 	}
 
 	dataVersionInt, ok := dataVersionRaw.AsInt64OK()
@@ -88,7 +88,7 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 
 // Given an operation, returned the fields affected by that operation
 func (op *oplogEntry) ChangedFields() []string {
-	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {		
+	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
 		return mapKeysRaw(op.Data)
 	} else if op.IsUpdate() && op.IsV2Update() {
 		// New-style update. Looks like:

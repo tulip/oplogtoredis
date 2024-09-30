@@ -199,7 +199,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 
 	if config.OplogV2ExtractSubfieldChanges() {
 		var diffMap map[string]interface{}
-		err := bson.Unmarshal(diffRaw, &diffMap);
+		err := bson.Unmarshal(diffRaw, &diffMap)
 		if err != nil {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
