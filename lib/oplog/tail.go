@@ -508,11 +508,12 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		if out.Operation == operationUpdate {
 			out.DocID = entry.Update.ID
 		} else {
-			oid, ok := entry.Doc.Lookup("_id").ObjectIDOK()
+			idLookup := entry.Doc.Lookup("_id")
+			oid, ok := idLookup.ObjectIDOK()
 			if ok {
 				out.DocID = oid.String()
 			} else {
-				oidString, ok := entry.Doc.Lookup("_id").StringValueOK()
+				oidString, ok := idLookup.StringValueOK()
 				if ok {
 					out.DocID = oidString
 				} else {

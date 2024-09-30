@@ -20,6 +20,14 @@ func rawBson(t *testing.T, data interface{}) bson.Raw {
 	return raw
 }
 
+func TestMapKeysRaw(t *testing.T) {
+	want := []string{"key1", "key2", "key3"}
+	got := mapKeysRaw(rawBson(t, map[string]interface{}{"key1": "one", "key2": "two", "key3": "three"}))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("mapKeysRaw() = %v, want %v", got, want)
+	}
+}
+
 func TestCategorization(t *testing.T) {
 	tests := map[string]struct {
 		in       *oplogEntry

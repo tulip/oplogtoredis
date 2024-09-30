@@ -117,7 +117,7 @@ func (op *oplogEntry) ChangedFields() []string {
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v1 update contained a key with a non-map value",
-					"op", op, "operationKey", operationKey, "operationMap", operationMap)
+					"op", op, "operationKey", operationKey)
 				continue
 			}
 
