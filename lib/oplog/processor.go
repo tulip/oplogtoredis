@@ -65,6 +65,11 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		return nil, errors.Wrapf(ErrUnsupportedDocIDType, "expected string or ObjectID, got %T instead", op.DocID)
 	}
 
+	changedFields, errCF := op.ChangedFields()
+	if errCF != nil {
+		return nil, errors.Wrap(errCF, "error getting changed fields")
+	}
+
 	// Construct the JSON we're going to send to Redis
 	//
 	// TODO PERF: consider a specialized JSON encoder
@@ -72,7 +77,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	msg := outgoingMessage{
 		Event:  eventNameForOperation(op),
 		Doc:    outgoingMessageDocument{idForMessage},
-		Fields: op.ChangedFields(),
+		Fields: changedFields,
 	}
 	log.Log.Debugw("Sending outgoing message", "message", msg)
 	msgJSON, err := json.Marshal(&msg)

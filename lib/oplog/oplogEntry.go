@@ -87,7 +87,7 @@ func (op *oplogEntry) UpdateIsReplace() bool {
 }
 
 // Given an operation, returned the fields affected by that operation
-func (op *oplogEntry) ChangedFields() []string {
+func (op *oplogEntry) ChangedFields() ([]string, error) {
 	if op.IsInsert() || (op.IsUpdate() && op.UpdateIsReplace()) {
 		return mapKeysRaw(op.Data)
 	} else if op.IsUpdate() && op.IsV2Update() {
@@ -104,7 +104,7 @@ func (op *oplogEntry) ChangedFields() []string {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v1 update failed to unmarshal",
 				"op", op, "error", err)
-			return []string{}
+			return []string{}, err
 		}
 		for _, element := range elements {
 			operationKey := element.Key()
@@ -120,23 +120,26 @@ func (op *oplogEntry) ChangedFields() []string {
 					"op", op, "operationKey", operationKey)
 				continue
 			}
-
-			fields = append(fields, mapKeysRaw(operationMap)...)
+			mapFields, err := mapKeysRaw(operationMap)
+			if err != nil {
+				return []string{}, err
+			}
+			fields = append(fields, mapFields...)
 		}
 
-		return fields
+		return fields, nil
 	}
 
-	return []string{}
+	return []string{}, nil
 }
 
 // Given a bson.Raw object, returns the top level keys of the document it represents
-func mapKeysRaw(rawData bson.Raw) []string {
+func mapKeysRaw(rawData bson.Raw) ([]string, error) {
 	elements, err := rawData.Elements()
 	if err != nil {
 		log.Log.Errorw("Failed to unmarshal oplog data",
 			"error", err)
-		return []string{}
+		return []string{}, err
 	}
 	fields := make([]string, len(elements))
 
@@ -144,7 +147,7 @@ func mapKeysRaw(rawData bson.Raw) []string {
 		fields[i] = elements[i].Key()
 	}
 
-	return fields
+	return fields, nil
 }
 
 // Given a map, returns the keys of that map

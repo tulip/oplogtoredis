@@ -22,7 +22,10 @@ func rawBson(t *testing.T, data interface{}) bson.Raw {
 
 func TestMapKeysRaw(t *testing.T) {
 	want := []string{"key1", "key2", "key3"}
-	got := mapKeysRaw(rawBson(t, map[string]interface{}{"key1": "one", "key2": "two", "key3": "three"}))
+	got, err := mapKeysRaw(rawBson(t, map[string]interface{}{"key1": "one", "key2": "two", "key3": "three"}))
+	if err != nil {
+		t.Error("mapKeysRaw() error", err)
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("mapKeysRaw() = %v, want %v", got, want)
 	}
@@ -313,7 +316,10 @@ func TestChangedFields(t *testing.T) {
 				t.Errorf("Failed to parse env with subfield setting %t", test.enableV2ExtractDeepFieldChanges)
 			}
 
-			got := test.input.ChangedFields()
+			got, err := test.input.ChangedFields()
+			if err != nil {
+				t.Error("ChangedFields() error", err)
+			}
 
 			sort.Strings(got)
 			sort.Strings(test.want)

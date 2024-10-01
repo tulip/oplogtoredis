@@ -1,6 +1,7 @@
 package oplog
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 
@@ -78,7 +79,7 @@ func flatObjectKeys(prefix string, obj map[string]interface{}) []string {
 	return acc
 }
 
-func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefix string) []string {
+func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefix string) ([]string, error) {
 	fields := []string{}
 
 	for operationKey, operation := range diffMap {
@@ -120,7 +121,11 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 			}
 
 			// indicates a sub-field set
-			fields = append(fields, getChangedFieldsFromOplogV2UpdateDeep(operationMap, prefix+operationKey[1:]+".")...)
+			subFields, err := getChangedFieldsFromOplogV2UpdateDeep(operationMap, prefix+operationKey[1:]+".")
+			if err != nil {
+				return []string{}, err
+			}
+			fields = append(fields, subFields...)
 		} else if operationKey == "a" {
 			// ignore
 			continue
@@ -133,10 +138,10 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 
 	}
 
-	return fields
+	return fields, nil
 }
 
-func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) []string {
+func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) ([]string, error) {
 	fields := []string{}
 
 	elements, err := diffRaw.Elements()
@@ -144,7 +149,7 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) []string {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v1 update failed to unmarshal",
 			"op", diffRaw, "error", err)
-		return []string{}
+		return []string{}, err
 	}
 	for _, element := range elements {
 		operationKey := element.Key()
@@ -157,8 +162,11 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) []string {
 					"op", diffRaw)
 				continue
 			}
-
-			fields = append(fields, mapKeysRaw(operationMap)...)
+			mapFields, err := mapKeysRaw(operationMap)
+			if err != nil {
+				return []string{}, err
+			}
+			fields = append(fields, mapFields...)
 		} else if strings.HasPrefix(operationKey, "s") {
 			// indicates a sub-field set
 			fields = append(fields, strings.TrimPrefix(operationKey, "s"))
@@ -174,10 +182,10 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) []string {
 
 	}
 
-	return fields
+	return fields, nil
 }
 
-func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
+func getChangedFieldsFromOplogV2Update(op *oplogEntry) ([]string, error) {
 	// New-style update. Looks like:
 	// { $v: 2, diff: { sa: "10", sb: "20", d: { c: true  } }
 	diffRawElement := op.Data.Lookup("diff")
@@ -185,7 +193,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update did not have a diff field",
 			"op", op)
-		return []string{}
+		return []string{}, errors.New("Oplog data for non-replacement v2 update did not have a diff field")
 	}
 
 	diffRaw, ok := diffRawElement.DocumentOK()
@@ -194,7 +202,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
 			"op", op)
-		return []string{}
+		return []string{}, errors.New("Oplog data for non-replacement v2 update had a diff that was not a map")
 	}
 
 	if config.OplogV2ExtractSubfieldChanges() {
@@ -204,7 +212,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) []string {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
 				"op", op)
-			return []string{}
+			return []string{}, err
 		}
 		return getChangedFieldsFromOplogV2UpdateDeep(diffMap, "")
 	} else {
