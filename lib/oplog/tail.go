@@ -509,6 +509,10 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 			out.DocID = entry.Update.ID
 		} else {
 			idLookup := entry.Doc.Lookup("_id")
+			if idLookup.IsZero() {
+				log.Log.Errorf("failed to get objectId: _id is empty or not set")
+				return nil
+			}
 			oid, ok := idLookup.ObjectIDOK()
 			if ok {
 				out.DocID = oid.String()
@@ -517,7 +521,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 				if ok {
 					out.DocID = oidString
 				} else {
-					log.Log.Errorf("failed to unmarshal objectId")
+					log.Log.Errorf("failed to get objectId: _id is not ObjectID or String type")
 					return nil
 				}
 			}
