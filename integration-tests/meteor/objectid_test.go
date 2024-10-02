@@ -2,7 +2,6 @@ package main
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tulip/oplogtoredis/integration-tests/meteor/harness"
@@ -17,8 +16,6 @@ func TestObjectID(t *testing.T) {
 	// Subscribe to objectIDTest from both servers
 	require.NoError(t, meteor1.Send(harness.DDPSub("subId", "objectIDTest.pub")))
 	require.NoError(t, meteor2.Send(harness.DDPSub("subId", "objectIDTest.pub")))
-
-	time.Sleep(time.Second)
 
 	meteor1.ClearReceiveBuffer()
 	meteor2.ClearReceiveBuffer()
