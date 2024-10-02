@@ -515,7 +515,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 			}
 			oid, ok := idLookup.ObjectIDOK()
 			if ok {
-				out.DocID = oid.String()
+				out.DocID = oid //.String()
 			} else {
 				oidString, ok := idLookup.StringValueOK()
 				if ok {
