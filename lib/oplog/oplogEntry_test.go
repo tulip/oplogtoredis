@@ -8,7 +8,47 @@ import (
 	"testing"
 
 	"github.com/tulip/oplogtoredis/lib/config"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
+
+func rawBson(t *testing.T, data interface{}) bson.Raw {
+	raw, err := bson.Marshal(data)
+	if err != nil {
+		t.Error("Failed to marshal test data", err)
+	}
+	return raw
+}
+
+func arraysMatch(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, valA := range a {
+		found := false
+		for _, valB := range b {
+			if valA == valB {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func TestMapKeysRaw(t *testing.T) {
+	want := []string{"key1", "key2", "key3"}
+	got, err := mapKeysRaw(rawBson(t, map[string]interface{}{"key1": "one", "key2": "two", "key3": "three"}))
+	if err != nil {
+		t.Error("mapKeysRaw() error", err)
+	}
+	if !arraysMatch(got, want) {
+		t.Errorf("mapKeysRaw() = %v, want %v", got, want)
+	}
+}
 
 func TestCategorization(t *testing.T) {
 	tests := map[string]struct {
@@ -101,7 +141,7 @@ func TestUpdateIsReplace(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&oplogEntry{Data: test.in}).UpdateIsReplace()
+			got := (&oplogEntry{Data: rawBson(t, test.in)}).UpdateIsReplace()
 
 			if got != test.expectedResult {
 				t.Errorf("UpdateIsReplace(%#v) = %t; want %t",
@@ -120,10 +160,10 @@ func TestChangedFields(t *testing.T) {
 		"Insert": {
 			input: &oplogEntry{
 				Operation: "i",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"foo": "a",
 					"bar": 10,
-				},
+				}),
 			},
 			want: []string{"foo", "bar"},
 		},
@@ -131,10 +171,10 @@ func TestChangedFields(t *testing.T) {
 		"Replacement update": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"foo": "a",
 					"bar": 10,
-				},
+				}),
 			},
 			want: []string{"foo", "bar"},
 		},
@@ -142,10 +182,10 @@ func TestChangedFields(t *testing.T) {
 		"Delete": {
 			input: &oplogEntry{
 				Operation: "d",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"foo": "a",
 					"bar": 10,
-				},
+				}),
 			},
 			want: []string{},
 		},
@@ -153,7 +193,7 @@ func TestChangedFields(t *testing.T) {
 		"Update": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v": "1.0",
 					"$set": map[string]interface{}{
 						"foo":     "a",
@@ -163,7 +203,7 @@ func TestChangedFields(t *testing.T) {
 					"$unset": map[string]interface{}{
 						"qax": true,
 					},
-				},
+				}),
 			},
 			want: []string{"foo", "bar", "baz.qux", "qax"},
 		},
@@ -171,10 +211,10 @@ func TestChangedFields(t *testing.T) {
 		"Update, no operations": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":   "1.0",
 					"$set": map[string]interface{}{},
-				},
+				}),
 			},
 			want: []string{},
 		},
@@ -182,13 +222,13 @@ func TestChangedFields(t *testing.T) {
 		"Update, unexpected operation value type": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":    "1.0",
 					"weird": "thing",
 					"$set": map[string]interface{}{
 						"foo": "a",
 					},
-				},
+				}),
 			},
 			want: []string{"foo"},
 		},
@@ -196,7 +236,7 @@ func TestChangedFields(t *testing.T) {
 		"Update v2": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v": 2,
 					"diff": map[string]interface{}{
 						"i":       map[string]interface{}{"a": 1, "b": "2"},
@@ -205,7 +245,7 @@ func TestChangedFields(t *testing.T) {
 						"sg":      10,
 						"sfoobar": map[string]interface{}{},
 					},
-				},
+				}),
 			},
 			want: []string{"a", "b", "c", "d", "e", "f", "g", "foobar"},
 		},
@@ -213,7 +253,7 @@ func TestChangedFields(t *testing.T) {
 		"Update v2 deep": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v": 2,
 					"diff": map[string]interface{}{
 						"i":       map[string]interface{}{"a": 1, "b": "2"},
@@ -222,7 +262,7 @@ func TestChangedFields(t *testing.T) {
 						"sg":      map[string]interface{}{},
 						"sfoobar": map[string]interface{}{},
 					},
-				},
+				}),
 			},
 			want:                            []string{"a", "b", "c", "d", "e", "f"},
 			enableV2ExtractDeepFieldChanges: true,
@@ -231,10 +271,10 @@ func TestChangedFields(t *testing.T) {
 		"Update v2, no operations": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":   2,
 					"diff": map[string]interface{}{},
-				},
+				}),
 			},
 			want: []string{},
 		},
@@ -242,10 +282,10 @@ func TestChangedFields(t *testing.T) {
 		"Update v2, no operations deep": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":   2,
 					"diff": map[string]interface{}{},
-				},
+				}),
 			},
 			want:                            []string{},
 			enableV2ExtractDeepFieldChanges: true,
@@ -254,7 +294,7 @@ func TestChangedFields(t *testing.T) {
 		"Update v2, unexpected operation value type": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":    2,
 					"weird": "thing",
 					"diff": map[string]interface{}{
@@ -262,7 +302,7 @@ func TestChangedFields(t *testing.T) {
 						"otherwierd": "thing",
 						"sfoo":       "bar",
 					},
-				},
+				}),
 			},
 			want: []string{"foo"},
 		},
@@ -270,7 +310,7 @@ func TestChangedFields(t *testing.T) {
 		"Update v2, unexpected operation value type deep": {
 			input: &oplogEntry{
 				Operation: "u",
-				Data: map[string]interface{}{
+				Data: rawBson(t, map[string]interface{}{
 					"$v":    2,
 					"weird": "thing",
 					"diff": map[string]interface{}{
@@ -278,7 +318,7 @@ func TestChangedFields(t *testing.T) {
 						"otherwierd": "thing",
 						"sfoo":       map[string]interface{}{"u": map[string]interface{}{"x": "10"}},
 					},
-				},
+				}),
 			},
 			want:                            []string{"foo.x"},
 			enableV2ExtractDeepFieldChanges: true,
@@ -295,7 +335,10 @@ func TestChangedFields(t *testing.T) {
 				t.Errorf("Failed to parse env with subfield setting %t", test.enableV2ExtractDeepFieldChanges)
 			}
 
-			got := test.input.ChangedFields()
+			got, err := test.input.ChangedFields()
+			if err != nil {
+				t.Error("ChangedFields() error", err)
+			}
 
 			sort.Strings(got)
 			sort.Strings(test.want)
@@ -387,7 +430,7 @@ func TestUpdateIsV2Formatted(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&oplogEntry{Data: test.in}).IsV2Update()
+			got := (&oplogEntry{Data: rawBson(t, test.in)}).IsV2Update()
 
 			if got != test.expectedResult {
 				t.Errorf("UpdateIsV2Formatted(%#v) = %t; want %t",

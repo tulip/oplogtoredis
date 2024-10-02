@@ -163,7 +163,10 @@ func TestOplogV2DeepConverter(t *testing.T) {
 		sort.Strings(test.want)
 
 		t.Run(testName, func(t *testing.T) {
-			got := getChangedFieldsFromOplogV2UpdateDeep(test.in, "")
+			got, err := getChangedFieldsFromOplogV2UpdateDeep(test.in, "")
+			if err != nil {
+				t.Error("getChangedFieldsFromOplogV2UpdateDeep() returned error", err)
+			}
 			sort.Strings(got)
 			assert.Equal(t, test.want, got)
 		})

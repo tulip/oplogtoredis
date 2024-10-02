@@ -492,17 +492,11 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 
 	switch entry.Operation {
 	case operationInsert, operationUpdate, operationRemove:
-		var data map[string]interface{}
-		if err := bson.Unmarshal(entry.Doc, &data); err != nil {
-			log.Log.Errorf("unmarshalling oplog entry data: %v", err)
-			return nil
-		}
-
 		out := oplogEntry{
 			Operation: entry.Operation,
 			Timestamp: entry.Timestamp,
 			Namespace: entry.Namespace,
-			Data:      data,
+			Data:      entry.Doc,
 
 			TxIdx: *txIdx,
 		}
@@ -514,7 +508,24 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		if out.Operation == operationUpdate {
 			out.DocID = entry.Update.ID
 		} else {
-			out.DocID = data["_id"]
+			idLookup := entry.Doc.Lookup("_id")
+			if idLookup.IsZero() {
+				log.Log.Errorf("failed to get objectId: _id is empty or not set")
+				return nil
+			}
+			oid, ok := idLookup.ObjectIDOK()
+			if ok {
+				// this is left as ObjectID type for now so it can be properly converted in processor.go:56
+				out.DocID = oid
+			} else {
+				oidString, ok := idLookup.StringValueOK()
+				if ok {
+					out.DocID = oidString
+				} else {
+					log.Log.Errorf("failed to get objectId: _id is not ObjectID or String type")
+					return nil
+				}
+			}
 		}
 
 		return []oplogEntry{out}

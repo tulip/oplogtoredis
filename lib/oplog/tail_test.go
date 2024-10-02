@@ -130,7 +130,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "i",
 				Namespace:  "foo.Bar",
-				Data:       map[string]interface{}{"_id": "someid", "foo": "bar"},
+				Data:       rawBson(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
 				DocID:      interface{}("someid"),
 				Database:   "foo",
 				Collection: "Bar",
@@ -148,7 +148,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "u",
 				Namespace:  "foo.Bar",
-				Data:       map[string]interface{}{"new": "data"},
+				Data:       rawBson(t, map[string]interface{}{"new": "data"}),
 				DocID:      interface{}("updateid"),
 				Database:   "foo",
 				Collection: "Bar",
@@ -165,7 +165,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp:  primitive.Timestamp{T: 1234},
 				Operation:  "d",
 				Namespace:  "foo.Bar",
-				Data:       map[string]interface{}{"_id": "someid"},
+				Data:       rawBson(t, map[string]interface{}{"_id": "someid"}),
 				DocID:      interface{}("someid"),
 				Database:   "foo",
 				Collection: "Bar",
@@ -238,10 +238,10 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Namespace:  "foo.Bar",
 					Database:   "foo",
 					Collection: "Bar",
-					Data: map[string]interface{}{
+					Data: rawBson(t, map[string]interface{}{
 						"_id": "id1",
 						"foo": "baz",
-					},
+					}),
 					TxIdx: 0,
 				},
 				{
@@ -251,10 +251,10 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Namespace:  "foo.Bar",
 					Database:   "foo",
 					Collection: "Bar",
-					Data: map[string]interface{}{
+					Data: rawBson(t, map[string]interface{}{
 						"_id": "id1",
 						"foo": "bar",
-					},
+					}),
 					TxIdx: 1,
 				},
 				{
@@ -264,9 +264,9 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Namespace:  "foo.Bar",
 					Database:   "foo",
 					Collection: "Bar",
-					Data: map[string]interface{}{
+					Data: rawBson(t, map[string]interface{}{
 						"foo": "quux",
-					},
+					}),
 					TxIdx: 2,
 				},
 				{
@@ -276,9 +276,9 @@ func TestParseRawOplogEntry(t *testing.T) {
 					Namespace:  "foo.Bar",
 					Database:   "foo",
 					Collection: "Bar",
-					Data: map[string]interface{}{
+					Data: rawBson(t, map[string]interface{}{
 						"_id": "id3",
-					},
+					}),
 					TxIdx: 3,
 				},
 			},
@@ -289,11 +289,44 @@ func TestParseRawOplogEntry(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			got := (&Tailer{Denylist: &sync.Map{}}).parseRawOplogEntry(test.in, nil)
 
-			if diff := pretty.Compare(got, test.want); diff != "" {
+			if diff := pretty.Compare(parseEntry(t, got), parseEntry(t, test.want)); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)
 			}
 		})
 	}
+}
+
+type oplogEntryConverted struct {
+	DocID      interface{}
+	Timestamp  primitive.Timestamp
+	Data       map[string]interface{}
+	Operation  string
+	Namespace  string
+	Database   string
+	Collection string
+
+	TxIdx uint
+}
+
+func parseEntry(t *testing.T, op []oplogEntry) []oplogEntryConverted {
+	opc := make([]oplogEntryConverted, len(op))
+
+	for i := 0; i < len(op); i++ {
+		data := map[string]interface{}{}
+		err := bson.Unmarshal(op[i].Data, &data)
+		if err != nil {
+			t.Error("Error unmarshalling oplog data", err)
+		}
+		opc[i].DocID = op[i].DocID
+		opc[i].Timestamp = op[i].Timestamp
+		opc[i].Data = data
+		opc[i].Operation = op[i].Operation
+		opc[i].Namespace = op[i].Namespace
+		opc[i].Database = op[i].Database
+		opc[i].Collection = op[i].Collection
+		opc[i].TxIdx = op[i].TxIdx
+	}
+	return opc
 }
 
 func TestParseNamespace(t *testing.T) {
