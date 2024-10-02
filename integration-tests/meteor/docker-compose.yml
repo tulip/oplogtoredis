@@ -52,6 +52,10 @@ services:
       - --timeout=600
       - testapp1:8080
       - '--'
+      - /wait-for.sh
+      - --timeout=600
+      - testapp2:8080
+      - '--'
       - /bin/oplogtoredis
 
   mongo:
