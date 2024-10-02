@@ -38,7 +38,7 @@ services:
     environment:
       - OTR_MONGO_URL=mongodb://mongo/tests
       - OTR_REDIS_URL=redis://redis
-      # - OTR_LOG_DEBUG=true
+      - OTR_LOG_DEBUG=true
       - OTR_OPLOG_V2_EXTRACT_SUBFIELD_CHANGES=true
     depends_on:
       mongo:
