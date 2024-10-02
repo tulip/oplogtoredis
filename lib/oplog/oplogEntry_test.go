@@ -20,13 +20,32 @@ func rawBson(t *testing.T, data interface{}) bson.Raw {
 	return raw
 }
 
+func arraysMatch(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, valA := range a {
+		found := false
+		for _, valB := range b {
+			if valA == valB {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func TestMapKeysRaw(t *testing.T) {
 	want := []string{"key1", "key2", "key3"}
 	got, err := mapKeysRaw(rawBson(t, map[string]interface{}{"key1": "one", "key2": "two", "key3": "three"}))
 	if err != nil {
 		t.Error("mapKeysRaw() error", err)
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !arraysMatch(got, want) {
 		t.Errorf("mapKeysRaw() = %v, want %v", got, want)
 	}
 }
