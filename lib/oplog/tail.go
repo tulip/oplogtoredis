@@ -522,7 +522,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 				if ok {
 					out.DocID = oidString
 				} else {
-					log.Log.Error("failed to get objectId: _id is not ObjectID or String type")
+					log.Log.Error("failed to get objectId: _id is not ObjectID or String type", idLookup.String())
 					return nil
 				}
 			}
