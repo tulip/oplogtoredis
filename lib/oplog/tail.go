@@ -515,7 +515,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 			}
 			err := idLookup.Unmarshal(&out.DocID)
 			if err != nil {
-				log.Log.Error("failed to unmarshal objectId", err)
+				log.Log.Errorf("failed to unmarshal objectId: %v", err)
 				return nil
 			}
 		}
