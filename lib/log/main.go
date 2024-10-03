@@ -94,6 +94,8 @@ func sentryInit(log *zap.Logger) *zap.Logger {
 		},
 	}
 
+	defaultSentryClient = sentry.CurrentHub().Client()
+
 	core, err := zapsentry.NewCore(cfg, zapsentry.NewSentryClientFromClient(defaultSentryClient))
 
 	if err != nil {
