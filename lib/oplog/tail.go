@@ -510,21 +510,13 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		} else {
 			idLookup := entry.Doc.Lookup("_id")
 			if idLookup.IsZero() {
-				log.Log.Errorf("failed to get objectId: _id is empty or not set")
+				log.Log.Error("failed to get objectId: _id is empty or not set")
 				return nil
 			}
-			oid, ok := idLookup.ObjectIDOK()
-			if ok {
-				// this is left as ObjectID type for now so it can be properly converted in processor.go:56
-				out.DocID = oid
-			} else {
-				oidString, ok := idLookup.StringValueOK()
-				if ok {
-					out.DocID = oidString
-				} else {
-					log.Log.Errorf("failed to get objectId: _id is not ObjectID or String type")
-					return nil
-				}
+			err := idLookup.Unmarshal(&out.DocID)
+			if err != nil {
+				log.Log.Errorf("failed to unmarshal objectId: %v", err)
+				return nil
 			}
 		}
 
