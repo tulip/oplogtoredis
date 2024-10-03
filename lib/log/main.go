@@ -94,6 +94,8 @@ func sentryInit(log *zap.Logger) *zap.Logger {
 		},
 	}
 
+	defaultSentryClient = sentry.CurrentHub().Client()
+
 	core, err := zapsentry.NewCore(cfg, zapsentry.NewSentryClientFromClient(defaultSentryClient))
 
 	if err != nil {
@@ -105,6 +107,7 @@ func sentryInit(log *zap.Logger) *zap.Logger {
 	log = zapsentry.AttachCoreToLogger(core, log).With(zapsentry.NewScope())
 
 	log.Info("Sentry wrapper configured")
+	log.Error("Sentry error test")
 
 	return log
 }
