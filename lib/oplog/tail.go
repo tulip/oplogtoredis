@@ -37,12 +37,10 @@ type Tailer struct {
 // Raw oplog entry from Mongo
 type rawOplogEntry struct {
 	Timestamp    primitive.Timestamp `bson:"ts"`
-	HistoryID    int64               `bson:"h"`
-	MongoVersion int                 `bson:"v"`
 	Operation    string              `bson:"op"`
 	Namespace    string              `bson:"ns"`
 	Doc          bson.Raw            `bson:"o"`
-	Update       rawOplogEntryID     `bson:"o2"`
+	Update       bson.Raw	    	 `bson:"o2"`
 }
 
 // Parsed Cursor Result
@@ -50,10 +48,6 @@ type cursorResultStatus struct {
 	GotResult       bool
 	DidTimeout      bool
 	DidLosePosition bool
-}
-
-type rawOplogEntryID struct {
-	ID interface{} `bson:"_id"`
 }
 
 const requeryDuration = time.Second
@@ -372,11 +366,42 @@ func closeCursor(cursor *mongo.Cursor) {
 // ignored it or failed at some later step.
 func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication, sendMetricsData func()) {
 	var result rawOplogEntry
+	var ok bool
+	result.Namespace, ok = rawData.Lookup("ns").StringValueOK()
+	if !ok {
+		log.Log.Error("Error unmarshalling oplog namespace entry")
+	}
 
-	err := bson.Unmarshal(rawData, &result)
-	if err != nil {
-		log.Log.Errorw("Error unmarshalling oplog entry", "error", err)
-		return
+	if len(result.Namespace) > 0 { // try to filter early if possible
+		db, _ := parseNamespace(result.Namespace)
+
+		if _, denied := denylist.Load(db); denied {
+			log.Log.Debugw("Skipping oplog entry", "database", db)
+			metricOplogEntriesFiltered.WithLabelValues(db).Add(1)
+
+			return
+		}
+	}
+
+	t, i, ok := rawData.Lookup("ts").TimestampOK()
+	if !ok {
+		log.Log.Warn("Error unmarshalling oplog timestamp entry")
+	}
+	result.Timestamp = primitive.Timestamp{T: t, I: i}
+
+	result.Operation, ok = rawData.Lookup("op").StringValueOK()
+	if !ok {
+		log.Log.Warn("Error unmarshalling oplog operation entry")
+	}
+
+	result.Doc, ok = rawData.Lookup("o").DocumentOK()
+	if !ok {
+		log.Log.Warn("Error unmarshalling oplog document entry")
+	}
+
+	result.Update, ok = rawData.Lookup("o2").DocumentOK()
+	if !ok {
+		log.Log.Debug("Error unmarshalling oplog update entry")
 	}
 
 	timestamp = &result.Timestamp
@@ -483,6 +508,19 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 	return primitive.Timestamp{T: uint32(time.Now().Unix() << 32)}
 }
 
+func parseID(idRaw bson.RawValue) (id interface{}, err error) {
+	if idRaw.IsZero() {
+		log.Log.Error("failed to get objectId: _id is empty or not set")
+		err = errors.New("empty or missing objectId")
+		return
+	}
+	err = idRaw.Unmarshal(&id)
+	if err != nil {
+		log.Log.Errorf("failed to unmarshal objectId: %v", err)
+	}
+	return
+}
+
 // converts a rawOplogEntry to an oplogEntry
 func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []oplogEntry {
 	if txIdx == nil {
@@ -505,19 +543,14 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 
 		out.Database, out.Collection = parseNamespace(out.Namespace)
 
+		var errID error
 		if out.Operation == operationUpdate {
-			out.DocID = entry.Update.ID
+			out.DocID, errID = parseID(entry.Update.Lookup("_id"))
 		} else {
-			idLookup := entry.Doc.Lookup("_id")
-			if idLookup.IsZero() {
-				log.Log.Error("failed to get objectId: _id is empty or not set")
-				return nil
-			}
-			err := idLookup.Unmarshal(&out.DocID)
-			if err != nil {
-				log.Log.Errorf("failed to unmarshal objectId: %v", err)
-				return nil
-			}
+			out.DocID, errID = parseID(entry.Doc.Lookup("_id"))
+		}
+		if(errID != nil) {
+			return nil
 		}
 
 		return []oplogEntry{out}

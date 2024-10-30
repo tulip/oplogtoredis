@@ -142,7 +142,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Operation: "u",
 				Namespace: "foo.Bar",
 				Doc:       mustRaw(t, map[string]interface{}{"new": "data"}),
-				Update:    rawOplogEntryID{ID: "updateid"},
+				Update:    rawBson(t, map[string]interface{}{"_id": "updateid"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
@@ -200,9 +200,11 @@ func TestParseRawOplogEntry(t *testing.T) {
 											"_id": "id1",
 											"foo": "baz",
 										}),
+										Update: mustRaw(t, map[string]interface{}{}),
 									},
 								},
 							}),
+							Update: mustRaw(t, map[string]interface{}{}),
 						},
 						{
 							Operation: "i",
@@ -211,6 +213,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 								"_id": "id1",
 								"foo": "bar",
 							}),
+							Update: mustRaw(t, map[string]interface{}{}),
 						},
 						{
 							Operation: "u",
@@ -218,7 +221,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 							Doc: mustRaw(t, map[string]interface{}{
 								"foo": "quux",
 							}),
-							Update: rawOplogEntryID{"id2"},
+							Update: mustRaw(t, map[string]interface{}{"_id": "id2"}),
 						},
 						{
 							Operation: "d",
@@ -226,6 +229,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 							Doc: mustRaw(t, map[string]interface{}{
 								"_id": "id3",
 							}),
+							Update: mustRaw(t, map[string]interface{}{}),
 						},
 					},
 				}),
