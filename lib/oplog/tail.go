@@ -549,7 +549,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 		} else {
 			out.DocID, errID = parseID(entry.Doc.Lookup("_id"))
 		}
-		if(errID != nil) {
+		if errID != nil {
 			return nil
 		}
 
