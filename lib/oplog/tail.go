@@ -208,7 +208,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 					continue
 				}
 
-				ts, pubs, sendMetricsData := tailer.unmarshalEntry(rawData, tailer.Denylist, readOrdinal)
+				ts, pubs, sendMetricsData := tailer.processEntry(rawData, tailer.Denylist, readOrdinal)
 
 				if ts != nil {
 					lastTimestamp = *ts
@@ -360,48 +360,80 @@ func closeCursor(cursor *mongo.Cursor) {
 	}
 }
 
-// unmarshalEntry unmarshals a single entry from the oplog.
-//
-// The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
-// ignored it or failed at some later step.
-func (tailer *Tailer) unmarshalEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication, sendMetricsData func()) {
+// unmarshalEntryMetadata processes the top-level data from an entry and returns a rawOplogEntry object.
+func unmarshalEntryMetadata(rawData bson.Raw, denylist *sync.Map) *rawOplogEntry {
 	var result rawOplogEntry
 	var ok bool
-	result.Namespace, ok = rawData.Lookup("ns").StringValueOK()
-	if !ok {
-		log.Log.Error("Error unmarshalling oplog namespace entry")
+	nsLookup, err := rawData.LookupErr("ns");
+	if err == nil {
+		result.Namespace, ok = nsLookup.StringValueOK()
+		if !ok {
+			// this means there was a type mismatch
+			log.Log.Error("Error unmarshalling oplog namespace entry")
+			return nil
+		}
 	}
 
-	if len(result.Namespace) > 0 { // try to filter early if possible
+	// try to filter early if possible
+	if len(result.Namespace) > 0 { 
 		db, _ := parseNamespace(result.Namespace)
 
 		if _, denied := denylist.Load(db); denied {
 			log.Log.Debugw("Skipping oplog entry", "database", db)
 			metricOplogEntriesFiltered.WithLabelValues(db).Add(1)
 
-			return
+			return nil
 		}
 	}
 
-	t, i, ok := rawData.Lookup("ts").TimestampOK()
-	if !ok {
-		log.Log.Warn("Error unmarshalling oplog timestamp entry")
-	}
-	result.Timestamp = primitive.Timestamp{T: t, I: i}
-
-	result.Operation, ok = rawData.Lookup("op").StringValueOK()
-	if !ok {
-		log.Log.Warn("Error unmarshalling oplog operation entry")
-	}
-
-	result.Doc, ok = rawData.Lookup("o").DocumentOK()
-	if !ok {
-		log.Log.Warn("Error unmarshalling oplog document entry")
+	tsLookup, err := rawData.LookupErr("ts")
+	if err == nil {
+		t, i, ok := tsLookup.TimestampOK()
+		if !ok {
+			log.Log.Error("Error unmarshalling oplog timestamp entry")
+			return nil
+		}
+		result.Timestamp = primitive.Timestamp{T: t, I: i}
 	}
 
-	result.Update, ok = rawData.Lookup("o2").DocumentOK()
-	if !ok {
-		log.Log.Debug("Error unmarshalling oplog update entry")
+	opLookup, err := rawData.LookupErr("op")
+	if err == nil {
+		result.Operation, ok = opLookup.StringValueOK()
+		if !ok {
+			log.Log.Error("Error unmarshalling oplog operation entry")
+			return nil
+		}
+	}
+
+	oLookup, err := rawData.LookupErr("o")
+	if err == nil {
+		result.Doc, ok = oLookup.DocumentOK()
+		if !ok {
+			log.Log.Error("Error unmarshalling oplog document entry")
+			return nil
+		}
+	}
+
+	o2Lookup, err := rawData.LookupErr("o2")
+	if err == nil {
+		result.Update, ok = o2Lookup.DocumentOK()
+		if !ok {
+			log.Log.Error("Error unmarshalling oplog update entry")
+			return nil
+		}
+	}
+
+	return &result
+}
+
+// processEntry processes a single entry from the oplog.
+//
+// The timestamp of the entry is returned so that tailOnce knows the timestamp of the last entry it read, even if it
+// ignored it or failed at some later step.
+func (tailer *Tailer) processEntry(rawData bson.Raw, denylist *sync.Map, readOrdinal int) (timestamp *primitive.Timestamp, pubs []*redispub.Publication, sendMetricsData func()) {
+	result := unmarshalEntryMetadata(rawData, denylist)
+	if result == nil {
+		return
 	}
 
 	timestamp = &result.Timestamp
@@ -522,7 +554,7 @@ func parseID(idRaw bson.RawValue) (id interface{}, err error) {
 }
 
 // converts a rawOplogEntry to an oplogEntry
-func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []oplogEntry {
+func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []oplogEntry {
 	if txIdx == nil {
 		idx := uint(0)
 		txIdx = &idx
@@ -573,7 +605,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry rawOplogEntry, txIdx *uint) []opl
 
 		for _, v := range txData.ApplyOps {
 			v.Timestamp = entry.Timestamp
-			ret = append(ret, tailer.parseRawOplogEntry(v, txIdx)...)
+			ret = append(ret, tailer.parseRawOplogEntry(&v, txIdx)...)
 		}
 
 		return ret
