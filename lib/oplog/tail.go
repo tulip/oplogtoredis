@@ -375,13 +375,11 @@ func unmarshalEntryMetadata(rawData bson.Raw, denylist *sync.Map) *rawOplogEntry
 	}
 
 	// try to filter early if possible
-	if len(result.Namespace) > 0 { 
+	if len(result.Namespace) > 0 && result.Namespace != "admin.$cmd" {
 		db, _ := parseNamespace(result.Namespace)
-
 		if _, denied := denylist.Load(db); denied {
 			log.Log.Debugw("Skipping oplog entry", "database", db)
 			metricOplogEntriesFiltered.WithLabelValues(db).Add(1)
-
 			return nil
 		}
 	}
