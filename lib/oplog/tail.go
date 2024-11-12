@@ -378,6 +378,10 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
+	
+	if len(entries) > 0 {
+		database = entries[0].Database
+	}
 
 	sendMetricsData = func() {
 		// TODO: remove these in a future version
