@@ -104,16 +104,6 @@ func TestGetStartTime(t *testing.T) {
 	}
 }
 
-func mustRaw(t *testing.T, data interface{}) bson.Raw {
-	b, err := bson.Marshal(data)
-	require.NoError(t, err)
-
-	var raw bson.Raw
-	require.NoError(t, bson.Unmarshal(b, &raw))
-
-	return raw
-}
-
 func TestParseRawOplogEntry(t *testing.T) {
 	tests := map[string]struct {
 		in   rawOplogEntry
@@ -124,7 +114,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "i",
 				Namespace: "foo.Bar",
-				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
+				Doc:       rawBson(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
@@ -141,8 +131,8 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "u",
 				Namespace: "foo.Bar",
-				Doc:       mustRaw(t, map[string]interface{}{"new": "data"}),
-				Update:    rawOplogEntryID{ID: "updateid"},
+				Doc:       rawBson(t, map[string]interface{}{"new": "data"}),
+				Update:    rawBson(t, map[string]interface{}{"_id": "updateid"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
@@ -159,7 +149,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "d",
 				Namespace: "foo.Bar",
-				Doc:       mustRaw(t, map[string]interface{}{"_id": "someid"}),
+				Doc:       rawBson(t, map[string]interface{}{"_id": "someid"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
@@ -176,7 +166,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "c",
 				Namespace: "foo.$cmd",
-				Doc:       mustRaw(t, map[string]interface{}{"drop": "Foo"}),
+				Doc:       rawBson(t, map[string]interface{}{"drop": "Foo"}),
 			},
 			want: nil,
 		},
@@ -185,47 +175,51 @@ func TestParseRawOplogEntry(t *testing.T) {
 				Timestamp: primitive.Timestamp{T: 1234},
 				Operation: "c",
 				Namespace: "admin.$cmd",
-				Doc: mustRaw(t, map[string]interface{}{
+				Doc: rawBson(t, map[string]interface{}{
 					"applyOps": []rawOplogEntry{
 						{
 							Timestamp: primitive.Timestamp{T: 1234},
 							Operation: "c",
 							Namespace: "admin.$cmd",
-							Doc: mustRaw(t, map[string]interface{}{
+							Doc: rawBson(t, map[string]interface{}{
 								"applyOps": []rawOplogEntry{
 									{
 										Operation: "i",
 										Namespace: "foo.Bar",
-										Doc: mustRaw(t, map[string]interface{}{
+										Doc: rawBson(t, map[string]interface{}{
 											"_id": "id1",
 											"foo": "baz",
 										}),
+										Update: rawBson(t, map[string]interface{}{}),
 									},
 								},
 							}),
+							Update: rawBson(t, map[string]interface{}{}),
 						},
 						{
 							Operation: "i",
 							Namespace: "foo.Bar",
-							Doc: mustRaw(t, map[string]interface{}{
+							Doc: rawBson(t, map[string]interface{}{
 								"_id": "id1",
 								"foo": "bar",
 							}),
+							Update: rawBson(t, map[string]interface{}{}),
 						},
 						{
 							Operation: "u",
 							Namespace: "foo.Bar",
-							Doc: mustRaw(t, map[string]interface{}{
+							Doc: rawBson(t, map[string]interface{}{
 								"foo": "quux",
 							}),
-							Update: rawOplogEntryID{"id2"},
+							Update: rawBson(t, map[string]interface{}{"_id": "id2"}),
 						},
 						{
 							Operation: "d",
 							Namespace: "foo.Bar",
-							Doc: mustRaw(t, map[string]interface{}{
+							Doc: rawBson(t, map[string]interface{}{
 								"_id": "id3",
 							}),
+							Update: rawBson(t, map[string]interface{}{}),
 						},
 					},
 				}),
@@ -287,7 +281,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := (&Tailer{Denylist: &sync.Map{}}).parseRawOplogEntry(test.in, nil)
+			got := (&Tailer{Denylist: &sync.Map{}}).parseRawOplogEntry(&test.in, nil)
 
 			if diff := pretty.Compare(parseEntry(t, got), parseEntry(t, test.want)); diff != "" {
 				t.Errorf("Got incorrect result (-got +want)\n%s", diff)
