@@ -45,8 +45,8 @@ var envTests = map[string]struct {
 			HTTPServerAddr:         "0.0.0.0:9000",
 			BufferSize:             10000,
 			TimestampFlushInterval: time.Second,
-			MaxCatchUp:             time.Minute,
-			RedisDedupeExpiration:  2 * time.Minute,
+			MaxCatchUp:             2 * time.Minute,
+			RedisDedupeExpiration:  2 * time.Minute + 30 * time.Second,
 			RedisMetadataPrefix:    "oplogtoredis::",
 		},
 	},
@@ -109,42 +109,42 @@ func TestParseEnv(t *testing.T) {
 
 func checkConfigExpectation(t *testing.T, expectedConfig *oplogtoredisConfiguration) {
 	if expectedConfig.MongoURL != MongoURL() {
-		t.Errorf("Incorrect Mongo URL. Got \"%s\", Expected \"%s\"",
+		t.Errorf("Incorrect Mongo URL. Expected \"%s\", Got \"%s\"",
 			expectedConfig.MongoURL, MongoURL())
 	}
 
 	if expectedConfig.RedisURL != strings.Join(RedisURL()[:], "") {
-		t.Errorf("Incorrect Redis URL. Got \"%s\", Expected \"%s\"",
+		t.Errorf("Incorrect Redis URL. Expected \"%s\", Got \"%s\"",
 			expectedConfig.RedisURL, RedisURL())
 	}
 
 	if expectedConfig.HTTPServerAddr != HTTPServerAddr() {
-		t.Errorf("Incorrect HTTPServerAddr. Got \"%s\", Expected \"%s\"",
+		t.Errorf("Incorrect HTTPServerAddr. Expected \"%s\", Got \"%s\"",
 			expectedConfig.HTTPServerAddr, HTTPServerAddr())
 	}
 
 	if expectedConfig.BufferSize != BufferSize() {
-		t.Errorf("Incorrect BufferSize. Got %d, Expected %d",
+		t.Errorf("Incorrect BufferSize. Expected %d, Got %d",
 			expectedConfig.BufferSize, BufferSize())
 	}
 
 	if expectedConfig.TimestampFlushInterval != TimestampFlushInterval() {
-		t.Errorf("Incorrect TimestampFlushInterval. Got %d, Expected %d",
+		t.Errorf("Incorrect TimestampFlushInterval. Expected %d, Got %d",
 			expectedConfig.TimestampFlushInterval, TimestampFlushInterval())
 	}
 
 	if expectedConfig.MaxCatchUp != MaxCatchUp() {
-		t.Errorf("Incorrect MaxCatchUp. Got %d, Expected %d",
+		t.Errorf("Incorrect MaxCatchUp. Expected %d, Got %d",
 			expectedConfig.MaxCatchUp, MaxCatchUp())
 	}
 
 	if expectedConfig.RedisDedupeExpiration != RedisDedupeExpiration() {
-		t.Errorf("Incorrect RedisDedupeExpiration. Got %d, Expected %d",
+		t.Errorf("Incorrect RedisDedupeExpiration. Expected %d, Got %d",
 			expectedConfig.RedisDedupeExpiration, RedisDedupeExpiration())
 	}
 
 	if expectedConfig.RedisMetadataPrefix != RedisMetadataPrefix() {
-		t.Errorf("Incorrect RedisMetadataPrefix. Got \"%s\", Expected \"%s\"",
+		t.Errorf("Incorrect RedisMetadataPrefix. Expected \"%s\", Got \"%s\"",
 			expectedConfig.RedisMetadataPrefix, RedisMetadataPrefix())
 	}
 }

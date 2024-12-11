@@ -103,6 +103,13 @@ var (
 		Name:      "last_received_staleness",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	}, []string{"ordinal"})
+
+	metricOplogFailedResume = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "resume_failed",
+		Help:      "Failures to resume tailing, gaps in publications",
+	})
 )
 
 func init() {
@@ -441,20 +448,21 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
 	if redisErr == nil {
-		// we have a last write time, check that it's not too far in the
-		// past
+		// we have a last write time, check that it's not too far in the past
 		if tsTime.After(time.Now().Add(-1 * tailer.MaxCatchUp)) {
-			log.Log.Infof("Found last processed timestamp, resuming oplog tailing from %d", tsTime.Unix())
+			log.Log.Infof("Found last processed timestamp (%d), resuming oplog tailing from %ds ago", tsTime.Unix(), time.Since(tsTime) / time.Second)
 			return ts
 		}
 
-		log.Log.Warnf("Found last processed timestamp, but it was too far in the past (%d). Will start from end of oplog", tsTime.Unix())
+		log.Log.Warnf("Found last processed timestamp (%d), but it was too far in the past (%ds ago). Will start from end of oplog", tsTime.Unix(), time.Since(tsTime) / time.Second)
 	}
 
 	if (redisErr != nil) && (redisErr != redis.Nil) {
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
+	
+	metricOplogFailedResume.Inc()
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
 	if mongoErr == nil {

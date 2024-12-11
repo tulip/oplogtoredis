@@ -16,8 +16,8 @@ type oplogtoredisConfiguration struct {
 	HTTPServerAddr                string        `default:"0.0.0.0:9000" envconfig:"HTTP_SERVER_ADDR"`
 	BufferSize                    int           `default:"10000" split_words:"true"`
 	TimestampFlushInterval        time.Duration `default:"1s" split_words:"true"`
-	MaxCatchUp                    time.Duration `default:"60s" split_words:"true"`
-	RedisDedupeExpiration         time.Duration `default:"120s" split_words:"true"`
+	MaxCatchUp                    time.Duration `default:"120s" split_words:"true"`
+	RedisDedupeExpiration         time.Duration `default:"150s" split_words:"true"`
 	RedisMetadataPrefix           string        `default:"oplogtoredis::" split_words:"true"`
 	MongoConnectTimeout           time.Duration `default:"10s" split_words:"true"`
 	MongoQueryTimeout             time.Duration `default:"5s" split_words:"true"`
