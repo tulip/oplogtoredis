@@ -103,6 +103,14 @@ var (
 		Name:      "last_received_staleness",
 		Help:      "Gauge recording the difference between this server's clock and the timestamp on the last read oplog entry.",
 	}, []string{"ordinal"})
+
+	metricOplogResumeGap = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "resume_gap_seconds",
+		Help:      "Histogram recording the gap in time that a tailing resume had to catchup and whether it was successful or not.",
+		Buckets:   []float64{1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000},
+	}, []string{"status"})
 )
 
 func init() {
@@ -440,25 +448,34 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 	// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
 	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
+	gapSeconds := time.Since(tsTime) / time.Second
+
 	if redisErr == nil {
-		// we have a last write time, check that it's not too far in the
-		// past
+		// we have a last write time, check that it's not too far in the past
 		if tsTime.After(time.Now().Add(-1 * tailer.MaxCatchUp)) {
-			log.Log.Infof("Found last processed timestamp, resuming oplog tailing from %d", tsTime.Unix())
+			log.Log.Infof("Found last processed timestamp, resuming oplog tailing",
+				"timestamp", tsTime.Unix(), 
+				"age_seconds", gapSeconds)
+			metricOplogResumeGap.WithLabelValues("success").Observe(float64(gapSeconds))
 			return ts
 		}
 
-		log.Log.Warnf("Found last processed timestamp, but it was too far in the past (%d). Will start from end of oplog", tsTime.Unix())
+		log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
+			"timestamp", tsTime.Unix(), 
+			"age_seconds", gapSeconds)
 	}
 
 	if (redisErr != nil) && (redisErr != redis.Nil) {
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
+	
+	metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
 	if mongoErr == nil {
-		log.Log.Infof("Starting tailing from end of oplog (timestamp %d)", mongoOplogEndTimestamp.T)
+		log.Log.Infow("Starting tailing from end of oplog",
+			"timestamp", mongoOplogEndTimestamp.T)
 		return *mongoOplogEndTimestamp
 	}
 
