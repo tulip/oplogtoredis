@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -179,11 +180,15 @@ func main() {
 		}(i)
 	}
 
+	var shuttingDown bool
+
 	// Start one more goroutine for the HTTP server
 	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, denylist, syncer)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
-		if httpErr != nil {
+		if shuttingDown {
+			log.Log.Warnf("HTTP Server shutdown due to signal")
+		} else if httpErr != nil {
 			panic("Could not start up HTTP server: " + httpErr.Error())
 		}
 	}()
@@ -194,11 +199,12 @@ func main() {
 	// if we're not ready to receive when the signal is sent.
 	// See examples from https://golang.org/pkg/os/signal/#Notify
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-signalChan
+	shuttingDown = true
 
-	// We got a SIGINT, cleanly stop background goroutines and then return so
+	// We got a SIGINT or SIGTERM, cleanly stop background goroutines and then return so
 	// that the `defer`s above can close the Mongo and Redis connection.
 	//
 	// We also call signal.Reset() to clear our signal handler so if we get
