@@ -29,16 +29,17 @@ type PublishOpts struct {
 
 // This script checks whether KEYS[1] is set. If it is, it does nothing. It not,
 // it sets the key, using ARGV[1] as the expiration, and then publishes the
-// message ARGV[2] to channels ARGV[3] and ARGV[4].
+// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns true if published.
 var publishDedupe = redis.NewScript(`
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
+		return true
 	end
 
-	return true
+	return false
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -75,7 +76,7 @@ var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "redispub",
 	Name:      "last_entry_staleness_seconds",
 	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
-}, []string{"ordinal"})
+}, []string{"ordinal", "status"})
 
 var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
@@ -83,7 +84,7 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Name:      "entry_staleness_seconds",
 	Help:      "Histogram recording the difference between this server's clock and the timestamp of each processed oplog entry.",
 	Buckets:   []float64{0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100},
-}, []string{"ordinal"})
+}, []string{"ordinal", "status"})
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
@@ -181,10 +182,8 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 	staleness := float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds())
-	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr).Set(staleness)
-	metricOplogEntryStaleness.WithLabelValues(ordinalStr).Observe(staleness)
 
-	_, err := publishDedupe.Run(
+	written, err := publishDedupe.Run(
 		context.Background(),
 		client,
 		[]string{
@@ -202,6 +201,15 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		p.Msg,                         // ARGV[2], message
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
+
+	var status string
+	if written.(bool) {
+		status = "published"
+	} else {
+		status = "duplicate"
+	}
+	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
+	metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
 
 	redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
 	return err
