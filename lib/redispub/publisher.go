@@ -200,10 +200,10 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		dedupeExpirationSeconds,       // ARGV[1], expiration time
 		p.Msg,                         // ARGV[2], message
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Result()
+	).Bool()
 
 	var status string
-	if written.(bool) {
+	if written {
 		status = "published"
 	} else {
 		status = "duplicate"
