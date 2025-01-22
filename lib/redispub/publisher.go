@@ -200,7 +200,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		dedupeExpirationSeconds,       // ARGV[1], expiration time
 		p.Msg,                         // ARGV[2], message
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Result()
+	).Bool()
 
 	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr).Set(staleness)
 	metricOplogEntryStaleness.WithLabelValues(ordinalStr).Observe(staleness)
