@@ -31,13 +31,13 @@ type PublishOpts struct {
 // it sets the key, using ARGV[1] as the expiration, and then publishes the
 // message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns true if published.
 var publishDedupe = redis.NewScript(`
-	local res = false
+	local res = 1
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
-		res = true
+		res = 2
 	end
 
 	return res
@@ -201,7 +201,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		dedupeExpirationSeconds,       // ARGV[1], expiration time
 		p.Msg,                         // ARGV[2], message
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Bool()
+	).Int()
 
 	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr).Set(staleness)
 	metricOplogEntryStaleness.WithLabelValues(ordinalStr).Observe(staleness)
