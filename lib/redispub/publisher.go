@@ -29,7 +29,7 @@ type PublishOpts struct {
 
 // This script checks whether KEYS[1] is set. If it is, it does nothing. It not,
 // it sets the key, using ARGV[1] as the expiration, and then publishes the
-// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns true if published.
+// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns 2 if published.
 var publishDedupe = redis.NewScript(`
 	local res = 1
 	if redis.call("GET", KEYS[1]) == false then
