@@ -31,15 +31,16 @@ type PublishOpts struct {
 // it sets the key, using ARGV[1] as the expiration, and then publishes the
 // message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns true if published.
 var publishDedupe = redis.NewScript(`
+	res = false
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
-		return true
+		res = true
 	end
 
-	return true
+	return res
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
