@@ -77,7 +77,7 @@ var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "redispub",
 	Name:      "last_entry_staleness_seconds",
 	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
-}, []string{"ordinal"})
+}, []string{"ordinal", "status"})
 
 var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
@@ -85,7 +85,7 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Name:      "entry_staleness_seconds",
 	Help:      "Histogram recording the difference between this server's clock and the timestamp of each processed oplog entry.",
 	Buckets:   []float64{0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100},
-}, []string{"ordinal"})
+}, []string{"ordinal", "status"})
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
@@ -184,7 +184,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	ordinalStr := strconv.Itoa(ordinal)
 	staleness := float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds())
 
-	_, err := publishDedupe.Run(
+	res, err := publishDedupe.Run(
 		context.Background(),
 		client,
 		[]string{
@@ -203,8 +203,14 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Int()
 
-	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr).Set(staleness)
-	metricOplogEntryStaleness.WithLabelValues(ordinalStr).Observe(staleness)
+	var status string
+	if res == 2 {
+		status = "published"
+	} else {
+		status = "duplicate"
+	}
+	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
+	metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
 
 	redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
 	return err
