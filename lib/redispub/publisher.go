@@ -36,9 +36,10 @@ var publishDedupe = redis.NewScript(`
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
+		return true
 	end
 
-	return true
+	return false
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
