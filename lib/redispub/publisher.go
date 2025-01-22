@@ -36,10 +36,9 @@ var publishDedupe = redis.NewScript(`
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
-		return true
 	end
 
-	return false
+	return true
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -76,7 +75,7 @@ var metricLastOplogEntryStaleness = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "redispub",
 	Name:      "last_entry_staleness_seconds",
 	Help:      "Gauge recording the difference between this server's clock and the timestamp on the last published oplog entry.",
-}, []string{"ordinal", "status"})
+}, []string{"ordinal"})
 
 var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
@@ -84,7 +83,7 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Name:      "entry_staleness_seconds",
 	Help:      "Histogram recording the difference between this server's clock and the timestamp of each processed oplog entry.",
 	Buckets:   []float64{0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100},
-}, []string{"ordinal", "status"})
+}, []string{"ordinal"})
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
@@ -182,7 +181,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 	staleness := float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds())
-	written := true
+
 	_, err := publishDedupe.Run(
 		context.Background(),
 		client,
@@ -202,14 +201,8 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
 	).Result()
 
-	var status string
-	if written {
-		status = "published"
-	} else {
-		status = "duplicate"
-	}
-	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
-	metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
+	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr).Set(staleness)
+	metricOplogEntryStaleness.WithLabelValues(ordinalStr).Observe(staleness)
 
 	redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
 	return err
