@@ -39,7 +39,7 @@ var publishDedupe = redis.NewScript(`
 		return true
 	end
 
-	return false
+	return true
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
