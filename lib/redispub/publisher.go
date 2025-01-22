@@ -182,8 +182,8 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 	staleness := float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds())
-
-	written, err := publishDedupe.Run(
+	written := true
+	_, err := publishDedupe.Run(
 		context.Background(),
 		client,
 		[]string{
@@ -200,7 +200,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 		dedupeExpirationSeconds,       // ARGV[1], expiration time
 		p.Msg,                         // ARGV[2], message
 		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Bool()
+	).Result()
 
 	var status string
 	if written {
