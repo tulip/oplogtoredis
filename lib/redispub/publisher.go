@@ -29,15 +29,16 @@ type PublishOpts struct {
 
 // This script checks whether KEYS[1] is set. If it is, it does nothing. It not,
 // it sets the key, using ARGV[1] as the expiration, and then publishes the
-// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns 2 if published.
+// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns 1 if published.
+// Note that an int is returned here as a boolean false is interpreted as an error.
 var publishDedupe = redis.NewScript(`
-	local res = 1
+	local res = 0
 	if redis.call("GET", KEYS[1]) == false then
 		redis.call("SETEX", KEYS[1], ARGV[1], 1)
 		for w in string.gmatch(ARGV[3], "([^$]+)") do
 			redis.call("PUBLISH", w, ARGV[2])
 		end
-		res = 2
+		res = 1
 	end
 
 	return res
@@ -204,7 +205,7 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	).Int()
 
 	var status string
-	if res == 2 {
+	if res == 1 {
 		status = "published"
 	} else {
 		status = "duplicate"
