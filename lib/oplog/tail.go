@@ -604,7 +604,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []op
 
 		applyOpsLookup, err := entry.Doc.LookupErr("applyOps")
 		if err != nil {
-			log.Log.Errorf("Looking up transaction data: %v", err)
+			log.Log.Errorf("Looking up transaction data: %v, namespace: %v", err, entry.Namespace)
 			return nil
 		}
 
