@@ -104,7 +104,8 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	metricFilterEnabled.WithLabelValues(id).Set(1)
 	err := syncer.StoreDenylistEntry(denylist, id)
 	if err != nil {
-		http.Error(response, "failed to persist removal of denylist entry", http.StatusInternalServerError)
+		log.Log.Warnw("Failed to persist creation of denylist entry", "id", id, "error", err.Error())
+		http.Error(response, "failed to persist creation of denylist entry", http.StatusInternalServerError)
 		return
 	}
 
@@ -129,6 +130,7 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	metricFilterEnabled.WithLabelValues(id).Set(0)
 	err := syncer.DeleteDenylistEntry(denylist, id)
 	if err != nil {
+		log.Log.Warnw("Failed to persist removal of denylist entry", "id", id, "error", err.Error())
 		http.Error(response, "failed to persist removal of denylist entry", http.StatusInternalServerError)
 		return
 	}
