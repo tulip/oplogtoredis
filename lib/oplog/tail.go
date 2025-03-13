@@ -606,14 +606,14 @@ func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []op
 		if err != nil {
 			list, errList := entry.Doc.Elements()
 			if errList != nil {
-				log.Log.Infof("applyOps key not found in command entry: %v, doc error: %v", err, errList)
+				log.Log.Debugf("applyOps key not found in command entry: %v, doc error: %v", err, errList)
 				return nil
 			}
 			keys := []string{}
 			for _, rawElem := range list {
 				keys = append(keys, rawElem.Key())
 			}
-			log.Log.Infof("applyOps key not found in command entry, ignoring. Keys: %v", strings.Join(keys, ", "))
+			log.Log.Debugf("applyOps key not found in command entry, ignoring. Keys: %v", strings.Join(keys, ", "))
 			return nil
 		}
 
