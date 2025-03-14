@@ -604,7 +604,16 @@ func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []op
 
 		applyOpsLookup, err := entry.Doc.LookupErr("applyOps")
 		if err != nil {
-			log.Log.Errorf("Looking up transaction data: %v", err)
+			list, errList := entry.Doc.Elements()
+			if errList != nil {
+				log.Log.Debugf("applyOps key not found in command entry: %v, doc error: %v", err, errList)
+				return nil
+			}
+			keys := []string{}
+			for _, rawElem := range list {
+				keys = append(keys, rawElem.Key())
+			}
+			log.Log.Debugf("applyOps key not found in command entry, ignoring. Keys: %v", strings.Join(keys, ", "))
 			return nil
 		}
 
