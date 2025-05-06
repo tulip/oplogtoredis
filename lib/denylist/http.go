@@ -96,7 +96,7 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 	_, exists := denylist.Load(id)
 	if exists {
-		log.Log.Infow("Denylist PUT: Create called for denylist entry that already exists", "id", id)
+		log.Log.Infow("Denylist PUT: Create called for entry that already exists", "id", id)
 		response.WriteHeader(http.StatusNoContent)
 		return
 	}
