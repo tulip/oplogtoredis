@@ -90,21 +90,23 @@ func getDenylistEntry(response http.ResponseWriter, request *http.Request, denyl
 func createDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map, syncer *Syncer) {
 	id := request.URL.Path
 	if strings.Contains(id, "/") {
+		log.Log.Warnw("Denylist PUT: entry includes '/'", "id", id)
 		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 	_, exists := denylist.Load(id)
 	if exists {
+		log.Log.Infow("Denylist PUT: Create called for entry that already exists", "id", id)
 		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	denylist.Store(id, true)
-	log.Log.Infow("Created denylist entry", "id", id)
+	log.Log.Infow("Denylist PUT: Created entry", "id", id)
 	metricFilterEnabled.WithLabelValues(id).Set(1)
 	err := syncer.StoreDenylistEntry(denylist, id)
 	if err != nil {
-		log.Log.Warnw("Failed to persist creation of denylist entry", "id", id, "error", err.Error())
+		log.Log.Warnw("Denylist PUT: Failed to persist creation of entry", "id", id, "error", err.Error())
 		http.Error(response, "failed to persist creation of denylist entry", http.StatusInternalServerError)
 		return
 	}
@@ -116,21 +118,23 @@ func createDenylistEntry(response http.ResponseWriter, request *http.Request, de
 func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, denylist *sync.Map, syncer *Syncer) {
 	id := request.URL.Path
 	if strings.Contains(id, "/") {
+		log.Log.Warnw("Denylist DELETE: entry includes '/'", "id", id)
 		http.Error(response, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 	_, exists := denylist.Load(id)
 	if !exists {
-		response.WriteHeader(http.StatusNoContent)
+		log.Log.Warnw("Denylist DELETE: non-existent entry", "id", id)
+		response.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	denylist.Delete(id)
-	log.Log.Infow("Deleted denylist entry", "id", id)
+	log.Log.Infow("Denylist DELETE: removed entry", "id", id)
 	metricFilterEnabled.WithLabelValues(id).Set(0)
 	err := syncer.DeleteDenylistEntry(denylist, id)
 	if err != nil {
-		log.Log.Warnw("Failed to persist removal of denylist entry", "id", id, "error", err.Error())
+		log.Log.Warnw("Denylist DELETE: Failed to persist removal of entry", "id", id, "error", err.Error())
 		http.Error(response, "failed to persist removal of denylist entry", http.StatusInternalServerError)
 		return
 	}

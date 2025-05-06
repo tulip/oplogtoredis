@@ -17,7 +17,7 @@ jobs:
       - name: run nix build
         run: nix build
   lint_and_units:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
@@ -33,35 +33,35 @@ jobs:
       - name: run unit tests
         run: ./scripts/runUnitTests.sh
   acceptance:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
       - name: run acceptance tests
         run: ./scripts/runIntegrationAcceptance.sh
   performance:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
       - name: run performance tests
         run: ./scripts/runIntegrationPerformance.sh
   fault_injection:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
       - name: run fault injection tests
         run: ./scripts/runIntegrationFaultInjection.sh
   meteor:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
       - name: run meteor tests
         run: ./scripts/runIntegrationMeteor.sh
   blackbox:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
