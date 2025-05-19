@@ -89,7 +89,7 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v2 update contained a i/u/d key with a non-map value",
-					"op", diffMap)
+					"operationKey", operationKey)
 				continue
 			}
 
@@ -99,7 +99,7 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v2 update contained an array operator key with a non-map value",
-					"op", diffMap)
+					"operationKey", operationKey)
 				continue
 			}
 
@@ -116,7 +116,7 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v2 update contained a s-field key with a non-map value",
-					"op", diffMap)
+					"operationKey", operationKey)
 				continue
 			}
 
@@ -132,7 +132,7 @@ func getChangedFieldsFromOplogV2UpdateDeep(diffMap map[string]interface{}, prefi
 		} else {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v2 update contained a field that was not an i/u/d or an s-prefixed field",
-				"op", diffMap)
+				"operationKey", operationKey)
 			continue
 		}
 
@@ -148,7 +148,7 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) ([]string, error
 	if err != nil {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v1 update failed to unmarshal",
-			"op", diffRaw, "error", err)
+			"error", err)
 		return []string{}, err
 	}
 	for _, element := range elements {
@@ -159,7 +159,7 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) ([]string, error
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v2 update contained a i/u/d key with a non-map value",
-					"op", diffRaw)
+					"operationKey", operationKey)
 				continue
 			}
 			mapFields, err := mapKeysRaw(operationMap)
@@ -176,7 +176,7 @@ func getChangedFieldsFromOplogV2UpdateShallow(diffRaw bson.Raw) ([]string, error
 		} else {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v2 update contained a field that was not an i/u/d or an s-prefixed field",
-				"op", diffRaw)
+				"operationKey", operationKey)
 			continue
 		}
 
@@ -192,7 +192,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) ([]string, error) {
 	if diffRawElement.IsZero() {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update did not have a diff field",
-			"op", op)
+			"op", op.LogData())
 		return []string{}, errors.New("Oplog data for non-replacement v2 update did not have a diff field")
 	}
 
@@ -201,7 +201,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) ([]string, error) {
 	if !ok {
 		metricUnprocessableChangedFields.Inc()
 		log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
-			"op", op)
+			"op", op.LogData())
 		return []string{}, errors.New("Oplog data for non-replacement v2 update had a diff that was not a map")
 	}
 
@@ -211,7 +211,7 @@ func getChangedFieldsFromOplogV2Update(op *oplogEntry) ([]string, error) {
 		if err != nil {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v2 update had a diff that was not a map",
-				"op", op)
+				"op", op.LogData())
 			return []string{}, err
 		}
 		return getChangedFieldsFromOplogV2UpdateDeep(diffMap, "")

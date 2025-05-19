@@ -103,7 +103,7 @@ func (op *oplogEntry) ChangedFields() ([]string, error) {
 		if err != nil {
 			metricUnprocessableChangedFields.Inc()
 			log.Log.Errorw("Oplog data for non-replacement v1 update failed to unmarshal",
-				"op", op, "error", err)
+				"op", op.LogData(), "error", err)
 			return []string{}, err
 		}
 		for _, element := range elements {
@@ -117,7 +117,7 @@ func (op *oplogEntry) ChangedFields() ([]string, error) {
 			if !operationMapOK {
 				metricUnprocessableChangedFields.Inc()
 				log.Log.Errorw("Oplog data for non-replacement v1 update contained a key with a non-map value",
-					"op", op, "operationKey", operationKey)
+					"op", op.LogData(), "operationKey", operationKey)
 				continue
 			}
 			mapFields, err := mapKeysRaw(operationMap)
@@ -131,6 +131,30 @@ func (op *oplogEntry) ChangedFields() ([]string, error) {
 	}
 
 	return []string{}, nil
+}
+
+// Oplog entry log data that is sanitized to exclude document data
+type oplogEntryLogData struct {
+	DocID      interface{}         `json:"docID"`
+	Timestamp  primitive.Timestamp `json:"timestamp"`
+	Operation  string              `json:"operation"`
+	Namespace  string              `json:"namespace"`
+	Database   string              `json:"database"`
+	Collection string              `json:"collection"`
+	TxIdx      uint                `json:"txIdx"`
+}
+
+// Creates an oplog entry log data struct, sanitized to exclude document data
+func (op *oplogEntry) LogData() oplogEntryLogData {
+	return oplogEntryLogData{
+		DocID:      op.DocID,
+		Timestamp:  op.Timestamp,
+		Operation:  op.Operation,
+		Namespace:  op.Namespace,
+		Database:   op.Database,
+		Collection: op.Collection,
+		TxIdx:      op.TxIdx,
+	}
 }
 
 // Given a bson.Raw object, returns the top level keys of the document it represents
