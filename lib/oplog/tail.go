@@ -36,11 +36,11 @@ type Tailer struct {
 
 // Raw oplog entry from Mongo
 type rawOplogEntry struct {
-	Timestamp    primitive.Timestamp `bson:"ts"`
-	Operation    string              `bson:"op"`
-	Namespace    string              `bson:"ns"`
-	Doc          bson.Raw            `bson:"o"`
-	Update       bson.Raw	    	 `bson:"o2"`
+	Timestamp primitive.Timestamp `bson:"ts"`
+	Operation string              `bson:"op"`
+	Namespace string              `bson:"ns"`
+	Doc       bson.Raw            `bson:"o"`
+	Update    bson.Raw            `bson:"o2"`
 }
 
 // Parsed Cursor Result
@@ -184,7 +184,9 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 		}
 
 		log.Log.Infow("Got latest oplog entry",
-			"entry", entry)
+			"timestamp", entry.Timestamp,
+			"operation", entry.Operation,
+			"namespace", entry.Namespace)
 		ts := entry.Timestamp
 		return &ts, nil
 	})
@@ -386,7 +388,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 	status := "ignored"
 	database := "(no database)"
 	messageLen := float64(len(rawData))
-	
+
 	if len(entries) > 0 {
 		database = entries[0].Database
 	}
@@ -454,14 +456,14 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 		// we have a last write time, check that it's not too far in the past
 		if tsTime.After(time.Now().Add(-1 * tailer.MaxCatchUp)) {
 			log.Log.Infof("Found last processed timestamp, resuming oplog tailing",
-				"timestamp", tsTime.Unix(), 
+				"timestamp", tsTime.Unix(),
 				"age_seconds", gapSeconds)
 			metricOplogResumeGap.WithLabelValues("success").Observe(float64(gapSeconds))
 			return ts
 		}
 
 		log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
-			"timestamp", tsTime.Unix(), 
+			"timestamp", tsTime.Unix(),
 			"age_seconds", gapSeconds)
 	}
 
@@ -469,7 +471,7 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
-	
+
 	metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
@@ -503,7 +505,7 @@ func parseID(idRaw bson.RawValue) (id interface{}, err error) {
 func (tailer *Tailer) unmarshalEntryMetadata(rawData bson.Raw) *rawOplogEntry {
 	var result rawOplogEntry
 	var ok bool
-	nsLookup, err := rawData.LookupErr("ns");
+	nsLookup, err := rawData.LookupErr("ns")
 	if err == nil {
 		result.Namespace, ok = nsLookup.StringValueOK()
 		if !ok {
