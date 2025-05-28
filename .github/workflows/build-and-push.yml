@@ -11,7 +11,6 @@ on:
     types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
@@ -66,3 +65,4 @@ jobs:
           tags: ${{ steps.setup-ecr-buildx.outputs.ecr_registry }}/tulip/oplogtoredis:${{ steps.generate-tag.outputs.TAG }}
           provenance: true
           push: true
+          platforms: linux/amd64,linux/arm64
