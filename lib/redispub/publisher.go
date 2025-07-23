@@ -85,7 +85,7 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Subsystem: "redispub",
 	Name:      "entry_staleness_seconds",
 	Help:      "Histogram recording the difference between this server's clock and the timestamp of each processed oplog entry.",
-	Buckets:   []float64{0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100},
+	Buckets:   []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 3, 5, 7, 10, 20, 50, 100},
 }, []string{"ordinal", "status"})
 
 // PublishStream reads Publications from the given channel and publishes them
@@ -131,7 +131,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds()))
+			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
 			for i, publishFn := range publishFns {
 				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
@@ -183,7 +183,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
-	staleness := float64(time.Since(time.Unix(int64(p.OplogTimestamp.T), 0)).Seconds())
+	staleness := time.Since(p.WallTime).Seconds()
 
 	res, err := publishDedupe.Run(
 		context.Background(),

@@ -1,6 +1,8 @@
 package oplog
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -27,6 +29,7 @@ var metricUnprocessableChangedFields = promauto.NewCounter(prometheus.CounterOpt
 type oplogEntry struct {
 	DocID      interface{}
 	Timestamp  primitive.Timestamp
+	WallTime   time.Time
 	Data       bson.Raw
 	Operation  string
 	Namespace  string
@@ -137,6 +140,7 @@ func (op *oplogEntry) ChangedFields() ([]string, error) {
 type oplogEntryLogData struct {
 	DocID      interface{}         `json:"docID"`
 	Timestamp  primitive.Timestamp `json:"timestamp"`
+	WallTime   time.Time           `json:"walltime"`
 	Operation  string              `json:"operation"`
 	Namespace  string              `json:"namespace"`
 	Database   string              `json:"database"`
@@ -149,6 +153,7 @@ func (op *oplogEntry) LogData() oplogEntryLogData {
 	return oplogEntryLogData{
 		DocID:      op.DocID,
 		Timestamp:  op.Timestamp,
+		WallTime:   op.WallTime,
 		Operation:  op.Operation,
 		Namespace:  op.Namespace,
 		Database:   op.Database,
