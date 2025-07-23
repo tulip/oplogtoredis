@@ -85,7 +85,7 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 	Subsystem: "redispub",
 	Name:      "entry_staleness_seconds",
 	Help:      "Histogram recording the difference between this server's clock and the timestamp of each processed oplog entry.",
-	Buckets:   []float64{0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100},
+	Buckets:   []float64{0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 3, 5, 7, 10, 20, 50, 100},
 }, []string{"ordinal", "status"})
 
 // PublishStream reads Publications from the given channel and publishes them
