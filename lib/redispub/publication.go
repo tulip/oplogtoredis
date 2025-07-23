@@ -1,6 +1,8 @@
 package redispub
 
 import (
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -17,6 +19,9 @@ type Publication struct {
 	// a monotonically increasing timestamp *and* a unique identifier --
 	// see https://docs.mongodb.com/manual/reference/bson-types/#timestamps
 	OplogTimestamp primitive.Timestamp
+
+	// WallTime is the database server wall time of the oplog entry.
+	WallTime time.Time
 
 	// TxIdx is the index of the operation within a transaction. Used to supplement OplogTimestamp in a transaction.
 	TxIdx uint

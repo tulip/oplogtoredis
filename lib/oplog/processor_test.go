@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -31,6 +32,7 @@ func TestProcessOplogEntry(t *testing.T) {
 		Channels       []string
 		Msg            decodedPublicationMessage
 		OplogTimestamp primitive.Timestamp
+		WallTime       time.Time
 		ParallelismKey int
 	}
 
@@ -60,6 +62,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"some": "field",
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: &decodedPublication{
 				Channels: []string{"foo.bar", "foo.bar::someid"},
@@ -71,6 +74,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				WallTime:       time.Unix(1234, 0).UTC(),
 				ParallelismKey: fooHash,
 			},
 		},
@@ -86,6 +90,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"new":  "field",
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: &decodedPublication{
 				Channels: []string{"foo.bar", "foo.bar::someid"},
@@ -97,6 +102,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some", "new"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				WallTime:       time.Unix(1234, 0).UTC(),
 				ParallelismKey: fooHash,
 			},
 		},
@@ -118,6 +124,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: &decodedPublication{
 				Channels: []string{"foo.bar", "foo.bar::someid"},
@@ -129,6 +136,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"a", "b", "c"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				WallTime:       time.Unix(1234, 0).UTC(),
 				ParallelismKey: fooHash,
 			},
 		},
@@ -141,6 +149,7 @@ func TestProcessOplogEntry(t *testing.T) {
 				Collection: "bar",
 				Data:       rawBson(t, bson.M{}),
 				Timestamp:  primitive.Timestamp{T: 1234},
+				WallTime:   time.Unix(1234, 0).UTC(),
 			},
 			want: &decodedPublication{
 				Channels: []string{"foo.bar", "foo.bar::someid"},
@@ -152,6 +161,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				WallTime:       time.Unix(1234, 0).UTC(),
 				ParallelismKey: fooHash,
 			},
 		},
@@ -166,6 +176,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"some": "field",
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: &decodedPublication{
 				Channels: []string{"foo.bar", "foo.bar::deadbeefdeadbeefdeadbeef"},
@@ -180,6 +191,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					Fields: []string{"some"},
 				},
 				OplogTimestamp: primitive.Timestamp{T: 1234},
+				WallTime:       time.Unix(1234, 0).UTC(),
 				ParallelismKey: fooHash,
 			},
 		},
@@ -194,6 +206,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"some": "field",
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			wantError: ErrUnsupportedDocIDType,
 			want:      nil,
@@ -209,6 +222,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					"some": "field",
 				}),
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: nil,
 		},
@@ -230,6 +244,7 @@ func TestProcessOplogEntry(t *testing.T) {
 					},
 				}),
 				Timestamp: primitive.Timestamp{T: 1636616135},
+				WallTime:  time.Unix(1234, 0).UTC(),
 			},
 			want: nil,
 		},
@@ -254,6 +269,7 @@ func TestProcessOplogEntry(t *testing.T) {
 			Channels:       pub.Channels,
 			Msg:            msg,
 			OplogTimestamp: pub.OplogTimestamp,
+			WallTime:       pub.WallTime,
 			ParallelismKey: pub.ParallelismKey,
 		}
 	}

@@ -112,12 +112,14 @@ func TestParseRawOplogEntry(t *testing.T) {
 		"Insert": {
 			in: rawOplogEntry{
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 				Operation: "i",
 				Namespace: "foo.Bar",
 				Doc:       rawBson(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
+				WallTime:   time.Unix(1234, 0).UTC(),
 				Operation:  "i",
 				Namespace:  "foo.Bar",
 				Data:       rawBson(t, map[string]interface{}{"_id": "someid", "foo": "bar"}),
@@ -129,6 +131,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 		"Update": {
 			in: rawOplogEntry{
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 				Operation: "u",
 				Namespace: "foo.Bar",
 				Doc:       rawBson(t, map[string]interface{}{"new": "data"}),
@@ -136,6 +139,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
+				WallTime:   time.Unix(1234, 0).UTC(),
 				Operation:  "u",
 				Namespace:  "foo.Bar",
 				Data:       rawBson(t, map[string]interface{}{"new": "data"}),
@@ -147,12 +151,14 @@ func TestParseRawOplogEntry(t *testing.T) {
 		"Remove": {
 			in: rawOplogEntry{
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 				Operation: "d",
 				Namespace: "foo.Bar",
 				Doc:       rawBson(t, map[string]interface{}{"_id": "someid"}),
 			},
 			want: []oplogEntry{{
 				Timestamp:  primitive.Timestamp{T: 1234},
+				WallTime:   time.Unix(1234, 0).UTC(),
 				Operation:  "d",
 				Namespace:  "foo.Bar",
 				Data:       rawBson(t, map[string]interface{}{"_id": "someid"}),
@@ -164,6 +170,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 		"Command": {
 			in: rawOplogEntry{
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 				Operation: "c",
 				Namespace: "foo.$cmd",
 				Doc:       rawBson(t, map[string]interface{}{"drop": "Foo"}),
@@ -173,12 +180,14 @@ func TestParseRawOplogEntry(t *testing.T) {
 		"Transaction": {
 			in: rawOplogEntry{
 				Timestamp: primitive.Timestamp{T: 1234},
+				WallTime:  time.Unix(1234, 0).UTC(),
 				Operation: "c",
 				Namespace: "admin.$cmd",
 				Doc: rawBson(t, map[string]interface{}{
 					"applyOps": []rawOplogEntry{
 						{
 							Timestamp: primitive.Timestamp{T: 1234},
+							WallTime:  time.Unix(1234, 0).UTC(),
 							Operation: "c",
 							Namespace: "admin.$cmd",
 							Doc: rawBson(t, map[string]interface{}{
@@ -228,6 +237,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				{
 					DocID:      "id1",
 					Timestamp:  primitive.Timestamp{T: 1234},
+					WallTime:   time.Unix(1234, 0).UTC(),
 					Operation:  "i",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -241,6 +251,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				{
 					DocID:      "id1",
 					Timestamp:  primitive.Timestamp{T: 1234},
+					WallTime:   time.Unix(1234, 0).UTC(),
 					Operation:  "i",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -254,6 +265,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				{
 					DocID:      "id2",
 					Timestamp:  primitive.Timestamp{T: 1234},
+					WallTime:   time.Unix(1234, 0).UTC(),
 					Operation:  "u",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -266,6 +278,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 				{
 					DocID:      "id3",
 					Timestamp:  primitive.Timestamp{T: 1234},
+					WallTime:   time.Unix(1234, 0).UTC(),
 					Operation:  "d",
 					Namespace:  "foo.Bar",
 					Database:   "foo",
@@ -293,6 +306,7 @@ func TestParseRawOplogEntry(t *testing.T) {
 type oplogEntryConverted struct {
 	DocID      interface{}
 	Timestamp  primitive.Timestamp
+	WallTime   time.Time
 	Data       map[string]interface{}
 	Operation  string
 	Namespace  string
@@ -313,6 +327,7 @@ func parseEntry(t *testing.T, op []oplogEntry) []oplogEntryConverted {
 		}
 		opc[i].DocID = op[i].DocID
 		opc[i].Timestamp = op[i].Timestamp
+		opc[i].WallTime = op[i].WallTime
 		opc[i].Data = data
 		opc[i].Operation = op[i].Operation
 		opc[i].Namespace = op[i].Namespace
