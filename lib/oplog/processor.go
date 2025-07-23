@@ -109,6 +109,7 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 		},
 		Msg:            msgJSON,
 		OplogTimestamp: op.Timestamp,
+		WallTime:       op.WallTime,
 
 		TxIdx:          op.TxIdx,
 		ParallelismKey: int(hashInt),
