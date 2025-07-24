@@ -1,6 +1,6 @@
-{ lib, stdenv, buildGo123Module, fetchFromGitHub, installShellFiles }:
+{ lib, stdenv, buildGo124Module, fetchFromGitHub, installShellFiles }:
 
-buildGo123Module {
+buildGo124Module {
   pname = "oplogtoredis";
   version = "3.9.0";
   src = builtins.path { path = ./.; };
