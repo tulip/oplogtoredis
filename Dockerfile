@@ -1,4 +1,4 @@
-FROM golang:1.17.0-alpine3.14
+FROM golang:1.23.11-alpine3.22
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
 # parts of the Mongo driver
@@ -14,7 +14,7 @@ RUN go build -o app
 # We're using a multistage build -- the previous stage has the full go toolchain
 # so it can do the build, and this stage is just a minimal Alpine image that we
 # copy the statically-linked binary into to keep our image small.
-FROM alpine:3.18
+FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates
 

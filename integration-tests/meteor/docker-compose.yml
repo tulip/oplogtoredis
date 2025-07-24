@@ -59,7 +59,7 @@ services:
       - /bin/oplogtoredis
 
   mongo:
-    image: mongo:5.0.19
+    image: mongo:7.0
     command: "mongod --replSet myapp --port 27017"
     logging:
       driver: none
@@ -71,7 +71,7 @@ services:
       - mongo_data:/data/db
 
   redis:
-    image: redis:6.0
+    image: redis:7.4
     logging:
       driver: none
 

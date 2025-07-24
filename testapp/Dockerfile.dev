@@ -1,4 +1,4 @@
-FROM node:14.17.6-bullseye
+FROM node:14.19.3-bullseye
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true

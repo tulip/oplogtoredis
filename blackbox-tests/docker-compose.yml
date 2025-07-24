@@ -31,7 +31,7 @@ services:
       - ./certificates/ca.crt:/usr/local/share/ca-certificates/ca.crt:ro
 
   mongo:
-    image: mongo:5.0.19
+    image: mongo:7.0.22
     command: "mongod --replSet myapp --port 27017 --bind_ip 0.0.0.0"
     healthcheck:
       test: test $$(echo "rs.initiate({_id:'myapp',members:[{_id:0,host:\"mongo:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1

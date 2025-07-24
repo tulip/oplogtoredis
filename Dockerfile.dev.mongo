@@ -1,4 +1,4 @@
-from mongo:5.0.19
+from mongo:7.0.22
 
 COPY scripts/startMongo.sh /startMongo
 COPY scripts/wait-for.sh /wait-for.sh

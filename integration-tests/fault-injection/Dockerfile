@@ -1,6 +1,6 @@
 # This expects to be run with the root of the repo as the context directory
 
-FROM redis:6.0-buster
+FROM redis:6.2.19-bookworm
 
 # Install mongo, and musl (for oplogtoredis bin)
 COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh

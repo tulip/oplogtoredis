@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:14.18.3-buster
+FROM --platform=linux/amd64 node:14.19.3-bullseye
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true
@@ -19,7 +19,7 @@ RUN meteor npm install && \
   cd /app/bundle/programs/server && \
   npm install
 
-FROM --platform=linux/amd64 node:14.18.3-buster-slim
+FROM --platform=linux/amd64 node:14.19.3-bullseye
 
 # Install mongoDB client
 RUN apt-get update && apt-get install -y gnupg wget
