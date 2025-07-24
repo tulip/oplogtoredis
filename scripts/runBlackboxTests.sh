@@ -37,7 +37,7 @@ fi
 # INSERT DATA INTO MONGO
 docker compose -f blackbox-tests/docker-compose.yml exec -T \
   mongo sh -c \
-  'mongo --eval "db.products.insert( { item: \"card\", qty: 15 } )"'
+  'mongosh --eval "db.products.insertOne( { item: \"card\", qty: 15 } )"'
 
 # CHECK REDIS HAS DATA
 # xargs is a hack to get rid of whitespace

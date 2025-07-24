@@ -1,4 +1,3 @@
-version: "3"
 services:
   test:
     build:
@@ -64,7 +63,7 @@ services:
       MONGO_ARGS: "${MONGO_ARGS}"
     command: "mongod --replSet myapp --port 27017 --bind_ip_all $MONGO_ARGS"
     healthcheck:
-      test: test $$(echo "rs.initiate({_id:'myapp',members:[{_id:0,host:\"mongo:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'myapp',members:[{_id:0,host:'mongo:27017'}]}) }" | mongosh --port 27017 --quiet
       interval: 10s
       start_period: 30s
     volumes:
