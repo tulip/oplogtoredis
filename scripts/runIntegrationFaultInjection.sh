@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -eu
-cd `dirname "$0"`'/..'
+cd "$(dirname "$0")/.."
 
 docker build --platform=linux/amd64 . -f Dockerfile -t local-oplogtoredis
 docker build --platform=linux/amd64 . -f Dockerfile.integration -t oltr-integration

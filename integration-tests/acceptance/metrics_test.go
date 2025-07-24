@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"testing"
@@ -21,7 +21,7 @@ func TestMetrics(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Get response body
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("Error receiving response body: %s", err)
 	}

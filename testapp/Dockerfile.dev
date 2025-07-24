@@ -1,4 +1,4 @@
-FROM node:14.19.3-bullseye
+FROM --platform=linux/amd64 meteor/node:14.21.4
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true
@@ -6,9 +6,9 @@ ENV METEOR_ALLOW_SUPERUSER=true
 RUN apt-get update && \
   apt-get install -y g++ build-essential curl && \
   rm -rf /var/lib/apt/lists/* && \
-  curl https://install.meteor.com/ | sh
+  curl https://install.meteor.com/?release=2.16 | sh
 
-RUN meteor create --release 2.3.6 /throwaway && rm -rf /throwaway
+RUN meteor create --release 2.16 /throwaway && rm -rf /throwaway
 
 # Set up app
 RUN mkdir /src

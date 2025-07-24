@@ -4,8 +4,8 @@
 # to identify potential issues.
 
 set -e
-cd `dirname "$0"`'/..'
+cd "$(dirname "$0")/.."
 
-golangci-lint run --deadline 15m ./lib/... ./integration-tests/...
+golangci-lint run ./lib/... ./integration-tests/...
 
 echo 'Lint passed.'

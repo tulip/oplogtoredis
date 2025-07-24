@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
-cd `dirname "$0"`
+cd "$(dirname "$0")"
 
-mongo "$MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
+mongosh "$MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
 mkdir /benchresult
 
 samples=10

@@ -30,14 +30,14 @@ docker compose -f blackbox-tests/docker-compose.yml up -d --build
 if [[ -x "$(command -v curl)" ]]; then
   ./scripts/wait-for-server-healthz.sh
 else
-  docker build -f blackbox-tests/Dockerfile.curl . -t wait-for-server-healthz
+  docker buil -f blackbox-tests/Dockerfile.curl . -t wait-for-server-healthz
   docker run --network="host" wait-for-server-healthz
 fi
 
 # INSERT DATA INTO MONGO
 docker compose -f blackbox-tests/docker-compose.yml exec -T \
   mongo sh -c \
-  'mongo --eval "db.products.insert( { item: \"card\", qty: 15 } )"'
+  'mongosh --eval "db.products.insertOne( { item: \"card\", qty: 15 } )"'
 
 # CHECK REDIS HAS DATA
 # xargs is a hack to get rid of whitespace
