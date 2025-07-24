@@ -1,6 +1,6 @@
 # expects build context of oplogtoredis
 
-FROM --platform=linux/amd64 golang:1.23.11-bookworm AS integration_base
+FROM --platform=linux/amd64 golang:1.24-bookworm AS integration_base
 
 RUN apt-get update && apt-get install -y gcc git
 

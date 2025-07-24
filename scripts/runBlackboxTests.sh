@@ -30,7 +30,7 @@ docker compose -f blackbox-tests/docker-compose.yml up -d --build
 if [[ -x "$(command -v curl)" ]]; then
   ./scripts/wait-for-server-healthz.sh
 else
-  docker buil -f blackbox-tests/Dockerfile.curl . -t wait-for-server-healthz
+  docker build -f blackbox-tests/Dockerfile.curl . -t wait-for-server-healthz
   docker run --network="host" wait-for-server-healthz
 fi
 

@@ -1,4 +1,4 @@
-FROM golang:1.23.11-alpine3.22
+FROM golang:1.24-alpine3.22
 
 # Install gcc, musl-dev, and sasl, which are needed to build the cgo
 # parts of the Mongo driver
