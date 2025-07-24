@@ -1,15 +1,15 @@
-{ lib, stdenv, buildGoModule, fetchFromGitHub, installShellFiles }:
+{ lib, stdenv, buildGo123Module, fetchFromGitHub, installShellFiles }:
 
-buildGoModule {
+buildGo123Module {
   pname = "oplogtoredis";
-  version = "3.8.7";
+  version = "3.9.0";
   src = builtins.path { path = ./.; };
 
   postInstall = ''
   '';
 
   # update: set value to an empty string and run `nix build`. This will download Go, fetch the dependencies and calculates their hash.
-  vendorHash = "sha256-c8HNPvFY3hu4iPrQ1Z4IoWzt09gJGDA5ZX5a87vsW50=";
+  vendorHash = "sha256-lVeF4HQPI/XqVoejdR7bk/DP66DIp56TVE4fW5F3U6A=";
 
   nativeBuildInputs = [ installShellFiles ];
   doCheck = false;
