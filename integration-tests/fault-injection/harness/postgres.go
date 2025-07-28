@@ -21,7 +21,7 @@ func runCommandWithLogs(name string, args ...string) {
 func StartPostgresServer() *PostgresServer {
 	runCommandWithLogs(
 		"pg_ctlcluster",
-		"11",
+		"13",
 		"main",
 		"start",
 	)
@@ -46,7 +46,7 @@ func StartPostgresServer() *PostgresServer {
 func (server *PostgresServer) Stop() {
 	runCommandWithLogs(
 		"pg_ctlcluster",
-		"11",
+		"13",
 		"main",
 		"stop",
 	)
