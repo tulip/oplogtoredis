@@ -9,11 +9,11 @@ import (
 
 // waitTCP wait until the TCP service is accepting connections
 //
-// It times out and panics after 60 seconds.
+// It times out and panics after 30 seconds.
 func waitTCP(addr string) {
 	log.Printf("Waiting for TCP to be available at %s", addr)
 	// Try once a second to connect
-	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Second) {
+	for startTime := time.Now(); time.Since(startTime) < 30*time.Second; time.Sleep(time.Second) {
 		conn, err := net.DialTimeout("tcp", addr, time.Second)
 
 		if err == nil {
@@ -36,11 +36,11 @@ func waitTCP(addr string) {
 
 // waitTCP wait until the TCP service is not accepting connections
 //
-// It times out and panics after 60 seconds.
+// It times out and panics after 30 seconds.
 func waitTCPDown(addr string) {
 	log.Printf("Waiting for TCP to be down at %s", addr)
 	// Try once a second to connect
-	for startTime := time.Now(); time.Since(startTime) < 10*time.Second; time.Sleep(time.Second) {
+	for startTime := time.Now(); time.Since(startTime) < 30*time.Second; time.Sleep(time.Second) {
 		conn, err := net.DialTimeout("tcp", addr, time.Second)
 
 		if err != nil {
