@@ -37,6 +37,7 @@ type Tailer struct {
 // Raw oplog entry from Mongo
 type rawOplogEntry struct {
 	Timestamp primitive.Timestamp `bson:"ts"`
+	WallTime  time.Time           `bson:"wall"`
 	Operation string              `bson:"op"`
 	Namespace string              `bson:"ns"`
 	Doc       bson.Raw            `bson:"o"`
@@ -535,6 +536,16 @@ func (tailer *Tailer) unmarshalEntryMetadata(rawData bson.Raw) *rawOplogEntry {
 		result.Timestamp = primitive.Timestamp{T: t, I: i}
 	}
 
+	wallLookup, err := rawData.LookupErr("wall")
+	if err == nil {
+		wall, ok := wallLookup.TimeOK()
+		if !ok {
+			log.Log.Error("Error unmarshalling oplog wall time entry")
+			return nil
+		}
+		result.WallTime = wall.UTC()
+	}
+
 	opLookup, err := rawData.LookupErr("op")
 	if err == nil {
 		result.Operation, ok = opLookup.StringValueOK()
@@ -577,6 +588,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []op
 		out := oplogEntry{
 			Operation: entry.Operation,
 			Timestamp: entry.Timestamp,
+			WallTime:  entry.WallTime,
 			Namespace: entry.Namespace,
 			Data:      entry.Doc,
 
@@ -638,6 +650,7 @@ func (tailer *Tailer) parseRawOplogEntry(entry *rawOplogEntry, txIdx *uint) []op
 				v := tailer.unmarshalEntryMetadata(rawDoc)
 				if v != nil {
 					v.Timestamp = entry.Timestamp
+					v.WallTime = entry.WallTime
 					ret = append(ret, tailer.parseRawOplogEntry(v, txIdx)...)
 				}
 			} else {
