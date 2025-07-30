@@ -124,8 +124,9 @@ func deleteDenylistEntry(response http.ResponseWriter, request *http.Request, de
 	}
 	_, exists := denylist.Load(id)
 	if !exists {
-		log.Log.Warnw("Denylist DELETE: non-existent entry", "id", id)
-		response.WriteHeader(http.StatusNotFound)
+		// Deploy operations at Tulip require returning a successful response code even if the entry is not present.
+		log.Log.Infow("Denylist DELETE: non-existent entry", "id", id)
+		response.WriteHeader(http.StatusNoContent)
 		return
 	}
 
