@@ -1,0 +1,18 @@
+FROM 657908024359.dkr.ecr.us-east-1.amazonaws.com/fedramp/ubi9:latest AS builder
+RUN dnf install -y go
+
+WORKDIR /oplogtoredis
+
+COPY main.go fedramp/go.mod fedramp/go.sum ./
+COPY lib ./lib
+
+RUN go build -o app
+
+FROM 657908024359.dkr.ecr.us-east-1.amazonaws.com/fedramp/ubi9:latest
+RUN dnf install -y nc
+    
+COPY --from=builder /oplogtoredis/app /bin/oplogtoredis
+CMD /bin/oplogtoredis
+
+ENV PORT 8080
+EXPOSE 8080
