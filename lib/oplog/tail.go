@@ -51,6 +51,8 @@ type cursorResultStatus struct {
 	DidLosePosition bool
 }
 
+const MAX_TIMESTAMP_FETCH_ATTEMPTS = 5;
+
 const requeryDuration = time.Second
 
 var (
@@ -190,7 +192,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 			"namespace", entry.Namespace)
 		ts := entry.Timestamp
 		return &ts, nil
-	})
+	}, 0)
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
@@ -447,7 +449,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
+func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error), tries int) primitive.Timestamp {
 	// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
 	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
@@ -466,9 +468,15 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 		log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
 			"timestamp", tsTime.Unix(),
 			"age_seconds", gapSeconds)
-	}
-
-	if (redisErr != nil) && (redisErr != redis.Nil) {
+	} else if (redisErr != nil) && (redisErr != redis.Nil) {
+		if tries < MAX_TIMESTAMP_FETCH_ATTEMPTS {
+			tries += 1
+			log.Log.Warnw("Error querying Redis for last processed timestamp. Will retry.",
+				"attempt", tries,
+				"error", redisErr)
+			time.Sleep(100 * time.Duration(tries) * time.Millisecond)
+			return tailer.getStartTime(maxOrdinal, getTimestampOfLastOplogEntry, tries)
+		}
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
@@ -484,7 +492,7 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 
 	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
 		"error", mongoErr)
-	return primitive.Timestamp{T: uint32(time.Now().Unix() << 32)}
+	return primitive.Timestamp{T: uint32(time.Now().Unix())}
 }
 
 func parseID(idRaw bson.RawValue) (id interface{}, err error) {

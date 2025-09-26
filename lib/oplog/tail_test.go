@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/go-redis/redis/v8"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
@@ -15,21 +16,28 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+func encodeMongoTimestamp(ts primitive.Timestamp) string {
+	return strconv.FormatUint(uint64(ts.T)<<32|uint64(ts.I), 10)
+}
+
 // Converts a time to a mongo timestamp
 func mongoTS(d time.Time) primitive.Timestamp {
-	return primitive.Timestamp{T: uint32(d.Unix() << 32)}
+	//return primitive.Timestamp{T: uint32(d.Unix() << 32)}
+	return primitive.Timestamp{
+		T: uint32(d.Unix()), // Extract Unix seconds and cast to uint32
+		I: 0,
+	}
 }
 
 // Determines if two dates are within a delta
 func timestampsWithinDelta(d1, d2 primitive.Timestamp, delta time.Duration) bool {
-	d1Seconds := int64(d1.T) >> 32
-	d2Seconds := int64(d2.T) >> 32
+	d1Seconds := int64(d1.T)
+	d2Seconds := int64(d2.T)
 
 	diff := d1Seconds - d2Seconds
 	if diff < 0 {
 		diff = -diff
 	}
-
 	return float64(diff) <= delta.Seconds()
 }
 
@@ -43,6 +51,7 @@ func TestGetStartTime(t *testing.T) {
 		redisTimestamp     primitive.Timestamp
 		mongoEndOfOplog    primitive.Timestamp
 		mongoEndOfOplogErr error
+		redisErr 		   string
 		expectedResult     primitive.Timestamp
 	}{
 		"Start time is in Redis": {
@@ -65,16 +74,34 @@ func TestGetStartTime(t *testing.T) {
 			mongoEndOfOplogErr: errors.New("Some mongo error"),
 			expectedResult:     mongoTS(now),
 		},
+		"Start time is in Redis, redis errors first attempt": {
+			redisTimestamp: mongoTS(notTooOld),
+			expectedResult: mongoTS(notTooOld),
+			redisErr:       "Some transient redis error",
+		},
 	}
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
+
 			redisServer, err := miniredis.Run()
 			if err != nil {
 				panic(err)
 			}
 			defer redisServer.Close()
-			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry.0", strconv.FormatInt(int64(test.redisTimestamp.T), 10)))
+
+			redisGetErrorCount := 0
+			// Register a hook so we can clear the error
+			redisServer.Server().SetPreHook(func(c *server.Peer, cmd string, args ...string) bool {
+				if cmd == "GET" && test.redisErr != "" && redisGetErrorCount < 3 {
+					redisGetErrorCount += 1
+					c.WriteError(test.redisErr)
+					return true
+				}
+				return false
+			})
+
+			require.NoError(t, redisServer.Set("someprefix.lastProcessedEntry.0", encodeMongoTimestamp(test.redisTimestamp)))
 
 			redisClient := []redis.UniversalClient{redis.NewUniversalClient(&redis.UniversalOptions{
 				Addrs: []string{redisServer.Addr()},
@@ -93,7 +120,7 @@ func TestGetStartTime(t *testing.T) {
 				}
 
 				return &test.mongoEndOfOplog, nil
-			})
+			}, 0)
 
 			// We need to do an approximate comparison; the function sometimes
 			// return time.Now
