@@ -22,7 +22,6 @@ func encodeMongoTimestamp(ts primitive.Timestamp) string {
 
 // Converts a time to a mongo timestamp
 func mongoTS(d time.Time) primitive.Timestamp {
-	//return primitive.Timestamp{T: uint32(d.Unix() << 32)}
 	return primitive.Timestamp{
 		T: uint32(d.Unix()), // Extract Unix seconds and cast to uint32
 		I: 0,
@@ -51,7 +50,7 @@ func TestGetStartTime(t *testing.T) {
 		redisTimestamp     primitive.Timestamp
 		mongoEndOfOplog    primitive.Timestamp
 		mongoEndOfOplogErr error
-		redisErr 		   string
+		redisErr           string
 		expectedResult     primitive.Timestamp
 	}{
 		"Start time is in Redis": {
@@ -120,7 +119,7 @@ func TestGetStartTime(t *testing.T) {
 				}
 
 				return &test.mongoEndOfOplog, nil
-			}, 0)
+			})
 
 			// We need to do an approximate comparison; the function sometimes
 			// return time.Now

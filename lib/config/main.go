@@ -29,6 +29,8 @@ type oplogtoredisConfiguration struct {
 	SentryDSN                     string        `default:"" envconfig:"SENTRY_DSN"`
 	SentryEnvironment             string        `default:"unknown" split_words:"true"`
 	SentryRelease                 string        `default:"unknown" split_words:"true"`
+	ResumeTsReadRetries           int           `default:"5" split_words:"true"`
+	ResumeTsReadRetryDelay        time.Duration `default:"500ms" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -182,6 +184,19 @@ func SentryEnvironment() string {
 // Required if SentryEnabled is set
 func SentryRelease() string {
 	return globalConfig.SentryRelease
+}
+
+// ResumeTsReadRetries is the number of times to retry reading the resume timestamp
+// before giving up. Defaults to 5.
+func ResumeTsReadRetries() int {
+	return globalConfig.ResumeTsReadRetries
+}
+
+// ResumeTsReadRetryDelay is the delay between retries when reading the resume timestamp
+// Defaults to 500ms.  Delays are multiplied by the number of attempts,
+// e.g., third attempt = 500ms * 3 = 1.5s delay before next attempt.
+func ResumeTsReadRetryDelay() time.Duration {
+	return globalConfig.ResumeTsReadRetryDelay
 }
 
 // ParseEnv parses the current environment variables and updates the stored
