@@ -79,7 +79,7 @@ services:
       - REDIS_REPLICATION_MODE=master
 
   redis-sentinel:
-    image: bitnami/redis-sentinel:latest
+    image: bitnamilegacy/redis-sentinel:latest
     environment:
       - REDIS_SENTINEL_MASTER=redis-sentinel-master
 
