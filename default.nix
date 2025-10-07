@@ -2,14 +2,14 @@
 
 buildGoModule {
   pname = "oplogtoredis";
-  version = "3.8.9";
+  version = "3.8.10";
   src = builtins.path { path = ./.; };
 
   postInstall = ''
   '';
 
   # update: set value to an empty string and run `nix build`. This will download Go, fetch the dependencies and calculates their hash.
-  vendorHash = "sha256-c8HNPvFY3hu4iPrQ1Z4IoWzt09gJGDA5ZX5a87vsW50=";
+  vendorHash = "sha256-8nzRIwW5oKaMDQOm2DfbJW9GRojfFKF79rlM7fOStwM=";
 
   nativeBuildInputs = [ installShellFiles ];
   doCheck = false;

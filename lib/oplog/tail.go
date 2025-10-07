@@ -448,32 +448,46 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
 func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
-	// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
-	ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
+	var redisErr error
 
-	gapSeconds := time.Since(tsTime) / time.Second
+	for tries := 0; tries < config.ResumeTsReadRetries(); tries++ {
+		// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
+		ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
-	if redisErr == nil {
-		// we have a last write time, check that it's not too far in the past
-		if tsTime.After(time.Now().Add(-1 * tailer.MaxCatchUp)) {
-			log.Log.Infof("Found last processed timestamp, resuming oplog tailing",
+		if redisErr == nil {
+			gapSeconds := time.Since(tsTime) / time.Second
+
+			// we have a last write time, check that it's not too far in the past
+			if tsTime.After(time.Now().Add(-1 * tailer.MaxCatchUp)) {
+				log.Log.Infof("Found last processed timestamp, resuming oplog tailing",
+					"timestamp", tsTime.Unix(),
+					"age_seconds", gapSeconds)
+				metricOplogResumeGap.WithLabelValues("success").Observe(float64(gapSeconds))
+				return ts
+			}
+
+			log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
 				"timestamp", tsTime.Unix(),
 				"age_seconds", gapSeconds)
-			metricOplogResumeGap.WithLabelValues("success").Observe(float64(gapSeconds))
-			return ts
+			metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
+			break
+		} else if redisErr == redis.Nil {
+			log.Log.Warnw("No last processed timestamp found in Redis. Will start from end of oplog.",
+				"attempt", tries)
+			break
+		} else if (redisErr != nil) && (redisErr != redis.Nil) {
+			log.Log.Warnw("Error querying Redis for last processed timestamp. Will retry.",
+				"attempt", tries,
+				"error", redisErr)
+			time.Sleep(config.ResumeTsReadRetryDelay() * time.Duration(tries))
 		}
-
-		log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
-			"timestamp", tsTime.Unix(),
-			"age_seconds", gapSeconds)
 	}
 
-	if (redisErr != nil) && (redisErr != redis.Nil) {
+	if redisErr != nil {
+		metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
 		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
 			"error", redisErr)
 	}
-
-	metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
 	if mongoErr == nil {
@@ -484,7 +498,7 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 
 	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
 		"error", mongoErr)
-	return primitive.Timestamp{T: uint32(time.Now().Unix() << 32)}
+	return primitive.Timestamp{T: uint32(time.Now().Unix())}
 }
 
 func parseID(idRaw bson.RawValue) (id interface{}, err error) {
