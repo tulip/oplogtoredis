@@ -7,6 +7,7 @@ package redispub
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -183,7 +184,17 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
-	staleness := time.Since(p.WallTime).Seconds()
+
+	// Clock skew can cause the difference between Mongo's reported wall time and
+	// OTR's current time to be a negative value. During a metrics scrape, if
+	// these negative values cause the histogram sum to be negative, Prometheus
+	// will treat it as a metric reset because the sum is otherwise assumed to be
+	// monotonic. As a result, Grafana charts that use the histogram sum will
+	// have artifacts, e.g. large spikes.
+	//
+	// The skew should only be a few milliseconds at most when using NTP, so the
+	// simplest fix is to round up to 0.
+	staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
 
 	res, err := publishDedupe.Run(
 		context.Background(),
