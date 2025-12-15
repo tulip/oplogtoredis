@@ -28,21 +28,31 @@ type PublishOpts struct {
 	MetadataPrefix   string
 }
 
-// This script checks whether KEYS[1] is set. If it is, it does nothing. It not,
-// it sets the key, using ARGV[1] as the expiration, and then publishes the
-// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns 1 if published.
-// Note that an int is returned here as a boolean false is interpreted as an error.
+// This script checks whether the keys in KEYS are set. If a key is set, it does
+// nothing. If not, it sets the key, using ARGV[1] as the expiration, and then
+// publishes the corresponding message from ARGV to the channels from ARGV.
+// Returns an array of integers, where 1 means published and 0 means duplicate.
 var publishDedupe = redis.NewScript(`
-	local res = 0
-	if redis.call("GET", KEYS[1]) == false then
-		redis.call("SETEX", KEYS[1], ARGV[1], 1)
-		for w in string.gmatch(ARGV[3], "([^$]+)") do
-			redis.call("PUBLISH", w, ARGV[2])
+	local results = {}
+	local expiration = ARGV[1]
+
+	for i = 1, #KEYS do
+		local key = KEYS[i]
+		local msg = ARGV[2 + (i-1)*2]
+		local channels = ARGV[3 + (i-1)*2]
+
+		if redis.call("GET", key) == false then
+			redis.call("SETEX", key, expiration, 1)
+			for w in string.gmatch(channels, "([^$]+)") do
+				redis.call("PUBLISH", w, msg)
+			end
+			table.insert(results, 1)
+		else
+			table.insert(results, 0)
 		end
-		res = 1
 	end
 
-	return res
+	return results
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -104,14 +114,14 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication) error
+	type PubFn func([]*Publication) error
 
 	var publishFns []PubFn
 
 	for _, client := range clients {
 		client := client
-		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
+		publishFn := func(batch []*Publication) error {
+			return publishBatch(batch, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
 		}
 		publishFns = append(publishFns, publishFn)
 	}
@@ -125,6 +135,8 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
 	}
 
+	const batchSize = 10
+
 	for {
 		select {
 		case <-stop:
@@ -132,36 +144,48 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 			return
 
 		case p := <-in:
-			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
+			batch := []*Publication{p}
+			// Try to fill batch
+		FillBatch:
+			for len(batch) < batchSize {
+				select {
+				case p2 := <-in:
+					batch = append(batch, p2)
+				default:
+					break FillBatch
+				}
+			}
+
+			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(batch[0].WallTime).Seconds())
 			for i, publishFn := range publishFns {
-				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+				err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
 				log.Log.Debugw("Published to", "idx", i)
 
 				if err != nil {
-					metricsSendFailed[i].Inc()
+					metricsSendFailed[i].Add(float64(len(batch)))
 					log.Log.Errorw("Permanent error while trying to publish message; giving up",
 						"error", err,
-						"message", p)
+						"batchSize", len(batch))
 				} else {
-					metricsSendSuccess[i].Inc()
+					metricsSendSuccess[i].Add(float64(len(batch)))
 
 					// We want to make sure we do this *after* we've successfully published
 					// the messages
-					timestampC <- p.OplogTimestamp
+					timestampC <- batch[len(batch)-1].OplogTimestamp
 				}
 			}
 		}
 	}
 }
 
-func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
-	if p == nil {
-		return errors.New("Nil Redis publication")
+func publishBatchWithRetries(batch []*Publication, maxRetries int, sleepTime time.Duration, publishFn func(batch []*Publication) error) error {
+	if len(batch) == 0 {
+		return errors.New("Empty Redis publication batch")
 	}
 
 	retries := 0
 	for retries < maxRetries {
-		err := publishFn(p)
+		err := publishFn(batch)
 
 		if err != nil {
 			log.Log.Errorw("Error publishing message, will retry",
@@ -181,7 +205,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
-func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
+func publishBatch(batch []*Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 
@@ -196,36 +220,43 @@ func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix s
 	// simplest fix is to round up to 0.
 	staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
 
+	keys := make([]string, len(batch))
+	args := make([]interface{}, 0, 1+len(batch)*2)
+	args = append(args, dedupeExpirationSeconds)
+
+	for i, p := range batch {
+		keys[i] = formatKey(p, prefix)
+		args = append(args, p.Msg, strings.Join(p.Channels, "$"))
+	}
+
 	res, err := publishDedupe.Run(
 		context.Background(),
 		client,
-		[]string{
-			// The key used for deduplication
-			// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
-			// where the first 32 bits are a unix timestamp (seconds since
-			// the epoch), and the next 32 bits are a monotonically-increasing
-			// sequence number for operations within that second. It's
-			// guaranteed-unique, so we can use it for deduplication.
-			// However, timestamps are shared within transactions, so we need more information to ensure uniqueness.
-			// The TxIdx field is used to ensure that each entry in a transaction has its own unique key.
-			formatKey(p, prefix),
-		},
-		dedupeExpirationSeconds,       // ARGV[1], expiration time
-		p.Msg,                         // ARGV[2], message
-		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Int()
+		keys,
+		args...,
+	).Slice()
 
-	var status string
-	if res == 1 {
-		status = "published"
-	} else {
-		status = "duplicate"
+	if err != nil {
+		redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
+		return err
 	}
-	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
-	metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
+
+	for i, item := range res {
+		p := batch[i]
+		staleness := time.Since(p.WallTime).Seconds()
+
+		var status string
+		if item.(int64) == 1 {
+			status = "published"
+		} else {
+			status = "duplicate"
+		}
+		metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
+		metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
+	}
 
 	redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
-	return err
+	return nil
 }
 
 func formatKey(p *Publication, prefix string) string {
