@@ -135,7 +135,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
 	}
 
-	const batchSize = 10
+	const batchSize = 25
 
 	for {
 		select {
@@ -145,7 +145,8 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 		case p := <-in:
 			batch := []*Publication{p}
-			// Try to fill batch
+			// Try to fill batch with buffer backlog
+			// (the label is needed to break out of both the select and for loop)
 		FillBatch:
 			for len(batch) < batchSize {
 				select {
@@ -155,7 +156,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 					break FillBatch
 				}
 			}
-
+			log.Log.Debugw("Batch size", "len(batch)", len(batch))
 			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(batch[0].WallTime).Seconds())
 			for i, publishFn := range publishFns {
 				err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
@@ -209,17 +210,6 @@ func publishBatch(batch []*Publication, client redis.UniversalClient, prefix str
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 
-	// Clock skew can cause the difference between Mongo's reported wall time and
-	// OTR's current time to be a negative value. During a metrics scrape, if
-	// these negative values cause the histogram sum to be negative, Prometheus
-	// will treat it as a metric reset because the sum is otherwise assumed to be
-	// monotonic. As a result, Grafana charts that use the histogram sum will
-	// have artifacts, e.g. large spikes.
-	//
-	// The skew should only be a few milliseconds at most when using NTP, so the
-	// simplest fix is to round up to 0.
-	staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
-
 	keys := make([]string, len(batch))
 	args := make([]interface{}, 0, 1+len(batch)*2)
 	args = append(args, dedupeExpirationSeconds)
@@ -243,7 +233,16 @@ func publishBatch(batch []*Publication, client redis.UniversalClient, prefix str
 
 	for i, item := range res {
 		p := batch[i]
-		staleness := time.Since(p.WallTime).Seconds()
+		// Clock skew can cause the difference between Mongo's reported wall time and
+		// OTR's current time to be a negative value. During a metrics scrape, if
+		// these negative values cause the histogram sum to be negative, Prometheus
+		// will treat it as a metric reset because the sum is otherwise assumed to be
+		// monotonic. As a result, Grafana charts that use the histogram sum will
+		// have artifacts, e.g. large spikes.
+		//
+		// The skew should only be a few milliseconds at most when using NTP, so the
+		// simplest fix is to round up to 0.
+		staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
 
 		var status string
 		if item.(int64) == 1 {
