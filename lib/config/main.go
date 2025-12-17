@@ -31,6 +31,7 @@ type oplogtoredisConfiguration struct {
 	SentryRelease                 string        `default:"unknown" split_words:"true"`
 	ResumeTsReadRetries           int           `default:"5" split_words:"true"`
 	ResumeTsReadRetryDelay        time.Duration `default:"500ms" split_words:"true"`
+	RedisBatchSize		          int           `default:"25" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
@@ -197,6 +198,12 @@ func ResumeTsReadRetries() int {
 // e.g., third attempt = 500ms * 3 = 1.5s delay before next attempt.
 func ResumeTsReadRetryDelay() time.Duration {
 	return globalConfig.ResumeTsReadRetryDelay
+}
+
+// RedisBatchSize is the maximum number of publications to batch per redis call
+// Defaults to 25.
+func RedisBatchSize() int {
+	return globalConfig.RedisBatchSize
 }
 
 // ParseEnv parses the current environment variables and updates the stored

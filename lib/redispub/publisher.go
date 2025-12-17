@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
@@ -135,7 +136,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
 	}
 
-	const batchSize = 25
+	const batchSize = config.RedisBatchSize()
 
 	for {
 		select {
