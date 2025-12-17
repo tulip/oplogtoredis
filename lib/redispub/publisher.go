@@ -136,7 +136,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
 	}
 
-	const batchSize = config.RedisBatchSize()
+	var batchSize = config.RedisBatchSize()
 
 	for {
 		select {
