@@ -15,17 +15,17 @@ import (
 // miniredis doesn't support PUBLISH and its lua support is spotty. It gets
 // tested in integration tests.
 
-func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
-	publication := &Publication{
+func TestPublishBatchWithRetriesImmediateSuccess(t *testing.T) {
+	batch := []*Publication{{
 		Channels:       []string{"a", "b"},
 		Msg:            []byte("asdf"),
 		OplogTimestamp: primitive.Timestamp{},
-	}
+	}}
 
 	callCount := 0
-	publishFn := func(p *Publication) error {
-		if p != publication {
-			t.Errorf("Got incorrect argument to the publish function: %#v", p)
+	publishFn := func(b []*Publication) error {
+		if len(b) != 1 || b[0] != batch[0] {
+			t.Errorf("Got incorrect argument to the publish function: %#v", b)
 		}
 
 		callCount++
@@ -33,7 +33,7 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 		return nil
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, time.Second, publishFn)
+	err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
 
 	if err != nil {
 		t.Errorf("Got unexpected error: %s", err)
@@ -44,17 +44,17 @@ func TestPublishSingleMessageWithRetriesImmediateSuccess(t *testing.T) {
 	}
 }
 
-func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
-	publication := &Publication{
+func TestPublishBatchWithRetriesTransientFailure(t *testing.T) {
+	batch := []*Publication{{
 		Channels:       []string{"a", "b"},
 		Msg:            []byte("asdf"),
 		OplogTimestamp: primitive.Timestamp{},
-	}
+	}}
 
 	callCount := 0
-	publishFn := func(p *Publication) error {
-		if p != publication {
-			t.Errorf("Got incorrect argument to the publish function: %#v", p)
+	publishFn := func(b []*Publication) error {
+		if len(b) != 1 || b[0] != batch[0] {
+			t.Errorf("Got incorrect argument to the publish function: %#v", b)
 		}
 
 		callCount++
@@ -67,25 +67,25 @@ func TestPublishSingleMessageWithRetriesTransientFailure(t *testing.T) {
 		return nil
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, 0, publishFn)
+	err := publishBatchWithRetries(batch, 30, 0, publishFn)
 
 	if err != nil {
 		t.Errorf("Got unexpected error: %s", err)
 	}
 }
 
-func TestPublishSingleMessageWithRetriesPermanentFailure(t *testing.T) {
-	publication := &Publication{
+func TestPublishBatchWithRetriesPermanentFailure(t *testing.T) {
+	batch := []*Publication{{
 		Channels:       []string{"a", "b"},
 		Msg:            []byte("asdf"),
 		OplogTimestamp: primitive.Timestamp{},
-	}
+	}}
 
-	publishFn := func(p *Publication) error {
+	publishFn := func(b []*Publication) error {
 		return errors.New("Some error")
 	}
 
-	err := publishSingleMessageWithRetries(publication, 30, 0, publishFn)
+	err := publishBatchWithRetries(batch, 30, 0, publishFn)
 
 	if err == nil {
 		t.Errorf("Expected an error, but didn't get one")
@@ -172,13 +172,13 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 	waitGroup.Wait()
 }
 
-func TestNilPublicationMessage(t *testing.T) {
-	err := publishSingleMessageWithRetries(nil, 5, 1*time.Second, func(p *Publication) error {
+func TestEmptyPublicationBatch(t *testing.T) {
+	err := publishBatchWithRetries([]*Publication{}, 5, 1*time.Second, func(b []*Publication) error {
 		t.Error("Should not have been called")
 		return nil
 	})
 
 	if err == nil {
-		t.Error("Exepcted error")
+		t.Error("Expected error")
 	}
 }
