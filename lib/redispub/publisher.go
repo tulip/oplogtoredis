@@ -32,6 +32,11 @@ type PublishOpts struct {
 // This script checks whether the keys in KEYS are set. If a key is set, it does
 // nothing. If not, it sets the key, using ARGV[1] as the expiration, and then
 // publishes the corresponding message from ARGV to the channels from ARGV.
+// The keys, messages, and channels are interleaved in ARGV, so for key KEYS[i],
+// the message is at ARGV[2 + (i-1)*2] and the channels are at ARGV[3 + (i-1)*2].
+// Because the first ARGV is the expiration, there's an offset between KEYS and
+// ARGV indices which is the reason for the (i-1).
+// The channels are a single string with channels separated by '$' characters.
 // Returns an array of integers, where 1 means published and 0 means duplicate.
 var publishDedupe = redis.NewScript(`
 	local results = {}
@@ -69,6 +74,14 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Name:      "temporary_send_failures",
 	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
 })
+
+var redisBatchSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "redis_batch_size",
+	Help:      "A histogram recording the size of the publication batches sent to redis.",
+	Buckets:   []float64{1, 2, 5, 10, 18, 25, 50, 100},
+}, []string{"status", "ordinal"})
 
 var redisCommandDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
@@ -135,7 +148,6 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 		metricsSendFailed[i] = metricSentMessages.WithLabelValues("failed", idx)
 		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
 	}
-
 	var batchSize = config.RedisBatchSize()
 
 	for {
@@ -182,7 +194,7 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 func publishBatchWithRetries(batch []*Publication, maxRetries int, sleepTime time.Duration, publishFn func(batch []*Publication) error) error {
 	if len(batch) == 0 {
-		return errors.New("Empty Redis publication batch")
+		return nil
 	}
 
 	retries := 0
@@ -195,7 +207,7 @@ func publishBatchWithRetries(batch []*Publication, maxRetries int, sleepTime tim
 				"retryNumber", retries)
 
 			// failure, retry
-			metricTemporaryFailures.Inc()
+			metricTemporaryFailures.Add(float64(len(batch)))
 			retries++
 			time.Sleep(sleepTime)
 		} else {
@@ -229,8 +241,10 @@ func publishBatch(batch []*Publication, client redis.UniversalClient, prefix str
 
 	if err != nil {
 		redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
+		redisBatchSize.WithLabelValues("failed", ordinalStr).Observe(float64(len(batch)))
 		return err
 	}
+	redisBatchSize.WithLabelValues("sent", ordinalStr).Observe(float64(len(batch)))
 
 	for i, item := range res {
 		p := batch[i]

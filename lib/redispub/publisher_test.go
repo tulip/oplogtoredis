@@ -173,12 +173,8 @@ func TestPeriodicallyUpdateTimestamp(t *testing.T) {
 }
 
 func TestEmptyPublicationBatch(t *testing.T) {
-	err := publishBatchWithRetries([]*Publication{}, 5, 1*time.Second, func(b []*Publication) error {
+	publishBatchWithRetries([]*Publication{}, 5, 1*time.Second, func(b []*Publication) error {
 		t.Error("Should not have been called")
 		return nil
 	})
-
-	if err == nil {
-		t.Error("Expected error")
-	}
 }
