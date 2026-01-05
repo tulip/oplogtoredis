@@ -2,7 +2,7 @@
 
 buildGoModule {
   pname = "oplogtoredis";
-  version = "3.8.11";
+  version = "3.9.0";
   src = builtins.path { path = ./.; };
 
   postInstall = ''
