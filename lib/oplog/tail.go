@@ -432,7 +432,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 				"op", ent.op,
 				"error", ent.err,
 				"database", ent.op.Database,
-				"collection", ent.op.Database,
+				"collection", ent.op.Collection,
 			)
 		}
 	} else if len(entries) > 0 {
