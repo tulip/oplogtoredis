@@ -52,6 +52,7 @@ func TestGetStartTime(t *testing.T) {
 		mongoEndOfOplogErr error
 		redisErr           string
 		expectedResult     primitive.Timestamp
+		expectedErr        bool
 	}{
 		"Start time is in Redis": {
 			redisTimestamp: mongoTS(notTooOld),
@@ -71,7 +72,7 @@ func TestGetStartTime(t *testing.T) {
 		},
 		"Start time not in Redis, Mongo errors": {
 			mongoEndOfOplogErr: errors.New("Some mongo error"),
-			expectedResult:     mongoTS(now),
+			expectedErr:        true,
 		},
 		"Start time is in Redis, redis errors first attempt": {
 			redisTimestamp: mongoTS(notTooOld),
@@ -113,7 +114,7 @@ func TestGetStartTime(t *testing.T) {
 				Denylist:     &sync.Map{},
 			}
 
-			actualResult := tailer.getStartTime(0, func() (*primitive.Timestamp, error) {
+			actualResult, err := tailer.getStartTime(0, func() (*primitive.Timestamp, error) {
 				if test.mongoEndOfOplogErr != nil {
 					return nil, test.mongoEndOfOplogErr
 				}
@@ -121,10 +122,13 @@ func TestGetStartTime(t *testing.T) {
 				return &test.mongoEndOfOplog, nil
 			})
 
-			// We need to do an approximate comparison; the function sometimes
-			// return time.Now
-			if !timestampsWithinDelta(actualResult, test.expectedResult, time.Second) {
-				t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, test.expectedResult)
+			if test.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				if !timestampsWithinDelta(actualResult, test.expectedResult, time.Second) {
+					t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, test.expectedResult)
+				}
 			}
 		})
 	}
