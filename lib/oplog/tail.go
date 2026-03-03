@@ -113,12 +113,12 @@ var (
 		Buckets:   []float64{1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000},
 	}, []string{"status"})
 
-	metricTailFailedToStart = promauto.NewCounter(prometheus.CounterOpts{
+	metricTailFailedToStart = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "otr",
 		Subsystem: "oplog",
 		Name:      "tail_failed_to_start",
-		Help:      "Number of times oplog tailing failed to start",
-	})
+		Help:      "Number of times oplog tailing failed to start, partitioned by reason",
+	}, []string{"reason"})
 )
 
 var errFailedToStart = errors.New("failed to start tailing")
@@ -147,15 +147,11 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 
 	for {
 		log.Log.Info("Starting oplog tailing")
-		err := tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
+		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
 		if wasStopped {
 			return
-		}
-
-		if errors.Is(err, errFailedToStart) {
-			metricTailFailedToStart.Inc()
 		}
 
 		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.")
@@ -170,6 +166,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
+		metricTailFailedToStart.WithLabelValues("session").Inc()
 		return errFailedToStart
 	}
 
@@ -206,13 +203,16 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	})
 
 	if startTimeErr != nil {
+		log.Log.Errorw("Failed to determine oplog start time", "error", startTimeErr)
+		metricTailFailedToStart.WithLabelValues("start_time").Inc()
 		return errFailedToStart
 	}
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
-		log.Log.Errorw("Error issuing tail query", "error", queryErr)
+		log.Log.Errorw("Error issuing initial tail query", "error", queryErr)
+		metricTailFailedToStart.WithLabelValues("query").Inc()
 		return errFailedToStart
 	}
 
