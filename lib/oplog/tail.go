@@ -121,7 +121,15 @@ var (
 	}, []string{"reason"})
 )
 
-var errFailedToStart = errors.New("failed to start tailing")
+// startFailureReasons used as metric labels when tailOnce fails to start.
+// tailOnce returns *string: nil means tailing started (no startup failure).
+var (
+	startFailureSession   = stringPtr("session")
+	startFailureStartTime = stringPtr("start_time")
+	startFailureQuery     = stringPtr("query")
+)
+
+func stringPtr(s string) *string { return &s }
 
 func init() {
 	prometheus.MustRegister(metricMaxOplogEntryByMinute)
@@ -147,14 +155,18 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 
 	for {
 		log.Log.Info("Starting oplog tailing")
-		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
+		reason := tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
 		if wasStopped {
 			return
 		}
 
-		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.")
+		if reason != nil {
+			metricTailFailedToStart.WithLabelValues(*reason).Inc()
+		}
+
+		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.", "startFailure", reason)
 		time.Sleep(requeryDuration)
 	}
 }
@@ -162,12 +174,11 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 // this accepts an array of PublisherChannels instances whose size is equal to the degree of write-parallelism.
 // Each incoming message will be routed to one of the PublisherChannels instances based on its parallelism key
 // (hash of the database name), then sent to every channel within that PublisherChannels instance.
-func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) error {
+func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) *string {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
-		metricTailFailedToStart.WithLabelValues("session").Inc()
-		return errFailedToStart
+		return startFailureSession
 	}
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
@@ -204,16 +215,14 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 	if startTimeErr != nil {
 		log.Log.Errorw("Failed to determine oplog start time", "error", startTimeErr)
-		metricTailFailedToStart.WithLabelValues("start_time").Inc()
-		return errFailedToStart
+		return startFailureStartTime
 	}
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
 		log.Log.Errorw("Error issuing initial tail query", "error", queryErr)
-		metricTailFailedToStart.WithLabelValues("query").Inc()
-		return errFailedToStart
+		return startFailureQuery
 	}
 
 	lastTimestamp := startTime
