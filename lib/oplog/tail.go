@@ -121,15 +121,13 @@ var (
 	}, []string{"reason"})
 )
 
-// startFailureReasons used as metric labels when tailOnce fails to start.
-// tailOnce returns *string: nil means tailing started (no startup failure).
-var (
-	startFailureSession   = stringPtr("session")
-	startFailureStartTime = stringPtr("start_time")
-	startFailureQuery     = stringPtr("query")
+// Start failure reasons used as metric labels when tailOnce fails to start.
+// tailOnce returns "": tailing started successfully (no startup failure).
+const (
+	startFailureSession   = "session"
+	startFailureStartTime = "start_time"
+	startFailureQuery     = "query"
 )
-
-func stringPtr(s string) *string { return &s }
 
 func init() {
 	prometheus.MustRegister(metricMaxOplogEntryByMinute)
@@ -162,8 +160,8 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 			return
 		}
 
-		if reason != nil {
-			metricTailFailedToStart.WithLabelValues(*reason).Inc()
+		if reason != "" {
+			metricTailFailedToStart.WithLabelValues(reason).Inc()
 		}
 
 		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.", "startFailure", reason)
@@ -174,7 +172,7 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 // this accepts an array of PublisherChannels instances whose size is equal to the degree of write-parallelism.
 // Each incoming message will be routed to one of the PublisherChannels instances based on its parallelism key
 // (hash of the database name), then sent to every channel within that PublisherChannels instance.
-func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) *string {
+func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) string {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
@@ -230,7 +228,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 		select {
 		case <-stop:
 			log.Log.Infof("Received stop; aborting oplog tailing")
-			return nil
+			return ""
 		default:
 		}
 
@@ -292,7 +290,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
-					return nil
+					return ""
 				}
 
 				break
@@ -303,7 +301,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
-					return nil
+					return ""
 				}
 
 				break
@@ -313,13 +311,13 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				closeCursor(query)
 
-				return nil
+				return ""
 			} else {
 				log.Log.Errorw("Got no data from cursor, but also no error. This is unexpected; restarting query")
 
 				closeCursor(query)
 
-				return nil
+				return ""
 			}
 		}
 	}
