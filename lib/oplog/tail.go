@@ -466,13 +466,13 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 				return ts
 			}
 
-			log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
+			log.Log.Errorw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
 				"timestamp", tsTime.Unix(),
 				"age_seconds", gapSeconds)
 			metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 			break
 		} else if redisErr == redis.Nil {
-			log.Log.Warnw("No last processed timestamp found in Redis. Will start from end of oplog.",
+			log.Log.Errorw("No last processed timestamp found in Redis. Will start from end of oplog.",
 				"attempt", tries)
 			break
 		} else if (redisErr != nil) && (redisErr != redis.Nil) {
