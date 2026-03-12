@@ -168,7 +168,6 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 
 		metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
 		err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
-		lastSeenPub = nil
 		log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
 
 		if err != nil {
