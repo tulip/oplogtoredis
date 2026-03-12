@@ -50,7 +50,7 @@ var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 	Subsystem: "redispub",
 	Name:      "processed_messages",
 	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them and publish function index",
-}, []string{"status", "idx"})
+}, []string{"status"})
 
 var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Namespace: "otr",
@@ -91,39 +91,23 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
+func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int, clientIndex int) {
 
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	for _, client := range clients {
-		go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
-	}
+	go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
 
 	// Redis expiration is in integer seconds, so we have to convert the
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func(*Publication) error
-
-	var publishFns []PubFn
-
-	for _, client := range clients {
-		client := client
-		publishFn := func(p *Publication) error {
-			return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
-		}
-		publishFns = append(publishFns, publishFn)
+	publishFn := func(p *Publication) error {
+		return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
 	}
 
-	publishFnsCount := len(publishFns)
-	metricsSendFailed := make([]prometheus.Counter, publishFnsCount)  //metricSentMessages.WithLabelValues("failed")
-	metricsSendSuccess := make([]prometheus.Counter, publishFnsCount) //metricSentMessages.WithLabelValues("sent")
-	for i := 0; i < publishFnsCount; i++ {
-		idx := strconv.Itoa(i)
-		metricsSendFailed[i] = metricSentMessages.WithLabelValues("failed", idx)
-		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
-	}
+	metricSendFailed := metricSentMessages.WithLabelValues("failed")
+	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
 
 	for {
 		select {
@@ -133,23 +117,22 @@ func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts
 
 		case p := <-in:
 			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
-			for i, publishFn := range publishFns {
-				err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
-				log.Log.Debugw("Published to", "idx", i)
+			err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+			log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
 
-				if err != nil {
-					metricsSendFailed[i].Inc()
-					log.Log.Errorw("Permanent error while trying to publish message; giving up",
-						"error", err,
-						"message", p)
-				} else {
-					metricsSendSuccess[i].Inc()
+			if err != nil {
+				metricSendFailed.Inc()
+				log.Log.Errorw("Permanent error while trying to publish message; giving up",
+					"error", err,
+					"message", p)
+			} else {
+				metricSendSuccess.Inc()
 
-					// We want to make sure we do this *after* we've successfully published
-					// the messages
-					timestampC <- p.OplogTimestamp
-				}
+				// We want to make sure we do this *after* we've successfully published
+				// the messages
+				timestampC <- p.OplogTimestamp
 			}
+
 		}
 	}
 }

@@ -112,11 +112,11 @@ func main() {
 			//
 			// TODO PERF: Use a leaky buffer (https://github.com/tulip/oplogtoredis/issues/2)
 			go func(ordinal int, clientIndex int) {
-				redispub.PublishStream([]redis.UniversalClient{redisClient}, redisPubs, &redispub.PublishOpts{
+				redispub.PublishStream(redisClient, redisPubs, &redispub.PublishOpts{
 					FlushInterval:    config.TimestampFlushInterval(),
 					DedupeExpiration: config.RedisDedupeExpiration(),
 					MetadataPrefix:   config.RedisMetadataPrefix(),
-				}, stopRedisPub, ordinal)
+				}, stopRedisPub, ordinal, clientIndex)
 				log.Log.Infow("Redis publisher completed", "ordinal", ordinal, "clientIndex", clientIndex)
 				waitGroup.Done()
 			}(i, j)
