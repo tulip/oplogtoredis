@@ -109,31 +109,81 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 	metricSendFailed := metricSentMessages.WithLabelValues("failed")
 	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
 
+	// this is the item that is logically at the head of the queue
+	// populate it every time something is pulled from the channel, and clear it if the channel becomes empty
+	// since the queue is in reverse chronological order, this is the oldest item, so we use it
+	// to drive that metric.
+	// 		- 	if the queue is empty, this will be nil (since it will have been cleared after
+	// 			the last publish and we are blocking)
+	//		- 	if the publish is stalled, this will be the item that is stuck trying to publish
+	//		-	under normal operation, this will cycle rapidly
+	var lastSeenPub *Publication = nil
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "otr",
+		Subsystem:   "redispub",
+		Name:        "oldest_message_age",
+		Help:        "Gauge indicating the age of the oldest seen-but-unprocessed message.",
+		ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(ordinal), "clientIndex": strconv.Itoa(clientIndex)},
+	}, func() float64 {
+		if lastSeenPub == nil {
+			return 0
+		} else {
+			return float64(math.Max(time.Since(lastSeenPub.WallTime).Seconds(), 0))
+		}
+	})
+
+	// main publisher loop:
 	for {
+		// try a non-blocking select{} first, then a blocking one. This way if the queue is
+		// nonempty, we can proceed normally, but if it's ever empty, the blocking one will fall through
+		// and we can reset the oldest-message metric before proceeding to the blocking one.
+
+		var p *Publication = nil
 		select {
 		case <-stop:
+			// we need to check the stop signal in both
 			close(timestampC)
 			return
+		case p = <-in:
+			// queue not empty, so we can proceed immediately
+			lastSeenPub = p
+		default:
+			// queue is empty, clear the metric and block until something happens
+			lastSeenPub = nil
 
-		case p := <-in:
-			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
-			err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
-			log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
-
-			if err != nil {
-				metricSendFailed.Inc()
-				log.Log.Errorw("Permanent error while trying to publish message; giving up",
-					"error", err,
-					"message", p)
-			} else {
-				metricSendSuccess.Inc()
-
-				// We want to make sure we do this *after* we've successfully published
-				// the messages
-				timestampC <- p.OplogTimestamp
+			select {
+			case <-stop:
+				// stop signal came in while we were blocked
+				close(timestampC)
+				return
+			case p = <-in:
+				// message arrived, so proceed
+				lastSeenPub = p
 			}
-
 		}
+
+		// p guaranteed to be non-nil since the only exits from the select{} sequence is
+		// getting a message or a stop signal (which would have returned already)
+
+		metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
+		err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+		lastSeenPub = nil
+		log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
+
+		if err != nil {
+			metricSendFailed.Inc()
+			log.Log.Errorw("Permanent error while trying to publish message; giving up",
+				"error", err,
+				"message", p)
+		} else {
+			metricSendSuccess.Inc()
+
+			// We want to make sure we do this *after* we've successfully published
+			// the messages
+			timestampC <- p.OplogTimestamp
+		}
+
 	}
 }
 
