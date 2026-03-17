@@ -72,6 +72,7 @@ func TestGetStartTime(t *testing.T) {
 		},
 		"Start time not in Redis, Mongo errors": {
 			mongoEndOfOplogErr: errors.New("Some mongo error"),
+			expectedResult:     mongoTS(now),
 			expectedErr:        true,
 		},
 		"Start time is in Redis, redis errors first attempt": {
@@ -126,9 +127,10 @@ func TestGetStartTime(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				if !timestampsWithinDelta(actualResult, test.expectedResult, time.Second) {
-					t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, test.expectedResult)
-				}
+			}
+
+			if !timestampsWithinDelta(actualResult, test.expectedResult, time.Second) {
+				t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, test.expectedResult)
 			}
 		})
 	}

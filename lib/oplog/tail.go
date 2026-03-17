@@ -121,8 +121,7 @@ var (
 	}, []string{"reason"})
 )
 
-// Start failure reasons used as metric labels when tailOnce fails to start.
-// tailOnce returns "": tailing started successfully (no startup failure).
+// Start failure reason labels for the metricTailFailedToStart counter.
 const (
 	startFailureSession   = "session"
 	startFailureStartTime = "start_time"
@@ -153,18 +152,14 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 
 	for {
 		log.Log.Info("Starting oplog tailing")
-		reason := tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
+		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
 		if wasStopped {
 			return
 		}
 
-		if reason != "" {
-			metricTailFailedToStart.WithLabelValues(reason).Inc()
-		}
-
-		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.", "startFailure", reason)
+		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.")
 		time.Sleep(requeryDuration)
 	}
 }
@@ -172,11 +167,12 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 // this accepts an array of PublisherChannels instances whose size is equal to the degree of write-parallelism.
 // Each incoming message will be routed to one of the PublisherChannels instances based on its parallelism key
 // (hash of the database name), then sent to every channel within that PublisherChannels instance.
-func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) string {
+func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOrdinal, readParallelism int) {
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
-		return startFailureSession
+		metricTailFailedToStart.WithLabelValues(startFailureSession).Inc()
+		return
 	}
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
@@ -212,15 +208,16 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	})
 
 	if startTimeErr != nil {
-		log.Log.Errorw("Failed to determine oplog start time", "error", startTimeErr)
-		return startFailureStartTime
+		log.Log.Errorw("Failed to determine oplog start time, falling back to current time", "error", startTimeErr)
+		metricTailFailedToStart.WithLabelValues(startFailureStartTime).Inc()
 	}
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
 		log.Log.Errorw("Error issuing initial tail query", "error", queryErr)
-		return startFailureQuery
+		metricTailFailedToStart.WithLabelValues(startFailureQuery).Inc()
+		return
 	}
 
 	lastTimestamp := startTime
@@ -228,7 +225,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 		select {
 		case <-stop:
 			log.Log.Infof("Received stop; aborting oplog tailing")
-			return ""
+			return
 		default:
 		}
 
@@ -290,7 +287,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
-					return ""
+					return
 				}
 
 				break
@@ -301,7 +298,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				if queryErr != nil {
 					log.Log.Errorw("Error issuing tail query", "error", queryErr)
-					return ""
+					return
 				}
 
 				break
@@ -311,13 +308,13 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 				closeCursor(query)
 
-				return ""
+				return
 			} else {
 				log.Log.Errorw("Got no data from cursor, but also no error. This is unexpected; restarting query")
 
 				closeCursor(query)
 
-				return ""
+				return
 			}
 		}
 	}
@@ -520,9 +517,9 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 		return *mongoOplogEndTimestamp, nil
 	}
 
-	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog.",
+	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
 		"error", mongoErr)
-	return primitive.Timestamp{}, mongoErr
+	return primitive.Timestamp{T: uint32(time.Now().Unix())}, mongoErr
 }
 
 func parseID(idRaw bson.RawValue) (id interface{}, err error) {
