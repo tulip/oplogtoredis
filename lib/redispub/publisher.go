@@ -49,7 +49,7 @@ var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "processed_messages",
-	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them and publish function index",
+	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them",
 }, []string{"status"})
 
 var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
