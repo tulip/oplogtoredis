@@ -121,13 +121,6 @@ var (
 	}, []string{"reason"})
 )
 
-// Start failure reason labels for the metricTailFailedToStart counter.
-const (
-	startFailureSession   = "session"
-	startFailureStartTime = "start_time"
-	startFailureQuery     = "query"
-)
-
 func init() {
 	prometheus.MustRegister(metricMaxOplogEntryByMinute)
 }
@@ -171,7 +164,7 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
-		metricTailFailedToStart.WithLabelValues(startFailureSession).Inc()
+		metricTailFailedToStart.WithLabelValues("session").Inc()
 		return
 	}
 
@@ -209,14 +202,14 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 
 	if startTimeErr != nil {
 		log.Log.Errorw("Failed to determine oplog start time, falling back to current time", "error", startTimeErr)
-		metricTailFailedToStart.WithLabelValues(startFailureStartTime).Inc()
+		metricTailFailedToStart.WithLabelValues("start_time").Inc()
 	}
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
 		log.Log.Errorw("Error issuing initial tail query", "error", queryErr)
-		metricTailFailedToStart.WithLabelValues(startFailureQuery).Inc()
+		metricTailFailedToStart.WithLabelValues("query").Inc()
 		return
 	}
 
