@@ -112,6 +112,13 @@ var (
 		Help:      "Histogram recording the gap in time that a tailing resume had to catchup and whether it was successful or not.",
 		Buckets:   []float64{1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000},
 	}, []string{"status"})
+
+	metricTailFailedToStart = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "tail_failed_to_start",
+		Help:      "Number of times oplog tailing failed to start, partitioned by reason",
+	}, []string{"reason"})
 )
 
 func init() {
@@ -157,12 +164,13 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	session, err := tailer.MongoClient.StartSession()
 	if err != nil {
 		log.Log.Errorw("Failed to start Mongo session", "error", err)
+		metricTailFailedToStart.WithLabelValues("session").Inc()
 		return
 	}
 
 	oplogCollection := session.Client().Database("local").Collection("oplog.rs")
 
-	startTime := tailer.getStartTime(len(out)-1, func() (*primitive.Timestamp, error) {
+	startTime, startTimeErr := tailer.getStartTime(len(out)-1, func() (*primitive.Timestamp, error) {
 		// Get the timestamp of the last entry in the oplog (as a position to
 		// start from if we don't have a last-written timestamp from Redis)
 		var entry rawOplogEntry
@@ -192,10 +200,16 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 		return &ts, nil
 	})
 
+	if startTimeErr != nil {
+		log.Log.Errorw("Failed to determine oplog start time, falling back to current time", "error", startTimeErr)
+		metricTailFailedToStart.WithLabelValues("start_time").Inc()
+	}
+
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
 
 	if queryErr != nil {
-		log.Log.Errorw("Error issuing tail query", "error", queryErr)
+		log.Log.Errorw("Error issuing initial tail query", "error", queryErr)
+		metricTailFailedToStart.WithLabelValues("query").Inc()
 		return
 	}
 
@@ -432,7 +446,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 				"op", ent.op,
 				"error", ent.err,
 				"database", ent.op.Database,
-				"collection", ent.op.Database,
+				"collection", ent.op.Collection,
 			)
 		}
 	} else if len(entries) > 0 {
@@ -447,7 +461,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 // We take the function to get the timestamp of the last oplog entry (as a
 // fallback if we don't have a latest timestamp from Redis) as an arg instead
 // of using tailer.mongoClient directly so we can unit test this function
-func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) primitive.Timestamp {
+func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry func() (*primitive.Timestamp, error)) (primitive.Timestamp, error) {
 	var redisErr error
 
 	for tries := 0; tries < config.ResumeTsReadRetries(); tries++ {
@@ -463,16 +477,16 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 					"timestamp", tsTime.Unix(),
 					"age_seconds", gapSeconds)
 				metricOplogResumeGap.WithLabelValues("success").Observe(float64(gapSeconds))
-				return ts
+				return ts, nil
 			}
 
-			log.Log.Warnw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
+			log.Log.Errorw("Found last processed timestamp, but it was too far in the past. Will start from end of oplog",
 				"timestamp", tsTime.Unix(),
 				"age_seconds", gapSeconds)
 			metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 			break
 		} else if redisErr == redis.Nil {
-			log.Log.Warnw("No last processed timestamp found in Redis. Will start from end of oplog.",
+			log.Log.Errorw("No last processed timestamp found in Redis. Will start from end of oplog.",
 				"attempt", tries)
 			break
 		} else if (redisErr != nil) && (redisErr != redis.Nil) {
@@ -493,12 +507,12 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 	if mongoErr == nil {
 		log.Log.Infow("Starting tailing from end of oplog",
 			"timestamp", mongoOplogEndTimestamp.T)
-		return *mongoOplogEndTimestamp
+		return *mongoOplogEndTimestamp, nil
 	}
 
 	log.Log.Errorw("Got error when asking for last operation timestamp in the oplog. Returning current time.",
 		"error", mongoErr)
-	return primitive.Timestamp{T: uint32(time.Now().Unix())}
+	return primitive.Timestamp{T: uint32(time.Now().Unix())}, mongoErr
 }
 
 func parseID(idRaw bson.RawValue) (id interface{}, err error) {

@@ -65,8 +65,8 @@ var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 	Namespace: "otr",
 	Subsystem: "redispub",
 	Name:      "processed_messages",
-	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them and publish function index",
-}, []string{"status", "idx"})
+	Help:      "Messages processed by Redis publisher, partitioned by whether or not we successfully sent them",
+}, []string{"status"})
 
 var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Namespace: "otr",
@@ -115,79 +115,112 @@ var metricOplogEntryStaleness = promauto.NewHistogramVec(prometheus.HistogramOpt
 
 // PublishStream reads Publications from the given channel and publishes them
 // to Redis.
-func PublishStream(clients []redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int) {
+func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *PublishOpts, stop <-chan bool, ordinal int, clientIndex int) {
 
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
 	timestampC := make(chan primitive.Timestamp)
-	for _, client := range clients {
-		go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
-	}
+	go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
 
 	// Redis expiration is in integer seconds, so we have to convert the
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	type PubFn func([]*Publication) error
+	publishFn := func(batch []*Publication) error {
+		return publishBatch(batch, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
+	}
 
-	var publishFns []PubFn
+	metricSendFailed := metricSentMessages.WithLabelValues("failed")
+	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
 
-	for _, client := range clients {
-		client := client
-		publishFn := func(batch []*Publication) error {
-			return publishBatch(batch, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
+	batchSize := config.RedisBatchSize()
+
+	// this is the oldest publication that has been pulled from the channel but
+	// not yet successfully published. It drives the oldest_message_age metric.
+	// 		- 	if the queue is empty between batches, this is cleared (since it
+	// 			will have been cleared after the last publish and we are blocking)
+	//		- 	if a publish is stalled, this is the oldest item in the in-flight
+	//			batch (i.e. batch[0])
+	//		-	under normal operation, this will cycle rapidly
+	var lastSeenPub *Publication = nil
+
+	promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   "otr",
+		Subsystem:   "redispub",
+		Name:        "oldest_message_age",
+		Help:        "Gauge indicating the age of the oldest seen-but-unprocessed message.",
+		ConstLabels: prometheus.Labels{"ordinal": strconv.Itoa(ordinal), "clientIndex": strconv.Itoa(clientIndex)},
+	}, func() float64 {
+		if lastSeenPub == nil {
+			return 0
 		}
-		publishFns = append(publishFns, publishFn)
-	}
+		return math.Max(time.Since(lastSeenPub.WallTime).Seconds(), 0)
+	})
 
-	publishFnsCount := len(publishFns)
-	metricsSendFailed := make([]prometheus.Counter, publishFnsCount)  //metricSentMessages.WithLabelValues("failed")
-	metricsSendSuccess := make([]prometheus.Counter, publishFnsCount) //metricSentMessages.WithLabelValues("sent")
-	for i := 0; i < publishFnsCount; i++ {
-		idx := strconv.Itoa(i)
-		metricsSendFailed[i] = metricSentMessages.WithLabelValues("failed", idx)
-		metricsSendSuccess[i] = metricSentMessages.WithLabelValues("sent", idx)
-	}
-	var batchSize = config.RedisBatchSize()
-
+	// main publisher loop:
 	for {
+		// try a non-blocking select{} first, then a blocking one. This way if the queue is
+		// nonempty, we can proceed normally, but if it's ever empty, the blocking one will fall through
+		// and we can reset the oldest-message metric before proceeding to the blocking one.
+
+		var p *Publication = nil
 		select {
 		case <-stop:
+			// we need to check the stop signal in both
 			close(timestampC)
 			return
+		case p = <-in:
+			// queue not empty, so we can proceed immediately
+		default:
+			// queue is empty, clear the metric and block until something happens
+			lastSeenPub = nil
 
-		case p := <-in:
-			batch := []*Publication{p}
-			// Try to fill batch with buffer backlog
-			// (the label is needed to break out of both the select and for loop)
-		FillBatch:
-			for len(batch) < batchSize {
-				select {
-				case p2 := <-in:
-					batch = append(batch, p2)
-				default:
-					break FillBatch
-				}
+			select {
+			case <-stop:
+				// stop signal came in while we were blocked
+				close(timestampC)
+				return
+			case p = <-in:
+				// message arrived, so proceed
 			}
-			log.Log.Debugw("Batch size", "len(batch)", len(batch))
-			metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(batch[0].WallTime).Seconds())
-			for i, publishFn := range publishFns {
-				err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
-				log.Log.Debugw("Published to", "idx", i)
+		}
 
-				if err != nil {
-					metricsSendFailed[i].Add(float64(len(batch)))
-					log.Log.Errorw("Permanent error while trying to publish message; giving up",
-						"error", err,
-						"batchSize", len(batch))
-				} else {
-					metricsSendSuccess[i].Add(float64(len(batch)))
+		// p guaranteed to be non-nil since the only exits from the select{} sequence is
+		// getting a message or a stop signal (which would have returned already)
 
-					// We want to make sure we do this *after* we've successfully published
-					// the messages
-					timestampC <- batch[len(batch)-1].OplogTimestamp
-				}
+		batch := []*Publication{p}
+		// lastSeenPub tracks the oldest in-flight item; don't advance it as we
+		// fill the batch, so the metric reports the age of the head of the batch.
+		lastSeenPub = p
+
+		// Try to fill batch with buffer backlog
+		// (the label is needed to break out of both the select and for loop)
+	FillBatch:
+		for len(batch) < batchSize {
+			select {
+			case p2 := <-in:
+				batch = append(batch, p2)
+			default:
+				break FillBatch
 			}
+		}
+		log.Log.Debugw("Batch size", "len(batch)", len(batch))
+		metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(batch[0].WallTime).Seconds())
+
+		err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
+		log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
+
+		if err != nil {
+			metricSendFailed.Add(float64(len(batch)))
+			log.Log.Errorw("Permanent error while trying to publish message; giving up",
+				"error", err,
+				"batchSize", len(batch))
+		} else {
+			metricSendSuccess.Add(float64(len(batch)))
+
+			// We want to make sure we do this *after* we've successfully published
+			// the messages
+			timestampC <- batch[len(batch)-1].OplogTimestamp
 		}
 	}
 }
