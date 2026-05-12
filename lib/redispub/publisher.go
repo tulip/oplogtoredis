@@ -261,7 +261,13 @@ func publishBatch(batch []*Publication, client redis.UniversalClient, prefix str
 	args = append(args, dedupeExpirationSeconds)
 
 	for i, p := range batch {
+		if p == nil {
+			log.Log.Warn("got nil publication in batch")
+			continue
+		}
 		keys[i] = formatKey(p, prefix)
+		// The channels are a single string with channels separated by '$' characters.
+		// See the publishDedupe script for details.
 		args = append(args, p.Msg, strings.Join(p.Channels, "$"))
 	}
 
