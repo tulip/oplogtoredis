@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tulip/oplogtoredis/lib/config"
 	"github.com/tulip/oplogtoredis/lib/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
@@ -28,21 +29,36 @@ type PublishOpts struct {
 	MetadataPrefix   string
 }
 
-// This script checks whether KEYS[1] is set. If it is, it does nothing. It not,
-// it sets the key, using ARGV[1] as the expiration, and then publishes the
-// message ARGV[2] to channels ARGV[3] and ARGV[4]. Returns 1 if published.
-// Note that an int is returned here as a boolean false is interpreted as an error.
+// This script checks whether the keys in KEYS are set. If a key is set, it does
+// nothing. If not, it sets the key, using ARGV[1] as the expiration, and then
+// publishes the corresponding message from ARGV to the channels from ARGV.
+// The keys, messages, and channels are interleaved in ARGV, so for key KEYS[i],
+// the message is at ARGV[2 + (i-1)*2] and the channels are at ARGV[3 + (i-1)*2].
+// Because the first ARGV is the expiration, there's an offset between KEYS and
+// ARGV indices which is the reason for the (i-1).
+// The channels are a single string with channels separated by '$' characters.
+// Returns an array of integers, where 1 means published and 0 means duplicate.
 var publishDedupe = redis.NewScript(`
-	local res = 0
-	if redis.call("GET", KEYS[1]) == false then
-		redis.call("SETEX", KEYS[1], ARGV[1], 1)
-		for w in string.gmatch(ARGV[3], "([^$]+)") do
-			redis.call("PUBLISH", w, ARGV[2])
+	local results = {}
+	local expiration = ARGV[1]
+
+	for i = 1, #KEYS do
+		local key = KEYS[i]
+		local msg = ARGV[2 + (i-1)*2]
+		local channels = ARGV[3 + (i-1)*2]
+
+		if redis.call("GET", key) == false then
+			redis.call("SETEX", key, expiration, 1)
+			for w in string.gmatch(channels, "([^$]+)") do
+				redis.call("PUBLISH", w, msg)
+			end
+			table.insert(results, 1)
+		else
+			table.insert(results, 0)
 		end
-		res = 1
 	end
 
-	return res
+	return results
 `)
 
 var metricSentMessages = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -58,6 +74,14 @@ var metricTemporaryFailures = promauto.NewCounter(prometheus.CounterOpts{
 	Name:      "temporary_send_failures",
 	Help:      "Number of failures encountered when trying to send a message. We automatically retry, and only register a permanent failure (in otr_redispub_processed_messages) after 30 failures.",
 })
+
+var redisBatchSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Namespace: "otr",
+	Subsystem: "redispub",
+	Name:      "redis_batch_size",
+	Help:      "A histogram recording the size of the publication batches sent to redis.",
+	Buckets:   []float64{1, 2, 5, 10, 18, 25, 50, 100},
+}, []string{"status", "ordinal"})
 
 var redisCommandDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Namespace: "otr",
@@ -102,20 +126,21 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 	// time.Duration
 	dedupeExpirationSeconds := int(opts.DedupeExpiration.Seconds())
 
-	publishFn := func(p *Publication) error {
-		return publishSingleMessage(p, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
+	publishFn := func(batch []*Publication) error {
+		return publishBatch(batch, client, opts.MetadataPrefix, dedupeExpirationSeconds, ordinal)
 	}
 
 	metricSendFailed := metricSentMessages.WithLabelValues("failed")
 	metricSendSuccess := metricSentMessages.WithLabelValues("sent")
 
-	// this is the item that is logically at the head of the queue
-	// populate it every time something is pulled from the channel, and clear it if the channel becomes empty
-	// since the queue is in reverse chronological order, this is the oldest item, so we use it
-	// to drive that metric.
-	// 		- 	if the queue is empty, this will be nil (since it will have been cleared after
-	// 			the last publish and we are blocking)
-	//		- 	if the publish is stalled, this will be the item that is stuck trying to publish
+	batchSize := config.RedisBatchSize()
+
+	// this is the oldest publication that has been pulled from the channel but
+	// not yet successfully published. It drives the oldest_message_age metric.
+	// 		- 	if the queue is empty between batches, this is cleared (since it
+	// 			will have been cleared after the last publish and we are blocking)
+	//		- 	if a publish is stalled, this is the oldest item in the in-flight
+	//			batch (i.e. batch[0])
 	//		-	under normal operation, this will cycle rapidly
 	var lastSeenPub *Publication = nil
 
@@ -128,9 +153,8 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 	}, func() float64 {
 		if lastSeenPub == nil {
 			return 0
-		} else {
-			return float64(math.Max(time.Since(lastSeenPub.WallTime).Seconds(), 0))
 		}
+		return math.Max(time.Since(lastSeenPub.WallTime).Seconds(), 0)
 	})
 
 	// main publisher loop:
@@ -147,7 +171,6 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 			return
 		case p = <-in:
 			// queue not empty, so we can proceed immediately
-			lastSeenPub = p
 		default:
 			// queue is empty, clear the metric and block until something happens
 			lastSeenPub = nil
@@ -159,41 +182,57 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 				return
 			case p = <-in:
 				// message arrived, so proceed
-				lastSeenPub = p
 			}
 		}
 
 		// p guaranteed to be non-nil since the only exits from the select{} sequence is
 		// getting a message or a stop signal (which would have returned already)
 
-		metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(p.WallTime).Seconds())
-		err := publishSingleMessageWithRetries(p, 30, time.Second, publishFn)
+		batch := []*Publication{p}
+		// lastSeenPub tracks the oldest in-flight item; don't advance it as we
+		// fill the batch, so the metric reports the age of the head of the batch.
+		lastSeenPub = p
+
+		// Try to fill batch with buffer backlog
+		// (the label is needed to break out of both the select and for loop)
+	FillBatch:
+		for len(batch) < batchSize {
+			select {
+			case p2 := <-in:
+				batch = append(batch, p2)
+			default:
+				break FillBatch
+			}
+		}
+		log.Log.Debugw("Batch size", "len(batch)", len(batch))
+		metricStalenessPreRetries.WithLabelValues(strconv.Itoa(ordinal)).Set(time.Since(batch[0].WallTime).Seconds())
+
+		err := publishBatchWithRetries(batch, 30, time.Second, publishFn)
 		log.Log.Debugw("Published to", "ordinal", ordinal, "clientIndex", clientIndex)
 
 		if err != nil {
-			metricSendFailed.Inc()
+			metricSendFailed.Add(float64(len(batch)))
 			log.Log.Errorw("Permanent error while trying to publish message; giving up",
 				"error", err,
-				"message", p)
+				"batchSize", len(batch))
 		} else {
-			metricSendSuccess.Inc()
+			metricSendSuccess.Add(float64(len(batch)))
 
 			// We want to make sure we do this *after* we've successfully published
 			// the messages
-			timestampC <- p.OplogTimestamp
+			timestampC <- batch[len(batch)-1].OplogTimestamp
 		}
-
 	}
 }
 
-func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime time.Duration, publishFn func(p *Publication) error) error {
-	if p == nil {
-		return errors.New("Nil Redis publication")
+func publishBatchWithRetries(batch []*Publication, maxRetries int, sleepTime time.Duration, publishFn func(batch []*Publication) error) error {
+	if len(batch) == 0 {
+		return nil
 	}
 
 	retries := 0
 	for retries < maxRetries {
-		err := publishFn(p)
+		err := publishFn(batch)
 
 		if err != nil {
 			log.Log.Errorw("Error publishing message, will retry",
@@ -201,7 +240,7 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 				"retryNumber", retries)
 
 			// failure, retry
-			metricTemporaryFailures.Inc()
+			metricTemporaryFailures.Add(float64(len(batch)))
 			retries++
 			time.Sleep(sleepTime)
 		} else {
@@ -213,51 +252,64 @@ func publishSingleMessageWithRetries(p *Publication, maxRetries int, sleepTime t
 	return errors.Errorf("sending message (retried %v times)", maxRetries)
 }
 
-func publishSingleMessage(p *Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
+func publishBatch(batch []*Publication, client redis.UniversalClient, prefix string, dedupeExpirationSeconds int, ordinal int) error {
 	start := time.Now()
 	ordinalStr := strconv.Itoa(ordinal)
 
-	// Clock skew can cause the difference between Mongo's reported wall time and
-	// OTR's current time to be a negative value. During a metrics scrape, if
-	// these negative values cause the histogram sum to be negative, Prometheus
-	// will treat it as a metric reset because the sum is otherwise assumed to be
-	// monotonic. As a result, Grafana charts that use the histogram sum will
-	// have artifacts, e.g. large spikes.
-	//
-	// The skew should only be a few milliseconds at most when using NTP, so the
-	// simplest fix is to round up to 0.
-	staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
+	keys := make([]string, len(batch))
+	args := make([]interface{}, 0, 1+len(batch)*2)
+	args = append(args, dedupeExpirationSeconds)
+
+	for i, p := range batch {
+		if p == nil {
+			log.Log.Warn("got nil publication in batch")
+			continue
+		}
+		keys[i] = formatKey(p, prefix)
+		// The channels are a single string with channels separated by '$' characters.
+		// See the publishDedupe script for details.
+		args = append(args, p.Msg, strings.Join(p.Channels, "$"))
+	}
 
 	res, err := publishDedupe.Run(
 		context.Background(),
 		client,
-		[]string{
-			// The key used for deduplication
-			// The oplog timestamp isn't really a timestamp -- it's a 64-bit int
-			// where the first 32 bits are a unix timestamp (seconds since
-			// the epoch), and the next 32 bits are a monotonically-increasing
-			// sequence number for operations within that second. It's
-			// guaranteed-unique, so we can use it for deduplication.
-			// However, timestamps are shared within transactions, so we need more information to ensure uniqueness.
-			// The TxIdx field is used to ensure that each entry in a transaction has its own unique key.
-			formatKey(p, prefix),
-		},
-		dedupeExpirationSeconds,       // ARGV[1], expiration time
-		p.Msg,                         // ARGV[2], message
-		strings.Join(p.Channels, "$"), // ARGV[3], channels
-	).Int()
+		keys,
+		args...,
+	).Slice()
 
-	var status string
-	if res == 1 {
-		status = "published"
-	} else {
-		status = "duplicate"
+	if err != nil {
+		redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
+		redisBatchSize.WithLabelValues("failed", ordinalStr).Observe(float64(len(batch)))
+		return err
 	}
-	metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
-	metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
+	redisBatchSize.WithLabelValues("sent", ordinalStr).Observe(float64(len(batch)))
+
+	for i, item := range res {
+		p := batch[i]
+		// Clock skew can cause the difference between Mongo's reported wall time and
+		// OTR's current time to be a negative value. During a metrics scrape, if
+		// these negative values cause the histogram sum to be negative, Prometheus
+		// will treat it as a metric reset because the sum is otherwise assumed to be
+		// monotonic. As a result, Grafana charts that use the histogram sum will
+		// have artifacts, e.g. large spikes.
+		//
+		// The skew should only be a few milliseconds at most when using NTP, so the
+		// simplest fix is to round up to 0.
+		staleness := math.Max(time.Since(p.WallTime).Seconds(), 0)
+
+		var status string
+		if item.(int64) == 1 {
+			status = "published"
+		} else {
+			status = "duplicate"
+		}
+		metricLastOplogEntryStaleness.WithLabelValues(ordinalStr, status).Set(staleness)
+		metricOplogEntryStaleness.WithLabelValues(ordinalStr, status).Observe(staleness)
+	}
 
 	redisCommandDuration.WithLabelValues(ordinalStr).Observe(time.Since(start).Seconds())
-	return err
+	return nil
 }
 
 func formatKey(p *Publication, prefix string) string {
