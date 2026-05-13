@@ -31,7 +31,7 @@ type oplogtoredisConfiguration struct {
 	SentryRelease                 string        `default:"unknown" split_words:"true"`
 	ResumeTsReadRetries           int           `default:"5" split_words:"true"`
 	ResumeTsReadRetryDelay        time.Duration `default:"500ms" split_words:"true"`
-	RedisBatchSize		          int           `default:"25" split_words:"true"`
+	RedisBatchSize		            int           `default:"1" split_words:"true"`
 }
 
 var globalConfig *oplogtoredisConfiguration
