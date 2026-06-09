@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/tulip/oplogtoredis/lib/config"
 )
 
 func encodeMongoTimestamp(ts primitive.Timestamp) string {
@@ -41,6 +43,11 @@ func timestampsWithinDelta(d1, d2 primitive.Timestamp, delta time.Duration) bool
 }
 
 func TestGetStartTime(t *testing.T) {
+	// Use a tiny retry delay so the persistent-failure case, which exhausts all
+	// retries, completes well within the unit test timeout (CI runs -timeout 5s).
+	t.Setenv("OTR_RESUME_TS_READ_RETRY_DELAY", "1ms")
+	require.NoError(t, config.ParseEnv())
+
 	now := time.Now()
 	maxCatchUp := time.Minute
 	notTooOld := now.Add(-30 * time.Second)
