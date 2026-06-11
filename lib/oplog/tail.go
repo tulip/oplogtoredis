@@ -53,6 +53,21 @@ type cursorResultStatus struct {
 
 const requeryDuration = time.Second
 
+// maxConsecutivePrematureStops is the number of times oplog tailing can stop
+// prematurely in a row before we escalate the log from a warning to an error.
+// A single premature stop is usually a transient blip (e.g. a brief Mongo
+// connection hiccup) that we recover from on the next retry, so it shouldn't
+// page anyone. Repeated back-to-back failures indicate a persistent problem
+// worth surfacing as an error.
+const maxConsecutivePrematureStops = 5
+
+// minSuccessfulTailDuration is how long a single tailing attempt must run
+// before we consider it to have made progress. An attempt that lasts at least
+// this long before stopping resets the consecutive-failure streak, so that
+// occasional premature stops during otherwise-healthy operation don't
+// accumulate toward the error threshold.
+const minSuccessfulTailDuration = time.Minute
+
 var (
 	// Deprecated: use metricOplogEntriesBySize instead
 	metricOplogEntriesReceived = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -143,8 +158,10 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 		childStopC <- true
 	}()
 
+	consecutivePrematureStops := 0
 	for {
 		log.Log.Info("Starting oplog tailing")
+		tailStart := time.Now()
 		tailer.tailOnce(out, childStopC, readOrdinal, readParallelism)
 		log.Log.Info("Oplog tailing ended")
 
@@ -152,9 +169,41 @@ func (tailer *Tailer) Tail(out []PublisherChannels, stop <-chan bool, readOrdina
 			return
 		}
 
-		log.Log.Errorw("Oplog tailing stopped prematurely. Waiting a second an then retrying.")
+		// Track how many times tailing has stopped prematurely in a row. An
+		// attempt that ran long enough to be considered healthy resets the
+		// streak so that an isolated premature stop during normal operation
+		// doesn't count toward the error threshold.
+		consecutivePrematureStops = nextPrematureStopStreak(consecutivePrematureStops, time.Since(tailStart))
+
+		// A single premature stop is usually transient and recoverable, so log
+		// it as a warning. Only escalate to an error once we've failed
+		// repeatedly in a row, which indicates a persistent problem.
+		if prematureStopIsError(consecutivePrematureStops) {
+			log.Log.Errorw("Oplog tailing repeatedly stopped prematurely. Waiting a second and then retrying.",
+				"consecutivePrematureStops", consecutivePrematureStops)
+		} else {
+			log.Log.Warnw("Oplog tailing stopped prematurely. Waiting a second and then retrying.",
+				"consecutivePrematureStops", consecutivePrematureStops)
+		}
 		time.Sleep(requeryDuration)
 	}
+}
+
+// nextPrematureStopStreak returns the updated count of consecutive premature
+// tailing stops given the duration the just-finished attempt ran for. If the
+// attempt ran long enough to be considered healthy, the streak resets before
+// counting this stop.
+func nextPrematureStopStreak(streak int, ranFor time.Duration) int {
+	if ranFor >= minSuccessfulTailDuration {
+		streak = 0
+	}
+	return streak + 1
+}
+
+// prematureStopIsError reports whether a streak of consecutive premature stops
+// is large enough to be logged as an error rather than a warning.
+func prematureStopIsError(streak int) bool {
+	return streak >= maxConsecutivePrematureStops
 }
 
 // this accepts an array of PublisherChannels instances whose size is equal to the degree of write-parallelism.
