@@ -63,6 +63,9 @@ func TestGetStartTime(t *testing.T) {
 		redisErrAttempts int
 		expectedResult   primitive.Timestamp
 		expectedErr      bool
+		// resumeFromEndOnFailure sets the OTR_RESUME_FROM_END_ON_FAILURE escape hatch
+		// for this subtest.
+		resumeFromEndOnFailure bool
 		// expectMongoFallback indicates whether getStartTime should consult the Mongo
 		// end-of-oplog fallback. On a persistent Redis read failure it must NOT, since
 		// that would silently skip oplog entries.
@@ -108,10 +111,31 @@ func TestGetStartTime(t *testing.T) {
 			expectedErr:         true,
 			expectMongoFallback: false,
 		},
+		"Start time read from Redis fails persistently, escape hatch enabled": {
+			// With OTR_RESUME_FROM_END_ON_FAILURE set, a persistent read failure
+			// falls back to the end of the oplog (the pre-retry behavior) instead
+			// of returning an error.
+			redisTimestamp:         mongoTS(notTooOld),
+			mongoEndOfOplog:        mongoTS(tooOld),
+			redisErr:               "redis: all sentinels specified in configuration are unreachable",
+			redisErrAttempts:       1000,
+			resumeFromEndOnFailure: true,
+			expectedResult:         mongoTS(tooOld),
+			expectMongoFallback:    true,
+		},
 	}
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
+			// Set explicitly (and re-parse) every subtest so config state from the
+			// escape-hatch case doesn't leak into others via the shared global config
+			// (subtests run in randomized order).
+			if test.resumeFromEndOnFailure {
+				t.Setenv("OTR_RESUME_FROM_END_ON_FAILURE", "true")
+			} else {
+				t.Setenv("OTR_RESUME_FROM_END_ON_FAILURE", "false")
+			}
+			require.NoError(t, config.ParseEnv())
 
 			redisServer, err := miniredis.Run()
 			if err != nil {

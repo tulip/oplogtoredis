@@ -506,12 +506,24 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 	// oplog here would silently skip every entry written since our last processed
 	// timestamp, so instead we return the error and let the caller restart and retry.
 	// If we can't read from Redis, we can't write to it either, so retrying is correct.
+	//
+	// The OTR_RESUME_FROM_END_ON_FAILURE escape hatch overrides this: if set, we fall
+	// back to the end of the oplog (the pre-retry behavior) rather than blocking
+	// startup, accepting the risk of skipping entries.
 	if redisErr != nil && !errors.Is(redisErr, redis.Nil) {
-		metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
+		if !config.ResumeFromEndOnFailure() {
+			metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
+			log.Log.Errorw("Error querying Redis for last processed timestamp after exhausting retries; "+
+				"aborting tail attempt so it can be retried rather than skipping oplog entries",
+				"error", redisErr)
+			return primitive.Timestamp{}, redisErr
+		}
+
 		log.Log.Errorw("Error querying Redis for last processed timestamp after exhausting retries; "+
-			"aborting tail attempt so it can be retried rather than skipping oplog entries",
+			"OTR_RESUME_FROM_END_ON_FAILURE is set, so falling back to the end of the oplog "+
+			"(this may skip oplog entries)",
 			"error", redisErr)
-		return primitive.Timestamp{}, redisErr
+		metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
 	}
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
