@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/tulip/oplogtoredis/lib/config"
 )
 
 func encodeMongoTimestamp(ts primitive.Timestamp) string {
@@ -41,6 +43,11 @@ func timestampsWithinDelta(d1, d2 primitive.Timestamp, delta time.Duration) bool
 }
 
 func TestGetStartTime(t *testing.T) {
+	// Use a tiny retry delay so the persistent-failure case, which exhausts all
+	// retries, completes well within the unit test timeout (CI runs -timeout 5s).
+	t.Setenv("OTR_RESUME_TS_READ_RETRY_DELAY", "1ms")
+	require.NoError(t, config.ParseEnv())
+
 	now := time.Now()
 	maxCatchUp := time.Minute
 	notTooOld := now.Add(-30 * time.Second)
@@ -51,39 +58,84 @@ func TestGetStartTime(t *testing.T) {
 		mongoEndOfOplog    primitive.Timestamp
 		mongoEndOfOplogErr error
 		redisErr           string
-		expectedResult     primitive.Timestamp
-		expectedErr        bool
+		// redisErrAttempts is the number of leading GET calls that should fail with
+		// redisErr. Use a large value to simulate a persistent (unrecoverable) failure.
+		redisErrAttempts int
+		expectedResult   primitive.Timestamp
+		expectedErr      bool
+		// resumeFromEndOnFailure sets the OTR_RESUME_FROM_END_ON_FAILURE escape hatch
+		// for this subtest.
+		resumeFromEndOnFailure bool
+		// expectMongoFallback indicates whether getStartTime should consult the Mongo
+		// end-of-oplog fallback. On a persistent Redis read failure it must NOT, since
+		// that would silently skip oplog entries.
+		expectMongoFallback bool
 	}{
 		"Start time is in Redis": {
 			redisTimestamp: mongoTS(notTooOld),
 			expectedResult: mongoTS(notTooOld),
 		},
 		"Start time is in redis, but too old": {
-			redisTimestamp:  mongoTS(tooOld),
-			mongoEndOfOplog: mongoTS(notTooOld),
-			expectedResult:  mongoTS(notTooOld),
+			redisTimestamp:      mongoTS(tooOld),
+			mongoEndOfOplog:     mongoTS(notTooOld),
+			expectedResult:      mongoTS(notTooOld),
+			expectMongoFallback: true,
 		},
 		"Start time not in Redis": {
 			// We use tooOld here to make sure we're not applying any kind
 			// of cutoff to the latest oplog entry -- it's always fine to use
 			// that regardless of how old it is
-			mongoEndOfOplog: mongoTS(tooOld),
-			expectedResult:  mongoTS(tooOld),
+			mongoEndOfOplog:     mongoTS(tooOld),
+			expectedResult:      mongoTS(tooOld),
+			expectMongoFallback: true,
 		},
 		"Start time not in Redis, Mongo errors": {
-			mongoEndOfOplogErr: errors.New("Some mongo error"),
-			expectedResult:     mongoTS(now),
-			expectedErr:        true,
+			mongoEndOfOplogErr:  errors.New("Some mongo error"),
+			expectedResult:      mongoTS(now),
+			expectedErr:         true,
+			expectMongoFallback: true,
 		},
-		"Start time is in Redis, redis errors first attempt": {
-			redisTimestamp: mongoTS(notTooOld),
-			expectedResult: mongoTS(notTooOld),
-			redisErr:       "Some transient redis error",
+		"Start time is in Redis, redis errors first few attempts": {
+			redisTimestamp:   mongoTS(notTooOld),
+			expectedResult:   mongoTS(notTooOld),
+			redisErr:         "Some transient redis error",
+			redisErrAttempts: 3,
+		},
+		"Start time read from Redis fails persistently": {
+			// Every read attempt fails. We must NOT fall back to the end of the
+			// oplog (which would skip entries); instead getStartTime should return
+			// an error so the tailer restarts and retries.
+			redisTimestamp:      mongoTS(notTooOld),
+			redisErr:            "redis: all sentinels specified in configuration are unreachable",
+			redisErrAttempts:    1000,
+			expectedErr:         true,
+			expectMongoFallback: false,
+		},
+		"Start time read from Redis fails persistently, escape hatch enabled": {
+			// With OTR_RESUME_FROM_END_ON_FAILURE set, a persistent read failure
+			// falls back to the end of the oplog (the pre-retry behavior) instead
+			// of returning an error.
+			redisTimestamp:         mongoTS(notTooOld),
+			mongoEndOfOplog:        mongoTS(tooOld),
+			redisErr:               "redis: all sentinels specified in configuration are unreachable",
+			redisErrAttempts:       1000,
+			resumeFromEndOnFailure: true,
+			expectedResult:         mongoTS(tooOld),
+			expectMongoFallback:    true,
 		},
 	}
 
 	for testName, test := range tests {
 		t.Run(testName, func(t *testing.T) {
+			// Set explicitly (and re-parse) every subtest so config state from the
+			// escape-hatch case doesn't leak into others via the shared global config
+			// (subtests run in randomized order).
+			if test.resumeFromEndOnFailure {
+				t.Setenv("OTR_RESUME_FROM_END_ON_FAILURE", "true")
+			} else {
+				t.Setenv("OTR_RESUME_FROM_END_ON_FAILURE", "false")
+			}
+			require.NoError(t, config.ParseEnv())
 
 			redisServer, err := miniredis.Run()
 			if err != nil {
@@ -92,9 +144,9 @@ func TestGetStartTime(t *testing.T) {
 			defer redisServer.Close()
 
 			redisGetErrorCount := 0
-			// Register a hook so we can clear the error
+			// Register a hook so we can fail the configured number of leading GETs
 			redisServer.Server().SetPreHook(func(c *server.Peer, cmd string, args ...string) bool {
-				if cmd == "GET" && test.redisErr != "" && redisGetErrorCount < 3 {
+				if cmd == "GET" && test.redisErr != "" && redisGetErrorCount < test.redisErrAttempts {
 					redisGetErrorCount += 1
 					c.WriteError(test.redisErr)
 					return true
@@ -115,7 +167,9 @@ func TestGetStartTime(t *testing.T) {
 				Denylist:     &sync.Map{},
 			}
 
+			mongoFallbackCalled := false
 			actualResult, err := tailer.getStartTime(0, func() (*primitive.Timestamp, error) {
+				mongoFallbackCalled = true
 				if test.mongoEndOfOplogErr != nil {
 					return nil, test.mongoEndOfOplogErr
 				}
@@ -129,8 +183,22 @@ func TestGetStartTime(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			if !timestampsWithinDelta(actualResult, test.expectedResult, time.Second) {
-				t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, test.expectedResult)
+			require.Equal(t, test.expectMongoFallback, mongoFallbackCalled,
+				"unexpected use of the Mongo end-of-oplog fallback")
+
+			// On a persistent Redis read failure we must not return a usable start
+			// time at all, so skip the timestamp comparison for that case.
+			if !test.expectedErr || test.expectMongoFallback {
+				expectedResult := test.expectedResult
+				if test.mongoEndOfOplogErr != nil {
+					// The Mongo-error fallback returns the current time, so compare against
+					// the clock now rather than a value captured at the start of the test
+					// (other slow subtests can otherwise push us past the delta).
+					expectedResult = mongoTS(time.Now())
+				}
+				if !timestampsWithinDelta(actualResult, expectedResult, time.Second) {
+					t.Errorf("Result was incorrect. Got %d, expected %d", actualResult, expectedResult)
+				}
 			}
 		})
 	}

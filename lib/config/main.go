@@ -31,6 +31,7 @@ type oplogtoredisConfiguration struct {
 	SentryRelease                 string        `default:"unknown" split_words:"true"`
 	ResumeTsReadRetries           int           `default:"5" split_words:"true"`
 	ResumeTsReadRetryDelay        time.Duration `default:"500ms" split_words:"true"`
+	ResumeFromEndOnFailure        bool          `default:"false" split_words:"true"`
 	RedisBatchSize		            int           `default:"1" split_words:"true"`
 }
 
@@ -198,6 +199,23 @@ func ResumeTsReadRetries() int {
 // e.g., third attempt = 500ms * 3 = 1.5s delay before next attempt.
 func ResumeTsReadRetryDelay() time.Duration {
 	return globalConfig.ResumeTsReadRetryDelay
+}
+
+// ResumeFromEndOnFailure controls the behavior when reading the resume
+// timestamp from Redis fails persistently (i.e. after exhausting
+// ResumeTsReadRetries). By default (false), oplogtoredis aborts the tail
+// attempt and retries rather than skipping ahead, since a failure to read the
+// resume timestamp would otherwise silently drop every oplog entry written
+// since the last processed position.
+//
+// This flag is an escape hatch: if set to true, a persistent read failure
+// falls back to starting from the end of the oplog (the pre-retry behavior),
+// at the cost of potentially skipping oplog entries. Use this only if an
+// unanticipated situation is blocking startup and you would rather resume from
+// the end of the oplog than stay down. It is set via the environment variable
+// `OTR_RESUME_FROM_END_ON_FAILURE` and defaults to false.
+func ResumeFromEndOnFailure() bool {
+	return globalConfig.ResumeFromEndOnFailure
 }
 
 // RedisBatchSize is the maximum number of publications to batch per redis call

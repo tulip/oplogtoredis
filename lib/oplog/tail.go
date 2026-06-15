@@ -250,8 +250,9 @@ func (tailer *Tailer) tailOnce(out []PublisherChannels, stop <-chan bool, readOr
 	})
 
 	if startTimeErr != nil {
-		log.Log.Errorw("Failed to determine oplog start time, falling back to current time", "error", startTimeErr)
+		log.Log.Errorw("Failed to determine oplog start time; aborting tail attempt to retry", "error", startTimeErr)
 		metricTailFailedToStart.WithLabelValues("start_time").Inc()
+		return
 	}
 
 	query, queryErr := issueOplogFindQuery(oplogCollection, startTime)
@@ -515,7 +516,10 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 
 	for tries := 0; tries < config.ResumeTsReadRetries(); tries++ {
 		// Get the earliest "last processed time" for each shard. This assumes that the number of shards is constant.
-		ts, tsTime, redisErr := redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
+		// Note: assign to the outer redisErr (with =, not :=) so the post-loop handler can see a persistent failure.
+		var ts primitive.Timestamp
+		var tsTime time.Time
+		ts, tsTime, redisErr = redispub.FirstLastProcessedTimestamp(tailer.RedisClients[0], tailer.RedisPrefix, maxOrdinal)
 
 		if redisErr == nil {
 			gapSeconds := time.Since(tsTime) / time.Second
@@ -534,11 +538,11 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 				"age_seconds", gapSeconds)
 			metricOplogResumeGap.WithLabelValues("failed").Observe(float64(gapSeconds))
 			break
-		} else if redisErr == redis.Nil {
+		} else if errors.Is(redisErr, redis.Nil) {
 			log.Log.Errorw("No last processed timestamp found in Redis. Will start from end of oplog.",
 				"attempt", tries)
 			break
-		} else if (redisErr != nil) && (redisErr != redis.Nil) {
+		} else {
 			log.Log.Warnw("Error querying Redis for last processed timestamp. Will retry.",
 				"attempt", tries,
 				"error", redisErr)
@@ -546,10 +550,29 @@ func (tailer *Tailer) getStartTime(maxOrdinal int, getTimestampOfLastOplogEntry 
 		}
 	}
 
-	if redisErr != nil {
-		metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
-		log.Log.Errorw("Error querying Redis for last processed timestamp. Will start from end of oplog.",
+	// A genuine read failure (as opposed to redis.Nil, which means there's simply no
+	// resume point yet) means we couldn't reach Redis. Falling back to the end of the
+	// oplog here would silently skip every entry written since our last processed
+	// timestamp, so instead we return the error and let the caller restart and retry.
+	// If we can't read from Redis, we can't write to it either, so retrying is correct.
+	//
+	// The OTR_RESUME_FROM_END_ON_FAILURE escape hatch overrides this: if set, we fall
+	// back to the end of the oplog (the pre-retry behavior) rather than blocking
+	// startup, accepting the risk of skipping entries.
+	if redisErr != nil && !errors.Is(redisErr, redis.Nil) {
+		if !config.ResumeFromEndOnFailure() {
+			metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
+			log.Log.Errorw("Error querying Redis for last processed timestamp after exhausting retries; "+
+				"aborting tail attempt so it can be retried rather than skipping oplog entries",
+				"error", redisErr)
+			return primitive.Timestamp{}, redisErr
+		}
+
+		log.Log.Errorw("Error querying Redis for last processed timestamp after exhausting retries; "+
+			"OTR_RESUME_FROM_END_ON_FAILURE is set, so falling back to the end of the oplog "+
+			"(this may skip oplog entries)",
 			"error", redisErr)
+		metricOplogResumeGap.WithLabelValues("failed").Observe(0) // zero because we failed to get the timestamp
 	}
 
 	mongoOplogEndTimestamp, mongoErr := getTimestampOfLastOplogEntry()
