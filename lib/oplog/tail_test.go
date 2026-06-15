@@ -477,3 +477,27 @@ func TestParseNamespace(t *testing.T) {
 		})
 	}
 }
+
+func TestPrematureStopEscalation(t *testing.T) {
+	// A run that lasted at least minSuccessfulTailDuration resets the streak,
+	// so an isolated premature stop after healthy operation stays a warning.
+	require.Equal(t, 1, nextPrematureStopStreak(4, minSuccessfulTailDuration))
+	require.False(t, prematureStopIsError(nextPrematureStopStreak(4, minSuccessfulTailDuration)))
+
+	// A run shorter than minSuccessfulTailDuration counts toward the streak.
+	require.Equal(t, 5, nextPrematureStopStreak(4, minSuccessfulTailDuration-time.Millisecond))
+
+	// Repeated rapid failures eventually escalate to an error.
+	streak := 0
+	for i := 1; i < maxConsecutivePrematureStops; i++ {
+		streak = nextPrematureStopStreak(streak, 0)
+		require.Falsef(t, prematureStopIsError(streak), "streak %d should be a warning", streak)
+	}
+	streak = nextPrematureStopStreak(streak, 0)
+	require.Equal(t, maxConsecutivePrematureStops, streak)
+	require.True(t, prematureStopIsError(streak), "streak should escalate to error at the threshold")
+
+	// Once a healthy run occurs, the streak resets back below the threshold.
+	streak = nextPrematureStopStreak(streak, minSuccessfulTailDuration)
+	require.False(t, prematureStopIsError(streak))
+}
