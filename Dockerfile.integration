@@ -1,6 +1,6 @@
 # expects build context of oplogtoredis
 
-FROM --platform=linux/amd64 golang:1.17.0-bullseye AS integration_base
+FROM --platform=linux/amd64 golang:1.24.6-bullseye AS integration_base
 
 ENV GO111MODULE on
 
