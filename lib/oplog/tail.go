@@ -134,6 +134,13 @@ var (
 		Name:      "tail_failed_to_start",
 		Help:      "Number of times oplog tailing failed to start, partitioned by reason",
 	}, []string{"reason"})
+
+	metricOplogEntriesByCollection = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "otr",
+		Subsystem: "oplog",
+		Name:      "entries_by_collection",
+		Help:      "Oplog entries received, partitioned by database and collection",
+	}, []string{"database", "collection"})
 )
 
 func init() {
@@ -452,10 +459,12 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 
 	status := "ignored"
 	database := "(no database)"
+	collection := "(no collection)"
 	messageLen := float64(len(rawData))
 
 	if len(entries) > 0 {
 		database = entries[0].Database
+		collection = entries[0].Collection
 	}
 
 	sendMetricsData = func() {
@@ -466,6 +475,7 @@ func (tailer *Tailer) processEntry(rawData bson.Raw, readOrdinal int) (timestamp
 		metricOplogEntriesBySize.WithLabelValues(database, status).Observe(messageLen)
 		metricMaxOplogEntryByMinute.Report(messageLen, database, status)
 		metricLastReceivedStaleness.WithLabelValues(strconv.Itoa(readOrdinal)).Set(float64(time.Since(time.Unix(int64(timestamp.T), 0))))
+		metricOplogEntriesByCollection.WithLabelValues(database, collection).Inc()
 	}
 
 	type errEntry struct {
