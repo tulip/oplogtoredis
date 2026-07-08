@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/tulip/oplogtoredis/integration-tests/fault-injection/harness"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/lib/denylist"
 )
 
 // This test restarts oplogtoredis after adding denylist entries.
@@ -40,12 +40,10 @@ func TestDenylistPersistence(t *testing.T) {
 	helpers.DoRequest("PUT", baseURL, "/denylist/abc", t, 201)
 	// PUT second rule
 	helpers.DoRequest("PUT", baseURL, "/denylist/def", t, 201)
-	// GET list with both rules
+	// GET list with both rules plus the seeded entries
 	data := helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	// check both permutations, in case the server reordered them
-	if !reflect.DeepEqual(data, []interface{}{"abc", "def"}) && !reflect.DeepEqual(data, []interface{}{"def", "abc"}) {
-		t.Fatalf("Expected doubleton from GET, but got %#v", data)
-	}
+	expectedDenylist := append(append([]string{}, denylist.SeedEntries...), "abc", "def")
+	helpers.AssertDenylistContains(t, data, expectedDenylist)
 
 	otr.Stop()
 	time.Sleep(3 * time.Second)
@@ -53,22 +51,15 @@ func TestDenylistPersistence(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	// denylist should have persisted across the restart
-
-	// GET list with both rules
+	// GET list with both rules plus the seeded entries
 	data = helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	// check both permutations, in case the server reordered them
-	if !reflect.DeepEqual(data, []interface{}{"abc", "def"}) && !reflect.DeepEqual(data, []interface{}{"def", "abc"}) {
-		t.Fatalf("Expected doubleton from GET, but got %#v", data)
-	}
+	helpers.AssertDenylistContains(t, data, append(append([]string{}, denylist.SeedEntries...), "abc", "def"))
 
 	// denylist should still be modifiable
 
 	// DELETE first rule
 	helpers.DoRequest("DELETE", baseURL, "/denylist/abc", t, 204)
-	// GET list with only second rule
+	// GET list with only second rule plus the seeded entries
 	data = helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	if !reflect.DeepEqual(data, []interface{}{"def"}) {
-		t.Fatalf("Expected singleton from GET, but got %#V", data)
-	}
+	helpers.AssertDenylistContains(t, data, append(append([]string{}, denylist.SeedEntries...), "def"))
 }
