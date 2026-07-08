@@ -11,16 +11,16 @@ var SeedEntries = []string{
 }
 
 func Seed(denylist *sync.Map, syncer *Syncer) error {
-	for _, id := range SeedEntries {
-		if _, exists := denylist.Load(id); exists {
+	for _, entry := range SeedEntries {
+		if _, exists := denylist.Load(entry); exists {
 			continue
 		}
 
-		denylist.Store(id, true)
-		metricFilterEnabled.WithLabelValues(id).Set(1)
-		log.Log.Infow("Denylist seed: Added entry", "id", id)
+		denylist.Store(entry, true)
+		metricFilterEnabled.WithLabelValues(entry).Set(1)
+		log.Log.Infow("Denylist seed: Added entry", "id", entry)
 
-		if err := syncer.StoreDenylistEntry(denylist, id); err != nil {
+		if err := syncer.StoreDenylistEntry(denylist, entry); err != nil {
 			return err
 		}
 	}
