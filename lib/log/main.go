@@ -68,7 +68,8 @@ func init() {
 func sentryInit(log *zap.Logger) *zap.Logger {
 	errConfig := config.ParseEnv()
 	if errConfig != nil {
-		panic("Error parsing environment variables: " + errConfig.Error())
+		// main() will surface an error there if env is invalid
+		return log
 	}
 	if !config.SentryEnabled() {
 		return log
