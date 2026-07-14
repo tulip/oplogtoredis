@@ -58,9 +58,13 @@ func main() {
 	if err != nil {
 		panic("Error setting up persistent denylist: " + err.Error())
 	}
-	denylist, err := syncer.LoadDenylist()
+	denylistMap, err := syncer.LoadDenylist()
 	if err != nil {
 		panic("Error loading persistent denylist: " + err.Error())
+	}
+	err = denylist.Seed(denylistMap, syncer)
+	if err != nil {
+		panic("Error seeding denylist: " + err.Error())
 	}
 
 	// this loop starts one writer shard on each pass. Repeat it a number of times equal to the write parallelism level.
@@ -170,7 +174,7 @@ func main() {
 				// it doesn't really matter which one since this isn't a meaningful amount of load, so just take the first one
 				RedisPrefix: config.RedisMetadataPrefix(),
 				MaxCatchUp:  config.MaxCatchUp(),
-				Denylist:    denylist,
+				Denylist:    denylistMap,
 			}
 			// pass all intake channels to the tailer, which will route messages accordingly
 			tailer.Tail(aggregatedRedisPubs, stopOplogTail, i, readParallelism)
@@ -183,7 +187,7 @@ func main() {
 	var shuttingDown bool
 
 	// Start one more goroutine for the HTTP server
-	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, denylist, syncer)
+	httpServer := makeHTTPServer(aggregatedRedisClients, aggregatedMongoSessions, denylistMap, syncer)
 	go func() {
 		httpErr := httpServer.ListenAndServe()
 		if shuttingDown {

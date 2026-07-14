@@ -2,53 +2,59 @@ package main
 
 import (
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
+	"github.com/tulip/oplogtoredis/lib/denylist"
 )
 
 // Test the /denylist HTTP operations
 func TestDenyList(t *testing.T) {
 	baseURL := os.Getenv("OTR_URL")
 
-	// GET empty list of rules
+	// GET list of rules: should contain only the seeded entries
 	data := helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	if !reflect.DeepEqual(data, []interface{}{}) {
-		t.Fatalf("Expected empty list from blank GET, but got %#v", data)
-	}
+	helpers.AssertDenylistContains(t, data, denylist.SeedEntries)
+
 	// PUT new rule
 	helpers.DoRequest("PUT", baseURL, "/denylist/abc", t, 201)
 	// GET list with new rule in it
 	data = helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	if !reflect.DeepEqual(data, []interface{}{"abc"}) {
-		t.Fatalf("Expected singleton from GET, but got %#v", data)
-	}
+	helpers.AssertDenylistContains(t, data, append(append([]string{}, denylist.SeedEntries...), "abc"))
 	// GET existing rule
 	data = helpers.DoRequest("GET", baseURL, "/denylist/abc", t, 200)
-	if !reflect.DeepEqual(data, "abc") {
+	if data != "abc" {
 		t.Fatalf("Expected matched body from GET, but got %#v", data)
 	}
 	// PUT second rule
 	helpers.DoRequest("PUT", baseURL, "/denylist/def", t, 201)
 	// GET second rule
 	data = helpers.DoRequest("GET", baseURL, "/denylist/def", t, 200)
-	if !reflect.DeepEqual(data, "def") {
+	if data != "def" {
 		t.Fatalf("Expected matched body from GET, but got %#v", data)
 	}
-	// GET list with both rules
+	// GET list with both rules plus the seeded entries
 	data = helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	// check both permutations, in case the server reordered them
-	if !reflect.DeepEqual(data, []interface{}{"abc", "def"}) && !reflect.DeepEqual(data, []interface{}{"def", "abc"}) {
-		t.Fatalf("Expected doubleton from GET, but got %#v", data)
-	}
+	helpers.AssertDenylistContains(t, data, append(append([]string{}, denylist.SeedEntries...), "abc", "def"))
 	// DELETE first rule
 	helpers.DoRequest("DELETE", baseURL, "/denylist/abc", t, 204)
 	// GET first rule
 	helpers.DoRequest("GET", baseURL, "/denylist/abc", t, 404)
-	// GET list with only second rule
+	// GET list with only second rule plus the seeded entries
 	data = helpers.DoRequest("GET", baseURL, "/denylist", t, 200)
-	if !reflect.DeepEqual(data, []interface{}{"def"}) {
-		t.Fatalf("Expected singleton from GET, but got %#V", data)
+	helpers.AssertDenylistContains(t, data, append(append([]string{}, denylist.SeedEntries...), "def"))
+}
+
+// The seeded entries should be present on the denylist without any manual
+// PUT, and should actually filter (a seeded DB is reported as denied).
+func TestDenyListSeeded(t *testing.T) {
+	baseURL := os.Getenv("OTR_URL")
+
+	for _, entry := range denylist.SeedEntries {
+		// GET the seeded rule directly; it should already exist (200)
+		data := helpers.DoRequest("GET", baseURL, "/denylist/"+entry, t, 200)
+		if data != entry {
+			t.Fatalf("Expected seeded entry %q from GET, but got %#v", entry, data)
+		}
 	}
 }

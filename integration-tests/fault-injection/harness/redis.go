@@ -33,7 +33,7 @@ func StartRedisServer() *RedisServer {
 // This function does not return until the server is up and ready to accept
 // connections.
 func (server *RedisServer) Start() {
-	log.Print("Startinf up Redis server")
+	log.Print("Starting up Redis server")
 	server.node = exec.Command("redis-server", "--loglevel", "debug") // #nosec
 
 	server.node.Stdout = makeLogStreamer("redis", "stdout")
