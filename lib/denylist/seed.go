@@ -6,6 +6,9 @@ import (
 	"github.com/tulip/oplogtoredis/lib/log"
 )
 
+// Please update the `DatabaseRemainsBlocked` alert for oplogtoredis
+// with any added seed entries. The file for that is in the helm repository.
+// helm/clustermon-alerts/rules/oplogtoredis.yaml
 var SeedEntries = []string{
 	"admin",
 }
