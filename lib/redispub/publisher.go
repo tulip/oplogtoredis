@@ -119,7 +119,7 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 
 	// Start up a background goroutine for periodically updating the last-processed
 	// timestamp
-	timestampC := make(chan primitive.Timestamp)
+	timestampC := make(chan primitive.Timestamp, 1)
 	go periodicallyUpdateTimestamp(client, timestampC, opts, ordinal)
 
 	// Redis expiration is in integer seconds, so we have to convert the
@@ -220,9 +220,20 @@ func PublishStream(client redis.UniversalClient, in <-chan *Publication, opts *P
 
 			// We want to make sure we do this *after* we've successfully published
 			// the messages
-			timestampC <- batch[len(batch)-1].OplogTimestamp
+			offerTimestamp(timestampC, batch[len(batch)-1].OplogTimestamp)
 		}
 	}
+}
+
+// offerTimestamp puts ts in c without waiting for periodicallyUpdateTimestamp, so a flush that is
+// stuck on Redis can't stop publishing. ts replaces a timestamp the flusher hasn't taken yet. It
+// needs c to have one slot and this goroutine to be its only sender.
+func offerTimestamp(c chan primitive.Timestamp, ts primitive.Timestamp) {
+	select {
+	case <-c:
+	default:
+	}
+	c <- ts
 }
 
 func publishBatchWithRetries(batch []*Publication, maxRetries int, sleepTime time.Duration, publishFn func(batch []*Publication) error) error {
