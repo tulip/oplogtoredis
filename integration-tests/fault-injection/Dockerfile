@@ -1,6 +1,8 @@
 # This expects to be run with the root of the repo as the context directory
 
 FROM redis:6.0-bullseye
+# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
+RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
 
 # Install mongo, and musl (for oplogtoredis bin)
 COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh

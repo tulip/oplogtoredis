@@ -1,4 +1,6 @@
 FROM --platform=linux/amd64 golang:1.17.0-bullseye
+# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
+RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
 
 # This netcat installation is needed for the following wait-for.sh invocation
 RUN apt-get update && apt-get install -y netcat-openbsd

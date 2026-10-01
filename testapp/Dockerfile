@@ -1,4 +1,6 @@
 FROM --platform=linux/amd64 node:14.21.3-bullseye
+# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
+RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true
@@ -20,6 +22,8 @@ RUN meteor npm install && \
   npm install
 
 FROM --platform=linux/amd64 node:14.21.3-bullseye-slim
+# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
+RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
 
 # Install mongoDB client
 RUN apt-get update && apt-get install -y gnupg wget

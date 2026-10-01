@@ -1,4 +1,6 @@
 FROM --platform=linux/amd64 golang:1.17.0-bullseye
+# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
+RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
 
 COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh
 RUN apt-get update && apt-get install -y netcat git libsasl2-dev && ./install-debian-mongo.sh
