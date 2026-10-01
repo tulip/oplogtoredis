@@ -1,6 +1,7 @@
 FROM --platform=linux/amd64 node:14.21.3-bullseye
-# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
-RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
+# Debian no longer serves all of bullseye-security, so it comes from Debian's snapshot archive.
+RUN sed -i -E 's#http://(deb|security)\.debian\.org/debian-security#http://snapshot.debian.org/archive/debian-security/20260824T000000Z#' /etc/apt/sources.list && \
+  echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
 
 # Install Meteor
 ENV METEOR_ALLOW_SUPERUSER=true
@@ -22,8 +23,9 @@ RUN meteor npm install && \
   npm install
 
 FROM --platform=linux/amd64 node:14.21.3-bullseye-slim
-# Debian no longer serves all of bullseye-security, so packages come from bullseye's main pocket.
-RUN sed -i '/bullseye-security/d' /etc/apt/sources.list
+# Debian no longer serves all of bullseye-security, so it comes from Debian's snapshot archive.
+RUN sed -i -E 's#http://(deb|security)\.debian\.org/debian-security#http://snapshot.debian.org/archive/debian-security/20260824T000000Z#' /etc/apt/sources.list && \
+  echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
 
 # Install mongoDB client
 RUN apt-get update && apt-get install -y gnupg wget
