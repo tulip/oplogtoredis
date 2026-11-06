@@ -1,0 +1,113 @@
+# owner: secops
+name: Gitleaks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  scan:
+    name: Gitleaks Security Scan
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Setup dynamic fetch-depth based on event
+        id: set-fetch-depth
+        shell: bash
+        env:
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          COMMITS_JSON: ${{ toJson(github.event.commits) }}
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            DEPTH=$(($(jq length <<< "$COMMITS_JSON") + 2))
+            BRANCH="${{ github.ref_name }}"
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            DEPTH=$((${{ github.event.pull_request.commits }} + 2))
+            BRANCH="${PR_HEAD_REF}"
+          fi
+
+          echo "depth=$DEPTH" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Configured fetch depth: $DEPTH for branch: $BRANCH"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.set-fetch-depth.outputs.branch }}
+          fetch-depth: ${{ steps.set-fetch-depth.outputs.depth }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Gitleaks scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          # Keep the pinned action SHA, but use gitleaks 8.30.1 internally.
+          # The action defaults to 8.24.3, which does not honor allowlist
+          # `paths` during git scans and flags allowlisted translation files.
+          GITLEAKS_VERSION: 8.30.1
+
+      - name: Send results to Panther SIEM
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f "results.sarif" ]; then
+            # Check if SARIF contains actual results (leaks detected)
+            results_count=$(jq '[.runs[].results[]] | length' < results.sarif)
+
+            if [ "$results_count" -gt 0 ]; then
+              echo "Detected $results_count leak(s), sending to Panther SIEM..."
+
+              # Parse SARIF and send to Panther HTTP log endpoint
+              timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+              repository="${{ github.repository }}"
+              ref="${{ github.ref }}"
+              sha="${{ github.sha }}"
+
+              # Create structured log entry for Panther
+              pr_id="${{ github.event.pull_request.number }}"
+              branch_name="${{ steps.set-fetch-depth.outputs.branch }}"
+
+              # Remove rules array from SARIF to reduce payload size
+              # Only keep the actual results, not all rule definitions
+              filtered_sarif=$(jq 'del(.runs[].tool.driver.rules)' < results.sarif)
+
+              jq -n \
+                --arg timestamp "$timestamp" \
+                --arg repository "$repository" \
+                --arg ref "$ref" \
+                --arg sha "$sha" \
+                --arg event_type "${{ github.event_name }}" \
+                --arg pr_id "$pr_id" \
+                --arg branch_name "$branch_name" \
+                --argjson sarif "$filtered_sarif" \
+                '{
+                  timestamp: $timestamp,
+                  source: "gitleaks",
+                  repository: $repository,
+                  ref: $ref,
+                  sha: $sha,
+                  event_type: $event_type,
+                  pr_id: $pr_id,
+                  branch_name: $branch_name,
+                  scan_results: $sarif
+                }' > panther_payload.json
+
+              # Send to Panther HTTP log endpoint with shared secret authentication
+              curl -X POST \
+                -H "Content-Type: application/json" \
+                -H "${{ secrets.PANTHER_HEADER_NAME }}: ${{ secrets.PANTHER_SHARED_SECRET }}" \
+                -d @panther_payload.json \
+                "${{ secrets.PANTHER_HTTP_ENDPOINT }}" || echo "Failed to send to Panther SIEM"
+            else
+              echo "No leaks detected in SARIF results, skipping Panther notification"
+            fi
+          else
+            echo "No SARIF results file found"
+          fi
