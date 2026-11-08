@@ -1,11 +1,11 @@
 package oplog
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/pkg/errors"
 	"github.com/tulip/oplogtoredis/lib/log"
@@ -21,16 +21,6 @@ var ErrUnsupportedDocIDType = errors.New("unsupported document _id type")
 // TODO PERF: Add options for filtering to specific collections or
 // databases (https://github.com/tulip/oplogtoredis/issues/8)
 func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
-	// Struct that matches the message format redis-oplog expects
-	type outgoingMessageDocument struct {
-		ID interface{} `json:"_id"`
-	}
-	type outgoingMessage struct {
-		Event  string                  `json:"e"`
-		Doc    outgoingMessageDocument `json:"d"`
-		Fields []string                `json:"f"`
-	}
-
 	if strings.HasPrefix(op.Collection, "system.") {
 		// We don't publish index creation events
 		return nil, nil
@@ -43,20 +33,15 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	}
 
 	var idForChannel string
-	var idForMessage interface{}
+	var idIsObjectID bool
 
 	switch id := op.DocID.(type) {
 	case string:
 		idForChannel = id
-		idForMessage = id
 
 	case primitive.ObjectID:
-		idHex := id.Hex()
-		idForChannel = idHex
-		idForMessage = map[string]string{
-			"$type":  "oid",
-			"$value": idHex,
-		}
+		idForChannel = id.Hex()
+		idIsObjectID = true
 
 	default:
 		// We don't know how to handle IDs that aren't strings or ObjectIDs,
@@ -71,30 +56,11 @@ func processOplogEntry(op *oplogEntry) (*redispub.Publication, error) {
 	}
 
 	// Construct the JSON we're going to send to Redis
-	//
-	// TODO PERF: consider a specialized JSON encoder
-	// https://github.com/tulip/oplogtoredis/issues/13
-	msg := outgoingMessage{
-		Event:  eventNameForOperation(op),
-		Doc:    outgoingMessageDocument{idForMessage},
-		Fields: changedFields,
-	}
-	log.Log.Debugw("Sending outgoing message", "message", msg)
-	msgJSON, err := json.Marshal(&msg)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "marshalling outgoing message")
-	}
+	msgJSON := appendOutgoingMessage(nil, eventNameForOperation(op), idForChannel, idIsObjectID, changedFields)
+	log.Log.Debugw("Sending outgoing message", "message", json.RawMessage(msgJSON))
 
 	hash := sha256.Sum256([]byte(op.Database))
-	intSlice := hash[len(hash)-8:]
-
-	var hashInt uint64
-
-	err = binary.Read(bytes.NewReader(intSlice), binary.LittleEndian, &hashInt)
-	if err != nil {
-		panic(errors.Wrap(err, "decoding database hash as uint64"))
-	}
+	hashInt := binary.LittleEndian.Uint64(hash[len(hash)-8:])
 
 	// We need to publish on both the full-collection channel and the
 	// single-document channel
@@ -121,4 +87,75 @@ func eventNameForOperation(op *oplogEntry) string {
 		return "r"
 	}
 	return op.Operation
+}
+
+// appendOutgoingMessage appends the message redis-oplog expects for one oplog
+// entry to dst:
+//
+//	{"e":"u","d":{"_id":"someid"},"f":["a","b"]}
+//
+// An ObjectID _id is sent as {"$type":"oid","$value":"<hex>"}, and nil fields
+// as null. The output is byte-for-byte what encoding/json produces for the
+// equivalent struct, but the message shape is fixed, so it is written directly
+// instead of through reflection.
+func appendOutgoingMessage(dst []byte, event, id string, idIsObjectID bool, fields []string) []byte {
+	// Capacity hint for the common case where nothing needs escaping: the
+	// fixed punctuation, each string plus its quotes, and a comma per field.
+	size := len(`{"e":"","d":{"_id":{"$type":"oid","$value":""}},"f":null}`) + len(event) + len(id)
+	for _, f := range fields {
+		size += len(f) + 3
+	}
+	if cap(dst)-len(dst) < size {
+		grown := make([]byte, len(dst), len(dst)+size)
+		copy(grown, dst)
+		dst = grown
+	}
+
+	dst = append(dst, `{"e":`...)
+	dst = appendJSONString(dst, event)
+	dst = append(dst, `,"d":{"_id":`...)
+	if idIsObjectID {
+		dst = append(dst, `{"$type":"oid","$value":`...)
+		dst = appendJSONString(dst, id)
+		dst = append(dst, '}')
+	} else {
+		dst = appendJSONString(dst, id)
+	}
+	dst = append(dst, `},"f":`...)
+	if fields == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		for i, f := range fields {
+			if i > 0 {
+				dst = append(dst, ',')
+			}
+			dst = appendJSONString(dst, f)
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}')
+}
+
+// appendJSONString appends s as a JSON string, exactly as encoding/json would.
+// Plain printable ASCII is copied as-is. Anything encoding/json escapes or
+// rewrites (quotes, backslashes, control characters, <, > and &, and all
+// non-ASCII, which covers invalid UTF-8 and U+2028/U+2029) is rare in field
+// names and IDs, so those strings are handed to encoding/json itself rather
+// than re-implementing its escaping rules.
+func appendJSONString(dst []byte, s string) []byte {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c >= utf8.RuneSelf || c == '"' || c == '\\' || c == '<' || c == '>' || c == '&' {
+			encoded, err := json.Marshal(s)
+			if err != nil {
+				// json.Marshal never fails for a string
+				panic(errors.Wrap(err, "marshalling string"))
+			}
+			return append(dst, encoded...)
+		}
+	}
+	dst = append(dst, '"')
+	dst = append(dst, s...)
+	return append(dst, '"')
 }
