@@ -26,7 +26,7 @@ import (
 	"github.com/tulip/oplogtoredis/lib/parse"
 	"github.com/tulip/oplogtoredis/lib/redispub"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"

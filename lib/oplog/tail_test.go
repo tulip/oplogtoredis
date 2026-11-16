@@ -9,7 +9,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/alicebob/miniredis/v2/server"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
