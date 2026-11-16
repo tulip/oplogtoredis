@@ -1,6 +1,9 @@
 # expects build context of oplogtoredis
 
 FROM --platform=linux/amd64 golang:1.17.0-bullseye AS integration_base
+# Debian no longer serves all of bullseye-security, so it comes from Debian's snapshot archive.
+RUN sed -i -E 's#http://(deb|security)\.debian\.org/debian-security#http://snapshot.debian.org/archive/debian-security/20260824T000000Z#' /etc/apt/sources.list && \
+  echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
 
 ENV GO111MODULE on
 
@@ -40,6 +43,9 @@ RUN go build -o /analyze analyzeBench.go
 
 
 FROM --platform=linux/amd64 debian:bullseye
+# Debian no longer serves all of bullseye-security, so it comes from Debian's snapshot archive.
+RUN sed -i -E 's#http://(deb|security)\.debian\.org/debian-security#http://snapshot.debian.org/archive/debian-security/20260824T000000Z#' /etc/apt/sources.list && \
+  echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
 COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh
 RUN apt-get update && apt-get install -y jq netcat && ./install-debian-mongo.sh
 RUN mkdir -p /integration/bin
