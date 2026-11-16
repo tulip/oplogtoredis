@@ -57,12 +57,16 @@ services:
       - /bin/oplogtoredis
 
   mongo:
-    image: mongo:5.0.19
+    image: mongo:7.0
     command: "mongod --replSet myapp --port 27017"
     logging:
       driver: none
     healthcheck:
-      test: test $$(echo "rs.initiate({_id:'myapp',members:[{_id:0,host:\"mongo:27017\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      # mongosh in piped mode emits shell prompts ("test> 1"), so the old
+      # `echo ... | mongo --quiet` form can never compare equal to 1. Use
+      # --eval with an explicit print, and prefer rs.status() so repeat
+      # probes stay idempotent once the set is initiated.
+      test: ["CMD-SHELL", "test $$(mongosh --port 27017 --quiet --eval 'try { print(rs.status().ok) } catch (e) { print(rs.initiate({_id: \"myapp\", members: [{ _id: 0, host: \"mongo:27017\" }] }).ok) }') -eq 1"]
       interval: 10s
       start_period: 10s
     volumes:
@@ -79,7 +83,9 @@ services:
       - REDIS_REPLICATION_MODE=master
 
   redis-sentinel:
-    image: bitnamilegacy/redis-sentinel:latest
+    # Pinned, not :latest - this image sets the sentinel's own Redis version
+    # independently of the redis containers above. Matches acceptance.
+    image: bitnamilegacy/redis-sentinel:8.0.2
     environment:
       - REDIS_SENTINEL_MASTER=redis-sentinel-master
 
