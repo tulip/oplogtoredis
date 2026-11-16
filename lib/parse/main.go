@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
@@ -32,6 +33,10 @@ func ParseRedisURL(url string, isSentinel bool) (*redis.UniversalOptions, error)
 	}, nil
 
 }
+
+// sentinelDialTimeout bounds each dial to the master. go-redis v8's Sentinel dialer uses DialTimeout
+// as given, without the default a plain client gets, so an unset DialTimeout never times out.
+const sentinelDialTimeout = 5 * time.Second
 
 // match against redis-sentinel://[something@]something[/db]
 var urlMatcher *regexp.Regexp = regexp.MustCompile(`redis-sentinel:\/\/(([^@]+)@)?([^/]+)(\/(\d+))?`)
@@ -90,9 +95,10 @@ func parseSentinelURL(urlString string) (*redis.UniversalOptions, error) {
 	}
 
 	return &redis.UniversalOptions{
-		Password:   password,
-		Addrs:      endpointsList,
-		MasterName: name,
-		DB:         db,
+		Password:    password,
+		Addrs:       endpointsList,
+		MasterName:  name,
+		DB:          db,
+		DialTimeout: sentinelDialTimeout,
 	}, nil
 }

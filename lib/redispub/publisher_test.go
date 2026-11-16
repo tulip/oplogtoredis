@@ -181,3 +181,18 @@ func TestEmptyPublicationBatch(t *testing.T) {
 		t.Errorf("Got unexpected error: %s", err)
 	}
 }
+
+func TestOfferTimestampReplacesAnUntakenTimestamp(t *testing.T) {
+	c := make(chan primitive.Timestamp, 1)
+	offerTimestamp(c, primitive.Timestamp{T: 1})
+	offerTimestamp(c, primitive.Timestamp{T: 2})
+
+	if got := <-c; got.T != 2 {
+		t.Errorf("got timestamp %v, want the latest, 2", got.T)
+	}
+	select {
+	case extra := <-c:
+		t.Errorf("channel still held %v", extra.T)
+	default:
+	}
+}
