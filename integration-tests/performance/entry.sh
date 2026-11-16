@@ -3,7 +3,10 @@
 set -euo pipefail
 cd `dirname "$0"`
 
-mongosh "$MONGO_URL" --eval 'rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017"}] })'
+# The compose healthcheck now initiates the replica set reliably, so calling
+# rs.initiate() blind throws "already initialized" and, under mongosh with
+# set -e, kills the run. Only initiate if the set is not already up.
+mongosh "$MONGO_URL" --eval 'try { rs.status() } catch (e) { rs.initiate({ _id: "myapp", members: [{ _id: 0, host: "mongo:27017" }] }) }'
 mkdir /benchresult
 
 samples=10
