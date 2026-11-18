@@ -41,7 +41,7 @@ services:
       - mongo_data:/data/db
 
   redis:
-    image: redis:6.0
+    image: redis:${REDIS_TAG:-6.0}
     hostname: redis
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro

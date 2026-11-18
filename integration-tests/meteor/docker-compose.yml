@@ -64,10 +64,7 @@ services:
     logging:
       driver: none
     healthcheck:
-      # mongosh in piped mode emits shell prompts ("test> 1"), so the old
-      # `echo ... | mongo --quiet` form can never compare equal to 1. Use
-      # --eval with an explicit print, and prefer rs.status() so repeat
-      # probes stay idempotent once the set is initiated.
+      # --eval, not a pipe: piped mongosh prints prompts, so the output never equals 1
       test: ["CMD-SHELL", "test $$(mongosh --port 27017 --quiet --eval 'try { print(rs.status().ok) } catch (e) { print(rs.initiate({_id: \"myapp\", members: [{ _id: 0, host: \"mongo:27017\" }] }).ok) }') -eq 1"]
       interval: 10s
       start_period: 10s

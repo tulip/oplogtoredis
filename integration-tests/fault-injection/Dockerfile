@@ -1,6 +1,8 @@
 # This expects to be run with the root of the repo as the context directory
 
-FROM redis:6.0-bullseye
+# Redis version under test; must be a bookworm tag (the mongo install is bookworm-only)
+ARG REDIS_TAG=6.0-bookworm
+FROM redis:${REDIS_TAG}
 
 # Install mongo, and musl (for oplogtoredis bin)
 COPY scripts/install-debian-mongo.sh ./install-debian-mongo.sh
@@ -8,7 +10,7 @@ RUN apt-get update && \
   ./install-debian-mongo.sh && \
   apt-get install -y \
   jq \
-  netcat \
+  netcat-openbsd \
   postgresql \
   musl && \
   rm -rf /var/lib/apt/lists/*
