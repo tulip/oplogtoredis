@@ -38,7 +38,8 @@ jobs:
         id: generate-tag
         run: |
           # Extract the current version from `default.nix`. This must pass.
-          version=$(nix flake show . --quiet --all-systems --json | jq -r '.defaultPackage."aarch64-darwin".name' | cut -d'-' -f2-)
+          version=$(nix eval --raw '.#packages.x86_64-linux.default.version')
+          if [ -z "$version" ]; then echo "could not read the version from the flake" >&2; exit 1; fi
 
           # Adds the branch name if the workflow is manually invoked from a branch.
           tag_branch_segment=""
