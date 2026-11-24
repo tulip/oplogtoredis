@@ -64,8 +64,8 @@ services:
       MONGO_ARGS: "${MONGO_ARGS}"
     command: "mongod --replSet myapp --port 27017 --bind_ip_all $MONGO_ARGS"
     healthcheck:
-      # --eval, not a pipe: piped mongosh prints prompts, so the output never equals 1
-      test: ["CMD-SHELL", "test $$(mongosh --port 27017 --quiet --eval 'try { print(rs.status().ok) } catch (e) { print(rs.initiate({_id: \"myapp\", members: [{ _id: 0, host: \"mongo:27017\" }] }).ok) }') -eq 1"]
+      # --eval, not a pipe; mongosh if present, else legacy mongo (4.4 has no mongosh, and its rs.status() doesn't throw)
+      test: ["CMD-SHELL", "SH=$$(command -v mongosh || command -v mongo); test $$($$SH --port 27017 --quiet --eval 'try { var s = rs.status(); if (s.ok != 1) { s = rs.initiate({_id: \"myapp\", members: [{ _id: 0, host: \"mongo:27017\" }] }) }; print(s.ok) } catch (e) { print(rs.initiate({_id: \"myapp\", members: [{ _id: 0, host: \"mongo:27017\" }] }).ok) }') -eq 1"]
       interval: 10s
       start_period: 30s
     volumes:
