@@ -3,7 +3,6 @@ package harness
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -34,7 +33,7 @@ type MongoServer struct {
 // StartMongoServer starts a mongo replica set and returns a
 // MongoServer for further operations
 func StartMongoServer() *MongoServer {
-	dir, err := ioutil.TempDir("", "example")
+	dir, err := os.MkdirTemp("", "example")
 	if err != nil {
 		panic("Error making temp dir: " + err.Error())
 	}

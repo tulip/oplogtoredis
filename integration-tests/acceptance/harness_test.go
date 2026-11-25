@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/kylelemons/godebug/pretty"
 	"github.com/tulip/oplogtoredis/integration-tests/helpers"
 	"github.com/tulip/oplogtoredis/lib/log"

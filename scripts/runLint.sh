@@ -6,6 +6,6 @@
 set -e
 cd `dirname "$0"`'/..'
 
-golangci-lint run --deadline 15m ./lib/... ./integration-tests/...
+golangci-lint run --timeout 15m ./lib/... ./integration-tests/...
 
 echo 'Lint passed.'

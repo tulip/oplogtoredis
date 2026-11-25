@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -23,7 +23,7 @@ func TestHealthz(t *testing.T) {
 	defer resp.Body.Close()
 
 	// Get response body
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("Error receiving response body: %s", err)
 	}
